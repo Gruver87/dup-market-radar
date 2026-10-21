@@ -121,7 +121,7 @@ def _fetch_markets(*, top_n: int) -> List[Dict[str, Any]]:
             resp = client.get(
                 url,
                 params=params,
-                headers={"User-Agent": "DUP-Market-Radar/0.2.60-bubbles"},
+                headers={"User-Agent": "DUP-Market-Radar/0.2.61-bubbles"},
             )
             resp.raise_for_status()
             data = read_capped_json(resp, CG_MAX_RESPONSE_BYTES, label="coingecko-bubbles")
@@ -164,7 +164,7 @@ def get_bubbles(
         with _lock:
             if _cache is not None:
                 body = dict(_cache)
-                body["ok"] = True
+                body["ok"] = False
                 body["stale"] = True
                 body["error"] = "coingecko circuit open — soft refuse"
                 body["cache_hit"] = True
@@ -220,7 +220,7 @@ def get_bubbles(
             _last_error = err
             if _cache is not None:
                 body = dict(_cache)
-                body["ok"] = True
+                body["ok"] = False
                 body["stale"] = True
                 body["error"] = err
                 body["cache_hit"] = True

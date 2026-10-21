@@ -92,6 +92,7 @@ def _build_trader() -> KuCoinManualTrader:
 
 _trader = _build_trader()
 _tg: Optional[TelegramBot] = None
+_tg_start_error: Optional[str] = None
 
 
 def _api_cfg() -> Dict[str, Any]:
@@ -298,6 +299,8 @@ def _ops_problems(*, for_ready: bool) -> list[str]:
     if meta.get("base_url_ok") is False:
         problems.append("symbol_meta_base_url_refused")
     # Telegram watch book (only when bot is configured / running)
+    if _tg_start_error:
+        problems.append("telegram_start_failed")
     if _tg is not None:
         tg = _tg.status()
         watches = tg.get("watches") or {}
@@ -368,6 +371,17 @@ def _tg_trade_place(
         _tg_apply_position_hooks(trade_ev)
     return out
 
+
+
+def _telegram_public_status() -> Dict[str, Any]:
+    if _tg is None:
+        out: Dict[str, Any] = {"running": False}
+    else:
+        out = dict(_tg.status())
+    if _tg_start_error:
+        out["start_error"] = _tg_start_error
+        out["degraded"] = True
+    return out
 
 def _build_telegram() -> TelegramBot:
     return TelegramBot(
@@ -513,7 +527,7 @@ def _public_trade_surface(*, detail: bool = False) -> Dict[str, Any]:
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    global _tg
+    global _tg, _tg_start_error
     # Fail-closed startup when docker/prod requires API key but none is set.
     if not api_key_gate_ok() and "pytest" not in sys.modules:
         raise RuntimeError(
@@ -524,16 +538,21 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     _auto.start()
     _tg = _build_telegram()
     _auto.set_on_action(_on_auto_action)
+    _tg_start_error = None
     try:
         started = _tg.start()
         if started:
             pruned = _tg.prune_watches()
             synced = _tg.sync_auto_positions(_auto.status().get("positions") or {})
             logger.info("telegram prune=%s sync_auto=%s", pruned, synced)
+        elif _tg.configured():
+            _tg_start_error = "telegram configured but start returned false"
+            logger.error("%s", _tg_start_error)
     except Exception as exc:  # noqa: BLE001
+        _tg_start_error = redact_exc(exc, max_len=256)
         logger.error(
             "telegram start failed — continuing without bot: %s",
-            redact_exc(exc, max_len=256),
+            _tg_start_error,
         )
     if bool(_api_cfg().get("warm_scan_on_startup", True)):
 
@@ -567,7 +586,7 @@ def _openapi_enabled() -> bool:
 _OPENAPI_ON = _openapi_enabled()
 app = FastAPI(
     title="DUP Market Radar",
-    version="0.2.60",
+    version="0.2.61",
     lifespan=_lifespan,
     docs_url="/docs" if _OPENAPI_ON else None,
     redoc_url="/redoc" if _OPENAPI_ON else None,
@@ -702,7 +721,7 @@ def _metrics_dict() -> Dict[str, Any]:
         native=native_status(),
         trade_limiter=_trade_limiter().status(),
         trade_stats=TRADE_STATS.snapshot(),
-        telegram=_tg.status() if _tg is not None else {},
+        telegram=_telegram_public_status(),
         auth_stats=AUTH_STATS.snapshot(),
     )
 
@@ -839,7 +858,7 @@ def health(request: Request) -> Dict[str, Any]:
         "auth": AUTH_STATS.snapshot(),
         "positions_integrity": auto.get("positions_integrity"),
         "telegram": _redact_fs_paths(
-            _tg.status() if _tg is not None else {"running": False}
+            _telegram_public_status()
         ),
         "last_scan_ok": None if snap is None else bool(snap.get("ok")),
         "score_backend": None if snap is None else snap.get("score_backend"),
@@ -872,7 +891,7 @@ def trade_status(request: Request) -> Dict[str, Any]:
         "auto": surface["auto_trade"],
         "rate_limit": _trade_limiter().status(),
         "telegram": _redact_fs_paths(
-            _tg.status() if _tg is not None else {"running": False}
+            _telegram_public_status()
         ),
     }
 
@@ -882,7 +901,7 @@ def telegram_status(request: Request) -> Dict[str, Any]:
     _check_api_key(request)
     if _tg is None:
         return {"ok": True, "running": False, "configured": False}
-    return {"ok": True, **_redact_fs_paths(_tg.status())}
+    return {"ok": True, **_redact_fs_paths(_telegram_public_status())}
 
 
 @app.get("/api/trade/events")
@@ -967,7 +986,14 @@ def trade_order(request: Request, body: ManualOrderBody) -> Dict[str, Any]:
     except HTTPException:
         raise
     except Exception as exc:  # noqa: BLE001
-        logger.warning("futures gate check soft-fail: %s", redact_exc(exc, max_len=128))
+        # Fail-closed: never place when the futures policy gate cannot be evaluated.
+        logger.error(
+            "futures gate check failed — refuse place: %s",
+            redact_exc(exc, max_len=128),
+        )
+        raise HTTPException(
+            503, detail="futures policy gate unavailable — refuse place"
+        ) from None
     result = _trader.place(
         TradeRequest(
             symbol=body.symbol,
@@ -1060,9 +1086,7 @@ def snapshot(request: Request, force: bool = False) -> Response:
     surface = _public_trade_surface()
     snap["manual_trade"] = surface["manual_trade"]
     snap["auto_trade"] = surface["auto_trade"]
-    snap["telegram"] = _redact_fs_paths(
-        _tg.status() if _tg is not None else {"running": False}
-    )
+    snap["telegram"] = _redact_fs_paths(_telegram_public_status())
     snap["cache"] = _cache.status()
     etag = _snapshot_etag(snap)
     snap["etag"] = etag

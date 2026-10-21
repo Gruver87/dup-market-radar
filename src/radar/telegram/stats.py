@@ -12,6 +12,7 @@ _ALLOWED = frozenset(
         "alerts_skipped_stale",
         "alerts_skipped_empty",
         "alerts_skipped_degraded",
+        "alerts_mark_miss",
         "watch_add_fail",
         "cmd_rate_refused",
     }
@@ -25,6 +26,7 @@ class TelegramStats:
         self.alerts_skipped_stale = 0
         self.alerts_skipped_empty = 0
         self.alerts_skipped_degraded = 0
+        self.alerts_mark_miss = 0
         self.watch_add_fail = 0
         self.cmd_rate_refused = 0
 
@@ -42,6 +44,7 @@ class TelegramStats:
                 "alerts_skipped_stale": self.alerts_skipped_stale,
                 "alerts_skipped_empty": self.alerts_skipped_empty,
                 "alerts_skipped_degraded": self.alerts_skipped_degraded,
+                "alerts_mark_miss": self.alerts_mark_miss,
                 "watch_add_fail": self.watch_add_fail,
                 "cmd_rate_refused": self.cmd_rate_refused,
             }

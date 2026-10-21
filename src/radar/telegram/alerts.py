@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 from radar.html_escape import escape_html
 from radar.money import display_bps, display_price, display_score_centi, drop_bps
 from radar.telegram.nearest import nearest_for_action
+from radar.telegram.stats import TG_STATS
 from radar.telegram.watches import WatchBook, norm_symbol
 
 
@@ -85,8 +86,10 @@ def evaluate_watch(
             try:
                 mark = mark_price_fn(symbol)
             except Exception:  # noqa: BLE001
+                TG_STATS.inc("alerts_mark_miss")
                 return None
             if not mark or int(mark) <= 0:
+                TG_STATS.inc("alerts_mark_miss")
                 return None
             price_i = int(mark)
             drop = drop_bps(entry_i, price_i)

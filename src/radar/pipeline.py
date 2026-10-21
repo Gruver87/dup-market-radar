@@ -97,10 +97,14 @@ def _http_timeouts(cfg: Dict[str, Any]) -> tuple[int, int]:
 
 def _ensure_fill_ratio(
     universe: Dict[str, Any], symbols: set[str], book: str
-) -> float:
-    """Fraction of symbols that already have 15m short-window on the live book."""
+) -> float | None:
+    """Fraction of symbols with 15m short-window on the live book.
+
+    Empty ``symbols`` → ``None`` (N/A), never painted as 1.0. Callers must
+    treat all-None as ensure failure (no scored targets).
+    """
     if not symbols:
-        return 1.0
+        return None
     by_sym = {
         str(r.get("symbol") or ""): r
         for r in (universe.get(book) or [])
@@ -114,6 +118,17 @@ def _ensure_fill_ratio(
         if row.get("change_bps_15m") is not None or row.get("change_pct_15m") is not None:
             ok += 1
     return ok / float(len(symbols))
+
+
+def _ensure_bucket_ok(ratio: float | None, *, threshold: float = 0.85) -> bool:
+    """N/A (None) is OK for that bucket; numeric must meet threshold."""
+    if ratio is None:
+        return True
+    return float(ratio) >= threshold
+
+
+def _fmt_fill(ratio: float | None) -> str:
+    return "n/a" if ratio is None else f"{float(ratio):.2f}"
 
 
 def run_scan(
@@ -204,13 +219,15 @@ def run_scan(
                     if str(r.get("market") or "spot").lower() == "futures"
                 }
                 if (
-                    _ensure_fill_ratio(universe, spot_top, "spot") >= 0.85
-                    and _ensure_fill_ratio(universe, fut_top, "futures") >= 0.85
-                    and _ensure_fill_ratio(universe, list_spot, "spot") >= 0.85
-                    and _ensure_fill_ratio(universe, list_fut, "futures") >= 0.85
+                    _ensure_bucket_ok(_ensure_fill_ratio(universe, spot_top, "spot"))
+                    and _ensure_bucket_ok(_ensure_fill_ratio(universe, fut_top, "futures"))
+                    and _ensure_bucket_ok(_ensure_fill_ratio(universe, list_spot, "spot"))
+                    and _ensure_bucket_ok(_ensure_fill_ratio(universe, list_fut, "futures"))
+                    and bool(spot_top or fut_top or list_spot or list_fut)
                 ):
                     break
             # Final honesty: incomplete top-N fill is not "ensure ok".
+            # Empty target set for a bucket = N/A; ALL buckets empty = fail-closed.
             spot_top = {
                 str(r.get("symbol") or "")
                 for r in rank_top(score_spot_alts(universe, cfg), top_n)
@@ -240,26 +257,40 @@ def run_scan(
             fut_fill = _ensure_fill_ratio(universe, fut_top, "futures")
             list_spot_fill = _ensure_fill_ratio(universe, list_spot, "spot")
             list_fut_fill = _ensure_fill_ratio(universe, list_fut, "futures")
-            ensure_acc["spot_fill_ratio"] = round(spot_fill, 4)
-            ensure_acc["fut_fill_ratio"] = round(fut_fill, 4)
-            ensure_acc["list_spot_fill_ratio"] = round(list_spot_fill, 4)
-            ensure_acc["list_fut_fill_ratio"] = round(list_fut_fill, 4)
+            ensure_acc["spot_fill_ratio"] = (
+                None if spot_fill is None else round(spot_fill, 4)
+            )
+            ensure_acc["fut_fill_ratio"] = (
+                None if fut_fill is None else round(fut_fill, 4)
+            )
+            ensure_acc["list_spot_fill_ratio"] = (
+                None if list_spot_fill is None else round(list_spot_fill, 4)
+            )
+            ensure_acc["list_fut_fill_ratio"] = (
+                None if list_fut_fill is None else round(list_fut_fill, 4)
+            )
             universe["short_window_ensure"] = ensure_acc
-            if (
-                spot_fill >= 0.85
-                and fut_fill >= 0.85
-                and list_spot_fill >= 0.85
-                and list_fut_fill >= 0.85
-            ):
+            any_targets = bool(spot_top or fut_top or list_spot or list_fut)
+            fills_ok = (
+                _ensure_bucket_ok(spot_fill)
+                and _ensure_bucket_ok(fut_fill)
+                and _ensure_bucket_ok(list_spot_fill)
+                and _ensure_bucket_ok(list_fut_fill)
+            )
+            if any_targets and fills_ok:
                 universe["mtf_ensure_ok"] = True
             else:
                 universe["mtf_ensure_ok"] = False
                 errs = list(universe.get("errors") or [])
-                errs.append(
-                    "mtf_ensure_incomplete:"
-                    f"spot={spot_fill:.2f},fut={fut_fill:.2f},"
-                    f"list_spot={list_spot_fill:.2f},list_fut={list_fut_fill:.2f}"
-                )
+                if not any_targets:
+                    errs.append("mtf_ensure_empty_targets")
+                else:
+                    errs.append(
+                        "mtf_ensure_incomplete:"
+                        f"spot={_fmt_fill(spot_fill)},fut={_fmt_fill(fut_fill)},"
+                        f"list_spot={_fmt_fill(list_spot_fill)},"
+                        f"list_fut={_fmt_fill(list_fut_fill)}"
+                    )
                 universe["errors"] = errs[:32]
         except Exception as exc:  # noqa: BLE001
             safe_ens = redact_exc(exc, max_len=128)

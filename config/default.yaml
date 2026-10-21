@@ -103,10 +103,11 @@ auto_trade:
   # require_no_risk_flags=true (any other flag still blocks auto-buy).
   listings_soft_risk_flags:
     - cross_venue_live
-  dry_run: false
+  # Lab-safe default: log-only until operator explicitly sets dry_run false + keys.
+  dry_run: true
   allowed_sectors:
     - spot_alts
-    - memes
+    # memes excluded: DEX rows are skipped in auto (_collect_buys); keep watchlist-only
     - listings
   buy_setups:
     - buy-watch

@@ -1,5 +1,14 @@
 # Changelog — DUP Market Radar
 
+## 0.2.61
+
+- Ensure: empty target set is N/A (not fake 1.0); all-empty → mtf_ensure_empty_targets / mtf_ensure_ok=false
+- Trade: futures policy gate exception → HTTP 503 refuse (never soft-continue to place)
+- Bubbles: stale/circuit cache returns ok=false (no silent green)
+- Auto: drop dead memes from default allowlist; dry_run: true lab-safe default
+- Telegram: start failure surfaced in health + /api/telegram/status; mark-miss counter
+- README: honest CI note (python-lab default + optional ci-native)
+
 ## 0.2.60
 
 - Auto: `listings_soft_risk_flags` (default `cross_venue_live`) soft-allows listing buys under `require_no_risk_flags`

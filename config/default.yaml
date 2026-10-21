@@ -1,0 +1,181 @@
+top_n: 10
+http_timeout_ms: 12000
+cache_ttl_ms: 25000
+# legacy aliases still accepted by pipeline
+http_timeout_sec: 12
+cache_ttl_sec: 25
+
+# Hybrid hot path — Rust integer scorers (radar_native ≥0.2)
+native:
+  prefer: true
+  fail_closed: true   # no silent Python swap when prefer=true
+
+ingest:
+  parallel_workers: 6
+  http_retries: 2
+  http_backoff_ms: 200
+  max_response_bytes: 20971520          # 20 MiB — Binance allTickers ~18 MiB (live evidence)
+  circuit_fail_threshold: 3
+  circuit_open_ms: 60000
+
+snapshot_refresh_ms: 45000
+
+# Crypto bubbles — top N by mcap, ~6m change via CoinGecko 200d (no exact 180d)
+bubbles:
+  enabled: true
+  top_n: 100
+  cache_ttl_ms: 30000                   # live poll floor for /api/ops/bubbles
+
+# API surface — CORS never *; trade soft rate-limit
+api:
+  cors_origins:
+    - http://127.0.0.1:8787
+    - http://localhost:8787
+  # Host header allowlist (TrustedHost). Empty = middleware off.
+  trusted_hosts:
+    - localhost
+    - 127.0.0.1
+  max_request_body_bytes: 65536          # POST/PUT/PATCH Content-Length cap
+  max_request_url_bytes: 2048            # path+query soft refuse 414
+  trade_rate_limit_per_min: 30
+  force_scan_rate_limit_per_min: 6       # ?force=true soft refuse (DoS)
+  snapshot_rate_limit_per_min: 120       # /api/snapshot soft refuse (DoS)
+  ops_rate_limit_per_min: 60             # /api/ops/* worldtime + fx + bubbles
+  metrics_rate_limit_per_min: 120         # /api/metrics* soft refuse
+  probe_rate_limit_per_min: 300           # /api/live|/api/ready|/api/health
+  auth_fail_rate_limit_per_min: 30        # bad X-Radar-Api-Key soft refuse (brute force)
+  enable_openapi: false                   # /docs|/redoc|/openapi.json off (RADAR_ENABLE_OPENAPI=1 to lab)
+  # Fat-finger caps for manual/TG/API place (integer money)
+  max_order_quote_usdt_micros: 500000000   # 500 USDT
+  max_order_base_size_i: 100000000000000   # 1e6 base units * 1e8
+  warm_scan_on_startup: true
+
+# Money: integer fixed-point only (no float). See radar/money.py
+# PRICE_SCALE=1e8, QUOTE_SCALE=1e6 (USDT micros), SCORE_CENTI=100, change in bps
+money:
+  price_scale: 100000000
+  quote_scale: 1000000
+  base_scale: 100000000
+
+# Telegram bot — alerts on fade/stop / futures flip; nearest entry-exit zones.
+# Requires TELEGRAM_BOT_TOKEN + TELEGRAM_ALLOWED_CHAT_IDS (or TELEGRAM_CHAT_ID) in .env
+telegram:
+  enabled: true                          # still no-op without token/chats
+  alert_cycle_sec: 60
+  alert_cooldown_ms: 300000              # same alert key ≤5m
+  stop_loss_bps: 1200
+  take_profit_warn_bps: 800              # warn bank profits if fade after gain
+  notify_trades: true
+  circuit_fail_threshold: 3              # soft-open Telegram API after N fails
+  circuit_open_ms: 60000
+  watch_ttl_sec: 1209600                 # 14d — prune stale /watch entries (0=off)
+  max_watches: 2000                      # soft refuse new /watch when full
+  snapshot_max_age_ms: 180000            # skip alerts if snapshot older than 3m
+  cmd_rate_limit_per_min: 30             # soft refuse flood per chat
+
+# Auto-trade (OFF by default). Futures never included. Integer amounts only.
+auto_trade:
+  enabled_default: false
+  cycle_sec: 90
+  quote_usdt_micros_per_buy: 10000000   # 10 USDT
+  max_open_positions: 5
+  max_buys_per_cycle: 2
+  max_sells_per_cycle: 5
+  min_score_centi: 5500                  # 55.00
+  positions_backup_keep: 5               # rotating copies under data/backups/
+  fill_reconcile: true                   # base_size_i from KuCoin dealSize after buy
+  fill_reconcile_attempts: 8
+  fill_reconcile_delay_ms: 250
+  sell_clamp_to_balance: true            # sell size ≤ trade-account available
+  enforce_symbol_meta: true              # refuse under KuCoin minFunds / baseMinSize
+  symbol_meta_ttl_sec: 3600
+  client_oid_ttl_sec: 604800             # 7d ledger for duplicate clientOid refuse
+  client_oid_max_entries: 10000
+  audit_log_max_bytes: 5242880           # rotate auto_trade_log.jsonl at 5 MiB
+  audit_log_keep: 5
+  require_no_risk_flags: true
+  dry_run: false
+  allowed_sectors:
+    - spot_alts
+    - memes
+    - listings
+  buy_setups:
+    - buy-watch
+    - new-listing-watch
+  sell_setups:
+    - fade-watch
+  stop_loss_bps: 1200                    # 12%
+
+
+# Primary trading venue: KuCoin (spot + USDT-M futures public data)
+venues:
+  - kucoin
+  - binance
+  - bybit
+  - mexc
+
+sectors:
+  spot_alts:
+    poll_sec: 60
+    min_quote_volume_usdt: 500000
+    min_price: 0.000001
+  futures:
+    poll_sec: 45
+    min_open_interest_usdt: 1000000
+    extreme_funding_abs: 0.0005
+    extreme_funding_rate_i: 50000       # 0.0005 * 1e8
+  memes:
+    poll_sec: 30
+    min_liquidity_usd: 50000
+    max_age_hours: 168
+    chains: ["solana", "ethereum", "bsc", "base"]
+  stables:
+    poll_sec: 60
+    depeg_warn_pct: 0.3
+    depeg_warn_bps: 30
+    symbols: ["USDT", "USDC", "DAI", "FDUSD", "TUSD", "USDE", "PYUSD"]
+  listings:
+    poll_sec: 60
+    lookback_hours: 48
+  whales:
+    poll_sec: 20
+    min_notional_usdt: 100000
+    symbols_watch: ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+
+stable_bases:
+  - USDT
+  - USDC
+  - BUSD
+  - FDUSD
+  - TUSD
+  - DAI
+  - USDE
+  - PYUSD
+  - USD1
+
+meme_keywords:
+  - PEPE
+  - DOGE
+  - SHIB
+  - FLOKI
+  - BONK
+  - WIF
+  - MEME
+  - TRUMP
+  - MOG
+  - NEIRO
+  - PNUT
+  - GOAT
+  - POPCAT
+
+allowlist_hosts:
+  - api.kucoin.com
+  - api-futures.kucoin.com
+  - api.binance.com
+  - fapi.binance.com
+  - api.bybit.com
+  - api.mexc.com
+  - contract.mexc.com
+  - api.dexscreener.com
+  - api.coingecko.com
+  - api.frankfurter.app

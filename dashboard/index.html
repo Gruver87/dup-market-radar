@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="google" content="notranslate" />
+  <title>DUP Market Radar</title>
+  <style>
+    :root {
+      --bg: #0e1116;
+      --panel: #161b22;
+      --border: #2a3340;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #3d9cf0;
+      --pos: #3fb950;
+      --neg: #f85149;
+      --warn: #d29922;
+      --mono: "Cascadia Code", "Consolas", ui-monospace, monospace;
+      --sans: "Segoe UI", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 24px;
+      align-items: baseline;
+      justify-content: space-between;
+      padding: 20px 24px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    h1 { margin: 0; font-size: 1.35rem; font-weight: 650; letter-spacing: 0.02em; }
+    h1 span { color: var(--accent); font-weight: 500; }
+    .meta { color: var(--muted); font-size: 0.85rem; font-family: var(--mono); }
+    .disclaimer {
+      padding: 8px 24px;
+      color: var(--warn);
+      font-size: 0.8rem;
+      border-bottom: 1px solid var(--border);
+    }
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 12px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    button.tab {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 6px 12px;
+      cursor: pointer;
+      font: inherit;
+      border-radius: 2px;
+    }
+    button.tab.active {
+      color: var(--text);
+      border-color: var(--accent);
+      background: #1a2330;
+    }
+    main { padding: 16px 24px 40px; }
+    .method { color: var(--muted); font-size: 0.85rem; margin-bottom: 12px; max-width: 960px; line-height: 1.45; }
+    .help, .watchbox {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 14px 16px;
+      margin-bottom: 16px;
+      max-width: 1100px;
+      font-size: 0.88rem;
+      line-height: 1.5;
+    }
+    .help h2, .watchbox h2 { margin: 0 0 8px; font-size: 0.95rem; font-weight: 650; }
+    .watchbox { background: #122018; border-color: #2a4a38; }
+    .watchbox h2 { color: var(--pos); }
+    .watchbox .note, .help .note { color: var(--muted); font-size: 0.8rem; margin-top: 8px; }
+    .help ul, .watchlist { margin: 6px 0 0 18px; padding: 0; }
+    .help li, .watchlist li { margin: 4px 0; }
+    .help .key { color: var(--accent); font-family: var(--mono); font-size: 0.84rem; }
+    .trade-status {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 12px;
+      font-family: var(--mono);
+    }
+    .trade-status.ok { color: var(--pos); }
+    .trade-status.bad { color: var(--warn); }
+    .pos-bag {
+      font-size: 0.78rem;
+      font-family: var(--mono);
+      color: var(--muted);
+      margin: -4px 0 14px;
+      white-space: pre-wrap;
+    }
+    .pos-bag .basis-fill { color: var(--pos); }
+    .pos-bag .basis-est { color: var(--warn); }
+    .errors {
+      color: var(--neg);
+      font-size: 0.8rem;
+      font-family: var(--mono);
+      margin-bottom: 12px;
+      white-space: pre-wrap;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+    th, td {
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    tr:hover td { background: #121821; }
+    .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    .pos { color: var(--pos); }
+    .neg { color: var(--neg); }
+    .flags { color: var(--warn); font-size: 0.75rem; }
+    .setup-buy, .setup-long { color: var(--pos); font-weight: 600; }
+    .setup-fade { color: var(--warn); font-weight: 600; }
+    .setup-short { color: var(--neg); font-weight: 600; }
+    .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    button.refresh, button.primary {
+      background: var(--accent);
+      color: #041018;
+      border: none;
+      padding: 6px 14px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 2px;
+    }
+    button.auto-off, button.auto-on {
+      border: 1px solid var(--border);
+      padding: 6px 14px;
+      font: inherit;
+      font-weight: 650;
+      cursor: pointer;
+      border-radius: 2px;
+    }
+    button.auto-off {
+      background: #1a2330;
+      color: var(--muted);
+      border-color: var(--border);
+    }
+    button.auto-on {
+      background: #1a3a28;
+      color: var(--pos);
+      border-color: #2a5a40;
+    }
+    button.refresh:disabled, button.primary:disabled { opacity: 0.5; cursor: wait; }
+    button.buy, button.sell {
+      border: 1px solid var(--border);
+      background: #1a2330;
+      color: var(--text);
+      padding: 4px 8px;
+      font: inherit;
+      font-size: 0.78rem;
+      cursor: pointer;
+      border-radius: 2px;
+      margin-right: 4px;
+    }
+    button.buy { border-color: #2a4a38; color: var(--pos); }
+    button.sell { border-color: #4a2a2a; color: var(--neg); }
+    button.buy:disabled, button.sell:disabled { opacity: 0.35; cursor: not-allowed; }
+    a { color: var(--accent); }
+    .empty { color: var(--muted); padding: 24px 0; }
+    .modal-bg {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      padding: 16px;
+    }
+    .modal-bg.open { display: flex; }
+    .modal {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      width: min(440px, 100%);
+      padding: 18px;
+    }
+    .modal h3 { margin: 0 0 10px; font-size: 1.05rem; }
+    .modal label { display: block; font-size: 0.8rem; color: var(--muted); margin: 10px 0 4px; }
+    .modal input {
+      width: 100%;
+      padding: 8px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font: inherit;
+    }
+    .modal .row { display: flex; gap: 8px; margin-top: 16px; }
+    .modal .row button { flex: 1; }
+    .modal .warn { color: var(--warn); font-size: 0.8rem; margin-top: 10px; }
+    .modal .out {
+      margin-top: 10px;
+      font-size: 0.8rem;
+      font-family: var(--mono);
+      white-space: pre-wrap;
+      color: var(--muted);
+    }
+    button.ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 6px 14px;
+      font: inherit;
+      cursor: pointer;
+    }
+    .lang-switch { display: inline-flex; gap: 4px; margin-right: 8px; }
+    .lang-switch button {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 4px 10px;
+      font: inherit;
+      cursor: pointer;
+      border-radius: 2px;
+    }
+    .lang-switch button.active {
+      color: var(--text);
+      border-color: var(--accent);
+    }
+    .ops-panel {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+      max-width: 1100px;
+    }
+    @media (max-width: 800px) { .ops-panel { grid-template-columns: 1fr; } }
+    .ops-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 12px 14px;
+      font-size: 0.85rem;
+    }
+    .ops-card h2 { margin: 0 0 8px; font-size: 0.92rem; }
+    .ops-card .clock-grid {
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      color: var(--muted);
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 2px 12px;
+    }
+    .ops-card .fx-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+    .ops-card input, .ops-card select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 8px;
+      font: inherit;
+      max-width: 110px;
+    }
+    .ops-card .fx-out {
+      margin-top: 8px;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      color: var(--muted);
+      white-space: pre-wrap;
+    }
+    .bubbles-wrap {
+      background: #0a0e14;
+      border: 1px solid var(--border);
+      margin-bottom: 16px;
+      max-width: 1100px;
+      overflow: hidden;
+    }
+    .bubbles-head {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      align-items: baseline;
+    }
+    .bubbles-head h2 { margin: 0; font-size: 0.95rem; }
+    .bubbles-meta { color: var(--muted); font-size: 0.75rem; font-family: var(--mono); }
+    #bubblesSvg { display: block; width: 100%; height: min(62vh, 560px); }
+    .bubble-tip {
+      position: fixed;
+      z-index: 40;
+      pointer-events: none;
+      background: #1a2330;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: 0.78rem;
+      font-family: var(--mono);
+      max-width: 280px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>DUP <span>Market Radar</span></h1>
+      <div class="meta" id="status" data-i18n="loading">загрузка…</div>
+    </div>
+    <div class="toolbar">
+      <div class="lang-switch" role="group" aria-label="Language">
+        <button type="button" id="langRu" data-lang="ru">RU</button>
+        <button type="button" id="langEn" data-lang="en">EN</button>
+      </div>
+      <button class="auto-off" id="autoToggle" type="button" data-i18n-title="auto_title">Авто: OFF</button>
+      <button class="refresh" id="refresh" type="button" data-i18n="refresh">Обновить</button>
+    </div>
+  </header>
+  <div class="disclaimer" id="disclaimer" data-i18n="disclaimer">
+    Watchlist · ручные Купить/Продать · авто ON/OFF (спот/мемы/листинги, без фьючерсов). Не финансовый совет.
+  </div>
+  <nav id="tabs"></nav>
+  <main>
+    <div class="ops-panel">
+      <div class="ops-card">
+        <h2 data-i18n="world_clock">Мировое время</h2>
+        <div class="clock-grid" id="worldClock">…</div>
+        <p class="note" style="color:var(--muted);font-size:0.75rem;margin:8px 0 0" data-i18n="clock_note">фиксированные UTC-смещения (без DST)</p>
+      </div>
+      <div class="ops-card">
+        <h2 data-i18n="fx_title">Обмен валют (ECB)</h2>
+        <div class="fx-row">
+          <input id="fxAmount" type="text" value="100" aria-label="amount" />
+          <select id="fxFrom" aria-label="from">
+            <option>USD</option><option>EUR</option><option>GBP</option>
+            <option>JPY</option><option>CHF</option><option>CNY</option>
+            <option selected>RUB</option>
+          </select>
+          <span>→</span>
+          <select id="fxTo" aria-label="to">
+            <option selected>USD</option><option>EUR</option><option>GBP</option>
+            <option>JPY</option><option>CHF</option><option>CNY</option>
+            <option>RUB</option>
+          </select>
+          <button class="ghost" type="button" id="fxGo" data-i18n="fx_go">Конвертировать</button>
+        </div>
+        <div class="fx-out" id="fxOut"></div>
+      </div>
+    </div>
+    <div class="bubbles-wrap">
+      <div class="bubbles-head">
+        <h2 data-i18n="bubbles_title">Crypto Bubbles · топ-100 · ~6м</h2>
+        <div class="bubbles-meta" id="bubblesMeta">…</div>
+      </div>
+      <svg id="bubblesSvg" viewBox="0 0 1100 560" role="img" aria-label="crypto bubbles"></svg>
+      <div class="bubble-tip" id="bubbleTip"></div>
+    </div>
+    <div class="help">
+      <h2 data-i18n="help_title">Как читать / ручная торговля</h2>
+      <ul id="helpList">
+        <li data-i18n="help_1"><span class="key">Score</span> — насколько монета выделяется. Не гарантия прибыли.</li>
+        <li data-i18n="help_2"><span class="key">Смотреть лонг (откат)</span> — рост уже был; ждать откат, не гнаться за пиком.</li>
+        <li data-i18n="help_3"><span class="key">Смотреть отскок</span> — после дампа; агрессивно и рискованно.</li>
+        <li data-i18n="help_4"><span class="key">Купить / Продать</span> — ручной режим. Превью → подтверждение. Работает и при Авто OFF, и при Авто ON.</li>
+        <li data-i18n="help_5"><span class="key">Авто: ON/OFF</span> — если ON, Radar сам шлёт market buy/sell по сигналам спот/мемы/листинги. <b>Фьючерсы никогда.</b> По умолчанию OFF.</li>
+        <li data-i18n="help_6">Авто-покупка: setup «лонг/откат» или новый листинг, score ≥ порога, без риск-флагов. Авто-продажа: fade-watch или стоп-лосс % от входа (см. config).</li>
+        <li data-i18n="help_7">Нужен <span class="key">.env</span> с ключами KuCoin. Можно включить <span class="key">auto_trade.dry_run: true</span> для лога без ордеров.</li>
+        <li data-i18n="help_8"><span class="key">Telegram</span> — алерты + /time /fx /lang. Токен и chat id в <span class="key">.env</span>.</li>
+      </ul>
+    </div>
+    <div class="trade-status" id="tradeStatus">торговля: …</div>
+    <div class="trade-status" id="autoStatus">авто: …</div>
+    <div class="trade-status" id="tgStatus">telegram: …</div>
+    <div class="pos-bag" id="posBag" hidden></div>
+    <div class="watchbox" id="watchbox"></div>
+    <div class="method" id="method"></div>
+    <div class="errors" id="errors"></div>
+    <div id="table"></div>
+  </main>
+
+  <div class="modal-bg" id="modalBg" role="dialog" aria-modal="true">
+    <div class="modal">
+      <h3 id="modalTitle">Ручной ордер</h3>
+      <div class="meta" id="modalSymbol"></div>
+      <label id="amountLabel" for="amount">Сумма</label>
+      <input id="amount" type="number" min="0" step="any" />
+      <p class="warn" id="modalWarn">
+        Это market-ордер на KuCoin spot. Автоматически Radar ордера не ставит.
+        Нажми «Превью», проверь, затем «Подтвердить ордер».
+      </p>
+      <div class="row">
+        <button class="ghost" type="button" id="modalCancel">Отмена</button>
+        <button class="ghost" type="button" id="modalPreview">Превью</button>
+        <button class="primary" type="button" id="modalConfirm">Подтвердить ордер</button>
+      </div>
+      <div class="out" id="modalOut"></div>
+    </div>
+  </div>
+
+  <script>
+    const I18N = {
+      ru: {
+        loading: "загрузка…",
+        refresh: "Обновить",
+        auto_title: "Автоторговля спот (без фьючерсов)",
+        disclaimer: "Watchlist · ручные Купить/Продать · авто ON/OFF (спот/мемы/листинги, без фьючерсов). Не финансовый совет.",
+        world_clock: "Мировое время",
+        clock_note: "фиксированные UTC-смещения (без DST)",
+        fx_title: "Обмен валют (ECB)",
+        fx_go: "Конвертировать",
+        bubbles_title: "Crypto Bubbles · топ-100 · ~6м",
+        help_title: "Как читать / ручная торговля",
+        help_1: "<span class=\"key\">Score</span> — насколько монета выделяется. Не гарантия прибыли.",
+        help_2: "<span class=\"key\">Смотреть лонг (откат)</span> — рост уже был; ждать откат, не гнаться за пиком.",
+        help_3: "<span class=\"key\">Смотреть отскок</span> — после дампа; агрессивно и рискованно.",
+        help_4: "<span class=\"key\">Купить / Продать</span> — ручной режим. Превью → подтверждение.",
+        help_5: "<span class=\"key\">Авто: ON/OFF</span> — market buy/sell по спот/мемы/листинги. <b>Фьючерсы никогда.</b>",
+        help_6: "Авто-покупка: лонг/откат или листинг; авто-продажа: fade или стоп-лосс.",
+        help_7: "Нужен <span class=\"key\">.env</span> с ключами KuCoin. <span class=\"key\">auto_trade.dry_run: true</span> = лог без ордеров.",
+        help_8: "<span class=\"key\">Telegram</span> — алерты + /time /fx /lang. Токен в <span class=\"key\">.env</span>.",
+        sectors: {
+          spot_alts: "Спот альты", futures: "Фьючерсы", futures_long: "Фьючерсы лонг",
+          futures_short: "Фьючерсы шорт", memes: "Мемы", stables: "Стейблы",
+          listings: "Листинги", whales: "Киты",
+        },
+      },
+      en: {
+        loading: "loading…",
+        refresh: "Refresh",
+        auto_title: "Auto-trade spot (no futures)",
+        disclaimer: "Watchlist · manual Buy/Sell · auto ON/OFF (spot/memes/listings, no futures). Not financial advice.",
+        world_clock: "World clock",
+        clock_note: "fixed UTC offsets (no DST)",
+        fx_title: "FX (ECB)",
+        fx_go: "Convert",
+        bubbles_title: "Crypto Bubbles · top-100 · ~6m",
+        help_title: "How to read / manual trade",
+        help_1: "<span class=\"key\">Score</span> — how unusual the coin looks. Not a profit guarantee.",
+        help_2: "<span class=\"key\">Buy-watch (pullback)</span> — move already happened; wait for a dip.",
+        help_3: "<span class=\"key\">Fade-watch</span> — after a dump; aggressive and risky.",
+        help_4: "<span class=\"key\">Buy / Sell</span> — manual mode. Preview → confirm.",
+        help_5: "<span class=\"key\">Auto: ON/OFF</span> — market buy/sell on spot/memes/listings. <b>Never futures.</b>",
+        help_6: "Auto-buy: pullback or listing; auto-sell: fade or stop-loss.",
+        help_7: "Needs KuCoin keys in <span class=\"key\">.env</span>. <span class=\"key\">auto_trade.dry_run: true</span> = log only.",
+        help_8: "<span class=\"key\">Telegram</span> — alerts + /time /fx /lang. Token in <span class=\"key\">.env</span>.",
+        sectors: {
+          spot_alts: "Spot alts", futures: "Futures", futures_long: "Futures long",
+          futures_short: "Futures short", memes: "Memes", stables: "Stables",
+          listings: "Listings", whales: "Whales",
+        },
+      },
+    };
+
+    function getLang() {
+      try {
+        const v = localStorage.getItem("radar_lang");
+        if (v === "en" || v === "ru") return v;
+      } catch (_) {}
+      return "ru";
+    }
+    function setLang(lang) {
+      const lg = lang === "en" ? "en" : "ru";
+      try { localStorage.setItem("radar_lang", lg); } catch (_) {}
+      document.documentElement.lang = lg;
+      applyI18n();
+      loadWorldClock();
+      renderTabs();
+      if (state.snap) render();
+    }
+    function applyI18n() {
+      const lg = getLang();
+      const pack = I18N[lg] || I18N.ru;
+      document.querySelectorAll("[data-i18n]").forEach((el) => {
+        const k = el.getAttribute("data-i18n");
+        if (pack[k] != null) el.innerHTML = pack[k];
+      });
+      document.querySelectorAll("[data-i18n-title]").forEach((el) => {
+        const k = el.getAttribute("data-i18n-title");
+        if (pack[k] != null) el.title = pack[k];
+      });
+      document.getElementById("langRu").classList.toggle("active", lg === "ru");
+      document.getElementById("langEn").classList.toggle("active", lg === "en");
+    }
+    function sectorList() {
+      const pack = I18N[getLang()] || I18N.ru;
+      return Object.keys(pack.sectors).map((id) => ({ id, label: pack.sectors[id] }));
+    }
+
+    async function loadWorldClock() {
+      const box = document.getElementById("worldClock");
+      try {
+        const res = await fetchTimeout("/api/ops/worldtime?lang=" + encodeURIComponent(getLang()));
+        const data = await res.json();
+        if (!data.ok) throw new Error("clock fail");
+        box.innerHTML = (data.cities || []).map((c) =>
+          `<span>${esc(c.label)}</span><span>${esc(c.ymd)} ${esc(c.hhmmss)}</span>`
+        ).join("");
+      } catch (e) {
+        box.textContent = String(e);
+      }
+    }
+
+    async function runFx() {
+      const out = document.getElementById("fxOut");
+      const amount = document.getElementById("fxAmount").value;
+      const from = document.getElementById("fxFrom").value;
+      const to = document.getElementById("fxTo").value;
+      out.textContent = "…";
+      try {
+        const q = new URLSearchParams({ amount, from_ccy: from, to_ccy: to });
+        const res = await fetchTimeout("/api/ops/fx?" + q.toString());
+        const data = await res.json();
+        if (!res.ok) {
+          out.textContent = typeof data.detail === "string" ? data.detail : JSON.stringify(data);
+          return;
+        }
+        const scale = data.scale || 1000000;
+        const fmt = (m) => {
+          const whole = Math.trunc(m / scale);
+          const frac = String(Math.abs(m % scale)).padStart(6, "0").replace(/0+$/, "");
+          return frac ? whole + "." + frac : String(whole);
+        };
+        out.textContent =
+          fmt(data.amount_in_micros) + " " + data.from + " → " +
+          fmt(data.amount_out_micros) + " " + data.to +
+          "\nrate=" + fmt(data.rate_micros) + " · " + (data.source || "");
+      } catch (e) {
+        out.textContent = String(e);
+      }
+    }
+
+    function bpsToPctLabel(bps) {
+      if (bps == null || Number.isNaN(Number(bps))) return "—";
+      const v = Number(bps) / 100;
+      const sign = v > 0 ? "+" : "";
+      return sign + v.toFixed(1) + "%";
+    }
+
+    function bubbleColor(bps) {
+      const v = Number(bps || 0);
+      // green up / red down — crypto-bubbles style
+      if (v >= 8000) return "#1a7f37";
+      if (v >= 2000) return "#2ea043";
+      if (v >= 500) return "#3fb950";
+      if (v > 0) return "#56d364";
+      if (v === 0) return "#6e7681";
+      if (v > -500) return "#f85149";
+      if (v > -2000) return "#da3633";
+      if (v > -8000) return "#b62324";
+      return "#8b1518";
+    }
+
+    function packBubbles(coins, W, H) {
+      const items = coins
+        .filter((c) => c && c.market_cap_i != null && c.market_cap_i > 0)
+        .slice(0, 100)
+        .map((c) => {
+          // market_cap_i is USDT micros → USD for bubble radius
+          const mUsd = Math.max(1, Number(c.market_cap_i) / 1e6);
+          const r = Math.max(10, Math.min(90, 10 + Math.sqrt(mUsd) / 3500));
+          return { ...c, r };
+        })
+        .sort((a, b) => b.r - a.r);
+      const placed = [];
+      const cx0 = W / 2, cy0 = H / 2;
+      for (const it of items) {
+        let placedOk = false;
+        for (let attempt = 0; attempt < 400 && !placedOk; attempt++) {
+          const ang = attempt * 0.55;
+          const rad = 8 + attempt * 1.35;
+          const x = cx0 + Math.cos(ang) * rad;
+          const y = cy0 + Math.sin(ang) * rad * 0.72;
+          if (x - it.r < 4 || y - it.r < 4 || x + it.r > W - 4 || y + it.r > H - 4) continue;
+          let hit = false;
+          for (const p of placed) {
+            const dx = p.x - x, dy = p.y - y;
+            if (dx * dx + dy * dy < (p.r + it.r + 1.5) * (p.r + it.r + 1.5)) {
+              hit = true;
+              break;
+            }
+          }
+          if (!hit) {
+            placed.push({ ...it, x, y });
+            placedOk = true;
+          }
+        }
+        if (!placedOk) {
+          placed.push({ ...it, x: cx0, y: cy0 });
+        }
+      }
+      return placed;
+    }
+
+    function renderBubbles(payload) {
+      const svg = document.getElementById("bubblesSvg");
+      const meta = document.getElementById("bubblesMeta");
+      const tip = document.getElementById("bubbleTip");
+      if (!svg) return;
+      const coins = (payload && payload.coins) || [];
+      const W = 1100, H = 560;
+      const packed = packBubbles(coins, W, H);
+      const stale = payload && payload.stale ? " · STALE" : "";
+      const age = payload && payload.age_ms != null ? ` · age=${Math.floor(payload.age_ms / 1000)}s` : "";
+      meta.textContent =
+        `n=${coins.length} · ${payload.period_label || "~6m"} · src=${payload.source || "—"}${stale}${age}` +
+        (payload.error ? ` · err=${payload.error}` : "");
+      const PRICE = 100000000;
+      let html = "";
+      for (const b of packed) {
+        const fill = bubbleColor(b.change_6m_bps);
+        const pct = bpsToPctLabel(b.change_6m_bps);
+        const fs = Math.max(7, Math.min(14, b.r * 0.38));
+        const price =
+          b.price_i != null ? (Number(b.price_i) / PRICE).toPrecision(4) : "—";
+        html += `<g class="bub" data-sym="${esc(b.symbol)}" data-name="${esc(b.name)}" ` +
+          `data-pct="${esc(pct)}" data-price="${esc(price)}" data-rank="${esc(b.rank)}">` +
+          `<circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="${b.r.toFixed(1)}" ` +
+          `fill="${fill}" fill-opacity="0.88" stroke="#0e1116" stroke-width="1.2"/>` +
+          `<text x="${b.x.toFixed(1)}" y="${(b.y - fs * 0.15).toFixed(1)}" text-anchor="middle" ` +
+          `fill="#e6edf3" font-size="${fs}" font-family="Segoe UI,sans-serif" font-weight="650">${esc(b.symbol)}</text>` +
+          `<text x="${b.x.toFixed(1)}" y="${(b.y + fs * 0.95).toFixed(1)}" text-anchor="middle" ` +
+          `fill="#e6edf3" font-size="${Math.max(6, fs * 0.75)}" font-family="Consolas,monospace">${esc(pct)}</text>` +
+          `</g>`;
+      }
+      svg.innerHTML = html;
+      svg.querySelectorAll("g.bub").forEach((g) => {
+        g.addEventListener("mousemove", (ev) => {
+          tip.style.display = "block";
+          tip.style.left = (ev.clientX + 12) + "px";
+          tip.style.top = (ev.clientY + 12) + "px";
+          tip.textContent =
+            `#${g.dataset.rank} ${g.dataset.sym} · ${g.dataset.name}\n` +
+            `price≈$${g.dataset.price} · 6m ${g.dataset.pct}`;
+        });
+        g.addEventListener("mouseleave", () => { tip.style.display = "none"; });
+      });
+    }
+
+    async function loadBubbles(force = false) {
+      try {
+        const res = await fetchTimeout("/api/ops/bubbles" + (force ? "?force=true" : ""), {}, 25000);
+        const data = await res.json();
+        if (!res.ok && !data.coins) {
+          document.getElementById("bubblesMeta").textContent =
+            typeof data.detail === "string" ? data.detail : "bubbles fail";
+          return;
+        }
+        renderBubbles(data);
+      } catch (e) {
+        document.getElementById("bubblesMeta").textContent = String(e);
+      }
+    }
+
+    const SECTORS = sectorList();
+
+    const SETUP_RU = {
+      "buy-watch": { label: "Смотреть лонг (откат)", cls: "setup-buy", kind: "buy" },
+      "fade-watch": { label: "Смотреть отскок (после падения)", cls: "setup-fade", kind: "fade" },
+      "long": { label: "Лонг (watch)", cls: "setup-long", kind: "buy" },
+      "short": { label: "Шорт (watch)", cls: "setup-short", kind: "short" },
+      "peg-monitor": { label: "Монитор пега", cls: "", kind: "other" },
+      "new-listing-watch": { label: "Новый листинг (watch)", cls: "setup-buy", kind: "buy" },
+    };
+
+    let state = { sector: "spot_alts", snap: null, tradeReady: false, autoOn: false, etag: null };
+    let modal = { symbol: null, side: null, venue: null, clientOid: null };
+
+    function newClientOid() {
+      if (window.crypto && typeof window.crypto.randomUUID === "function") {
+        return window.crypto.randomUUID();
+      }
+      return "radar-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+    }
+
+    function apiHeaders(json = true) {
+      const h = {};
+      if (json) h["Content-Type"] = "application/json";
+      try {
+        const k = (localStorage.getItem("radar_api_key") || "").trim();
+        // Match server API_KEY_MIN/MAX — never send junk/oversize
+        if (k.length >= 8 && k.length <= 256) h["X-Radar-Api-Key"] = k;
+      } catch (_) { /* private mode */ }
+      return h;
+    }
+
+    /** Soft-refuse hung API: AbortController timeout (ms). */
+    const FETCH_TIMEOUT_MS = 20000;
+    async function fetchTimeout(url, opts = {}, timeoutMs = FETCH_TIMEOUT_MS) {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), timeoutMs);
+      try {
+        return await fetch(url, { ...opts, signal: ctrl.signal });
+      } finally {
+        clearTimeout(t);
+      }
+    }
+
+    /** Escape untrusted snapshot/API strings before innerHTML. Soft-cap length. */
+    function esc(s) {
+      let t = String(s == null ? "" : s);
+      if (t.length > 4096) t = t.slice(0, 4096) + "…";
+      return t
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    /** Only https:// URLs; empty if unsafe. */
+    function safeHref(u) {
+      const s = String(u || "").trim();
+      if (!/^https:\/\//i.test(s)) return "";
+      return esc(s);
+    }
+
+    function setupInfo(code) {
+      if (!code) return { label: "—", cls: "", kind: "other" };
+      if (SETUP_RU[code]) return SETUP_RU[code];
+      if (String(code).startsWith("whale-")) {
+        const side = String(code).replace("whale-", "");
+        return {
+          label: side === "buy" ? "Кит: крупные покупки" : side === "sell" ? "Кит: крупные продажи" : "Кит",
+          cls: side === "buy" ? "setup-buy" : "setup-short",
+          kind: side === "buy" ? "buy" : "short",
+        };
+      }
+      return { label: code, cls: "", kind: "other" };
+    }
+
+    // Integer fixed-point display (no float money logic)
+    const PRICE_SCALE = 100000000;
+    const QUOTE_SCALE = 1000000;
+    const BASE_SCALE = 100000000;
+
+    function scaledToStr(n, scale) {
+      if (n === null || n === undefined) return "—";
+      const neg = n < 0;
+      let v = Math.abs(Math.trunc(n));
+      const whole = Math.floor(v / scale);
+      let frac = String(v % scale).padStart(String(scale - 1).length, "0").replace(/0+$/, "");
+      let s = frac ? `${whole}.${frac}` : String(whole);
+      return neg && s !== "0" ? "-" + s : s;
+    }
+
+    function fmtPriceI(pi) {
+      return scaledToStr(pi, PRICE_SCALE);
+    }
+
+    function fmtQuoteI(qi) {
+      if (qi === null || qi === undefined) return "—";
+      // compact USDT from micros
+      const usdt_i = Math.trunc(qi); // micros
+      const abs = Math.abs(usdt_i);
+      if (abs >= 1e6 * QUOTE_SCALE) return (usdt_i / (1e6 * QUOTE_SCALE)).toFixed(2) + "M";
+      if (abs >= 1e3 * QUOTE_SCALE) return (usdt_i / (1e3 * QUOTE_SCALE)).toFixed(1) + "k";
+      return scaledToStr(usdt_i, QUOTE_SCALE);
+    }
+
+    function fmtBps(bps) {
+      if (bps === null || bps === undefined) return "—";
+      const sign = bps > 0 ? "+" : bps < 0 ? "-" : "";
+      const a = Math.abs(Math.trunc(bps));
+      return `${sign}${Math.floor(a / 100)}.${String(a % 100).padStart(2, "0")}%`;
+    }
+
+    function fmtScoreCenti(c) {
+      if (c === null || c === undefined) return "—";
+      const n = Math.trunc(c);
+      const sign = n < 0 ? "-" : "";
+      const a = Math.abs(n);
+      return `${sign}${Math.floor(a / 100)}.${String(a % 100).padStart(2, "0")}`;
+    }
+
+    /** Human decimal string → scaled int (no float multiply). */
+    function parseScaled(str, fracDigits) {
+      const s = String(str || "").trim().replace(",", ".");
+      const m = s.match(/^(\d+)(?:\.(\d+))?$/);
+      if (!m) return null;
+      const frac = (m[2] || "").slice(0, fracDigits).padEnd(fracDigits, "0");
+      const n = Number(m[1] + frac);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    }
+
+    function pctClass(bps) {
+      if (bps === null || bps === undefined) return "num";
+      return "num " + (bps >= 0 ? "pos" : "neg");
+    }
+
+    function entryRu(r) {
+      const setup = r.setup;
+      const p = r.price_i;
+      if (p == null) return r.entry_hint || "—";
+      if (setup === "buy-watch" || setup === "long" || setup === "new-listing-watch") {
+        const lo = Math.floor((p * 985) / 1000);
+        return `Ждать откат примерно к ${fmtPriceI(lo)}–${fmtPriceI(p)}`;
+      }
+      if (setup === "fade-watch") {
+        const hi = Math.floor((p * 1015) / 1000);
+        return `Зона возможного отскока ${fmtPriceI(p)}–${fmtPriceI(hi)}`;
+      }
+      if (setup === "short") return `Шорт-watch около ${fmtPriceI(p)}`;
+      return r.entry_hint || "—";
+    }
+
+    function canTradeRow(r) {
+      // Manual KuCoin spot only — skip pure DEX / stables monitor rows without CEX symbol
+      if (!r || !r.symbol) return false;
+      if (r.market === "dex" || r.venue === "dexscreener" || r.venue === "coingecko") return false;
+      if (state.sector === "stables" || state.sector === "whales") return false;
+      return true;
+    }
+
+    function openTrade(symbol, side, venue) {
+      modal = { symbol, side, venue, clientOid: newClientOid() };
+      document.getElementById("modalTitle").textContent =
+        side === "buy" ? "Купить (KuCoin spot, market)" : "Продать (KuCoin spot, market)";
+      document.getElementById("modalSymbol").textContent =
+        `${symbol}` + (venue ? ` · источник сигнала: ${venue}` : "") +
+        (state.tradeReady ? " · ключи OK" : " · ключи НЕ настроены");
+      document.getElementById("amountLabel").textContent =
+        side === "buy" ? "Сумма в USDT (сколько потратить)" : "Количество монеты (base size)";
+      document.getElementById("amount").value = side === "buy" ? "10" : "";
+      document.getElementById("modalOut").textContent = "";
+      document.getElementById("modalBg").classList.add("open");
+    }
+
+    function closeTrade() {
+      document.getElementById("modalBg").classList.remove("open");
+      modal.clientOid = null;
+    }
+
+    async function sendOrder(confirm) {
+      const raw = document.getElementById("amount").value;
+      const out = document.getElementById("modalOut");
+      if (!modal.symbol || !modal.side) return;
+      if (!modal.clientOid) modal.clientOid = newClientOid();
+      const body = {
+        symbol: modal.symbol,
+        side: modal.side,
+        confirm: !!confirm,
+        client_oid: modal.clientOid,
+        reconcile: true,
+      };
+      if (modal.side === "buy") {
+        const micros = parseScaled(raw, 6); // USDT → micros
+        if (micros == null) {
+          out.textContent = "Укажи сумму USDT > 0 (целое/десятичное)";
+          return;
+        }
+        body.quote_usdt_micros = micros;
+      } else {
+        const sizeI = parseScaled(raw, 8); // base → 1e8
+        if (sizeI == null) {
+          out.textContent = "Укажи количество base > 0";
+          return;
+        }
+        body.base_size_i = sizeI;
+      }
+
+      out.textContent = confirm ? "отправляю ордер…" : "превью…";
+      try {
+        const res = await fetchTimeout("/api/trade/order", {
+          method: "POST",
+          headers: apiHeaders(true),
+          body: JSON.stringify(body),
+        }, 30000);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          if (res.status === 429) {
+            const ra = res.headers.get("Retry-After") || "?";
+            out.textContent = `rate limit — Retry-After=${ra}s · soft refuse`;
+            return;
+          }
+          const detail = data.detail;
+          out.textContent = "ошибка: " + (typeof detail === "string"
+            ? detail
+            : JSON.stringify(detail || data, null, 2));
+          // Soft refuse duplicate → mint fresh oid for intentional retry
+          if (confirm && detail && String(detail.message || detail).toLowerCase().includes("duplicate")) {
+            modal.clientOid = newClientOid();
+          }
+          return;
+        }
+        // Keep clientOid after live success — double-confirm soft-refuses as duplicate
+        let text = JSON.stringify(data, null, 2);
+        if (confirm && data.ok && !data.dry_run) {
+          text += "\n\nОрдер отправлен на KuCoin.";
+          const fill = data.fill || {};
+          if (fill.ok && fill.base_size_i != null) {
+            text += `\nFill reconcile: base_size_i=${fill.base_size_i} · basis=${fill.size_basis}`;
+          } else if (data.order_id && data.fill) {
+            text += `\nFill reconcile: FAIL · ${fill.message || "unreconciled"}`;
+          }
+        }
+        out.textContent = text;
+      } catch (e) {
+        out.textContent = "сеть: " + e;
+      }
+    }
+
+    function renderTabs() {
+      const nav = document.getElementById("tabs");
+      nav.innerHTML = "";
+      sectorList().forEach(s => {
+        const b = document.createElement("button");
+        b.className = "tab" + (s.id === state.sector ? " active" : "");
+        b.type = "button";
+        b.textContent = s.label;
+        b.onclick = () => { state.sector = s.id; render(); };
+        nav.appendChild(b);
+      });
+    }
+
+    function renderPosBag(at) {
+      const bag = document.getElementById("posBag");
+      const positions = (at && at.positions) || {};
+      const keys = Object.keys(positions);
+      if (!keys.length) {
+        bag.hidden = true;
+        bag.innerHTML = "";
+        return;
+      }
+      const lines = keys.map(sym => {
+        const p = positions[sym] || {};
+        const basis = String(p.size_basis || "—");
+        const cls = basis.indexOf("kucoin_fill") >= 0 ? "basis-fill"
+          : (basis.indexOf("estimat") >= 0 || basis.indexOf("unreconcil") >= 0 ? "basis-est" : "");
+        const size = p.base_size_i != null ? String(p.base_size_i) : "—";
+        const oid = p.order_id ? ` · oid=${esc(String(p.order_id).slice(0, 10))}` : "";
+        return `<div><span class="${cls}">${esc(sym)}</span> · base_size_i=${esc(size)} · <span class="${cls}">${esc(basis)}</span>${oid}</div>`;
+      });
+      bag.hidden = false;
+      bag.innerHTML = lines.join("");
+    }
+
+    function renderTradeStatus(snap) {
+      const el = document.getElementById("tradeStatus");
+      const autoEl = document.getElementById("autoStatus");
+      const btn = document.getElementById("autoToggle");
+      const mt = (snap && snap.manual_trade) || {};
+      const at = (snap && snap.auto_trade) || {};
+      state.tradeReady = !!mt.configured;
+      state.autoOn = !!at.enabled;
+      if (mt.configured) {
+        el.className = "trade-status ok";
+        el.textContent = "ручные кнопки KuCoin: ключи найдены · работают всегда (с подтверждением)";
+      } else {
+        el.className = "trade-status bad";
+        el.textContent = "ручная торговля: нет .env ключей — превью можно, живой ордер нет";
+      }
+      const pos = at.open_positions != null ? at.open_positions : 0;
+      const persistOk = at.persistence_ok !== false;
+      const integ = at.positions_integrity || "—";
+      const persistTag = persistOk ? `persist=OK · integrity=${integ}` : `persist=СБОЙ · integrity=${integ}`;
+      const sha = at.positions_sha256 ? String(at.positions_sha256).slice(0, 8) : "";
+      const fillOn = at.fill_reconcile !== false;
+      if (!persistOk) {
+        autoEl.className = "trade-status bad";
+        autoEl.textContent =
+          `АВТО заблокирован: файл позиций · ${persistTag} · ${at.persistence_error || ""}`;
+        btn.textContent = state.autoOn ? "Авто: ON?" : "Авто: OFF";
+        btn.className = "auto-off";
+        renderPosBag(at);
+        return;
+      }
+      if (at.enabled) {
+        autoEl.className = "trade-status ok";
+        autoEl.textContent =
+          `АВТО ON · сектора: ${(at.allowed_sectors || []).join(", ") || "—"} · ` +
+          `позиции=${pos} · ${persistTag}` +
+          (sha ? ` · sha=${sha}` : "") +
+          ` · fill_reconcile=${fillOn}` +
+          ` · dry_run=${!!at.dry_run} · фьючерсы исключены`;
+        btn.textContent = "Авто: ON";
+        btn.className = "auto-on";
+      } else {
+        autoEl.className = "trade-status bad";
+        autoEl.textContent =
+          `АВТО OFF · только ручные · позиции=${pos} · ${persistTag}` +
+          (sha ? ` · sha=${sha}` : "") +
+          ` · fill_reconcile=${fillOn}` +
+          ` · фьючерсы не торгуются автоматом`;
+        btn.textContent = "Авто: OFF";
+        btn.className = "auto-off";
+      }
+      renderPosBag(at);
+      const tgEl = document.getElementById("tgStatus");
+      const tg = (snap && snap.telegram) || {};
+      if (tg.running) {
+        tgEl.className = "trade-status ok";
+        tgEl.textContent =
+          `telegram ON · chats=${tg.allowed_chats || 0} · watches=${(tg.watches && tg.watches.count) || 0}` +
+          (tg.watches && tg.watches.persist_ok === false ? " · watches persist=СБОЙ" : "");
+      } else if (tg.env_ready) {
+        tgEl.className = "trade-status bad";
+        tgEl.textContent = "telegram: secrets OK, но бот не running";
+      } else {
+        tgEl.className = "trade-status bad";
+        tgEl.textContent = "telegram OFF · задай TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID в .env";
+      }
+    }
+
+    async function toggleAuto() {
+      const next = !state.autoOn;
+      const msg = next
+        ? "Включить АВТО-торговлю KuCoin spot (без фьючерсов)? Ордера market buy/sell пойдут сами по циклу."
+        : "Выключить АВТО-торговлю? Останутся только ручные Купить/Продать.";
+      if (!confirm(msg)) return;
+      try {
+        const res = await fetchTimeout("/api/trade/auto", {
+          method: "POST",
+          headers: apiHeaders(true),
+          body: JSON.stringify({ enabled: next }),
+        }, 15000);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          alert(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || data));
+          return;
+        }
+        if (state.snap) state.snap.auto_trade = data;
+        renderTradeStatus(state.snap || { auto_trade: data, manual_trade: {} });
+      } catch (e) {
+        alert("сеть: " + e);
+      }
+    }
+
+    function renderWatchbox(rows) {
+      const box = document.getElementById("watchbox");
+      if (state.sector === "stables") {
+        box.innerHTML = `<h2>Стейблы</h2><p>Монитор пега к $1, не сигнал «покупай рост».</p><p class="note">Не финансовый совет.</p>`;
+        return;
+      }
+      if (state.sector === "whales") {
+        box.innerHTML = `<h2>Киты</h2><p>Крупные сделки по размеру. Не smart-money labels.</p><p class="note">Не финансовый совет.</p>`;
+        return;
+      }
+      const buyish = rows.filter(r => setupInfo(r.setup).kind === "buy" && !(r.risk_flags || []).length).slice(0, 5);
+      const fadeish = rows.filter(r => setupInfo(r.setup).kind === "fade" && !(r.risk_flags || []).length).slice(0, 3);
+      let html = `<h2>Что смотреть сейчас (watchlist)</h2>`;
+      if (!buyish.length && !fadeish.length) {
+        html += `<p>Нет чистых кандидатов без риск-флагов.</p>`;
+      } else {
+        if (buyish.length) {
+          html += `<p><b>Ближе к лонгу после отката:</b></p><ol class="watchlist">`;
+          buyish.forEach(r => {
+            html += `<li><b>${esc(r.symbol)}</b> (${esc(r.venue)}) · score ${esc(fmtScoreCenti(r.score_centi))} · Δ ${esc(fmtBps(r.change_bps))} · ${esc(entryRu(r))}</li>`;
+          });
+          html += `</ol>`;
+        }
+        if (fadeish.length) {
+          html += `<p><b>Отскок после падения:</b></p><ol class="watchlist">`;
+          fadeish.forEach(r => {
+            html += `<li><b>${esc(r.symbol)}</b> (${esc(r.venue)}) · score ${esc(fmtScoreCenti(r.score_centi))} · Δ ${esc(fmtBps(r.change_bps))}</li>`;
+          });
+          html += `</ol>`;
+        }
+      }
+      html += `<p class="note">Кнопки Купить/Продать справа в таблице — только вручную. Не финансовый совет.</p>`;
+      box.innerHTML = html;
+    }
+
+    function render() {
+      const snap = state.snap;
+      if (!snap) return;
+      renderTradeStatus(snap);
+      const metaKey = state.sector.startsWith("futures") ? "futures" : state.sector;
+      const meta = (snap.sector_meta || {})[metaKey] || {};
+      document.getElementById("method").textContent =
+        (meta.title || state.sector) + " — " + (meta.method || "") +
+        (meta.poll_hint ? " · " + meta.poll_hint : "");
+      const errs = snap.errors || [];
+      document.getElementById("errors").textContent = errs.length ? errs.join("\n") : "";
+      document.getElementById("disclaimer").textContent =
+        snap.disclaimer || "Watchlist + ручные ордера. Автоторговли нет. Не финансовый совет.";
+      const when = snap.generated_at ? new Date(snap.generated_at * 1000).toLocaleString() : "—";
+      const backend = snap.score_backend || "?";
+      const scoreMs = snap.score_ms != null ? `${snap.score_ms}ms` : "—";
+      const dedupe = snap.dedupe || {};
+      const spotDrop = (dedupe.spot && dedupe.spot.dropped) || 0;
+      const http = snap.http_stats || {};
+      const httpTag = http.retries != null
+        ? `http get=${http.gets ?? 0}/retry=${http.retries}/429=${http.rate_limited ?? 0}`
+        : "";
+      document.getElementById("status").textContent =
+        `вселенная=${snap.universe_size ?? "—"} · скан=${snap.elapsed_ms != null ? snap.elapsed_ms + "ms" : (snap.elapsed_sec ?? "—") + "с"} · score=${backend}/${scoreMs}` +
+        (spotDrop ? ` · dedupe_spot=-${spotDrop}` : "") +
+        (httpTag ? ` · ${httpTag}` : "") +
+        ` · ${when}` +
+        (snap.ok ? "" : " · СБОЙ ДАННЫХ");
+
+      const rows = ((snap.sectors || {})[state.sector]) || [];
+      renderWatchbox(rows);
+      const el = document.getElementById("table");
+      if (!rows.length) {
+        el.innerHTML = '<div class="empty">Нет кандидатов в этом скане.</div>';
+        return;
+      }
+      const head = `<table><thead><tr>
+        <th>#</th><th>Монета</th><th>Биржа</th><th>Цена</th><th>Δ%</th><th>Объём</th>
+        <th>Score</th><th>Что делать</th><th>Зона входа</th><th>Риски</th><th>Сделка</th>
+      </tr></thead><tbody>`;
+      const body = rows.map((r, i) => {
+        const href = safeHref(r.url);
+        const link = href
+          ? `<a href="${href}" target="_blank" rel="noopener">${esc(r.symbol)}</a>`
+          : esc(r.symbol || "—");
+        const s = setupInfo(r.setup);
+        const trade = canTradeRow(r)
+          ? `<button class="buy" type="button" data-sym="${esc(r.symbol)}" data-side="buy" data-venue="${esc(r.venue || "")}">Купить</button>` +
+            `<button class="sell" type="button" data-sym="${esc(r.symbol)}" data-side="sell" data-venue="${esc(r.venue || "")}">Продать</button>`
+          : "—";
+        const venue = esc(r.venue || "—") + (r.chain ? " / " + esc(r.chain) : "");
+        const flags = esc((r.risk_flags || []).join(", ") || "—");
+        return `<tr>
+          <td class="num">${i + 1}</td>
+          <td>${link}</td>
+          <td>${venue}</td>
+          <td class="num">${esc(fmtPriceI(r.price_i))}</td>
+          <td class="${pctClass(r.change_bps)}">${esc(fmtBps(r.change_bps))}</td>
+          <td class="num">${esc(fmtQuoteI(r.quote_volume_i))}</td>
+          <td class="num">${esc(fmtScoreCenti(r.score_centi))}</td>
+          <td class="${esc(s.cls)}">${esc(s.label)}</td>
+          <td>${esc(entryRu(r))}</td>
+          <td class="flags">${flags}</td>
+          <td>${trade}</td>
+        </tr>`;
+      }).join("");
+      el.innerHTML = head + body + "</tbody></table>";
+      el.querySelectorAll("button.buy, button.sell").forEach(btn => {
+        btn.addEventListener("click", () => {
+          openTrade(btn.dataset.sym, btn.dataset.side, btn.dataset.venue);
+        });
+      });
+    }
+
+    /** Position book is redacted on public snapshot — pull full auto status when API key is set. */
+    async function enrichTradeDetail() {
+      if (!state.snap) return;
+      let hasKey = false;
+      try { hasKey = !!localStorage.getItem("radar_api_key"); } catch (_) { /* private */ }
+      if (!hasKey) return;
+      try {
+        const res = await fetchTimeout("/api/trade/auto", { headers: apiHeaders(false) }, 15000);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && data.ok !== false) {
+          state.snap.auto_trade = data;
+        }
+      } catch (_) { /* soft — snapshot counts still shown */ }
+    }
+
+    async function load(force = false) {
+      const btn = document.getElementById("refresh");
+      btn.disabled = true;
+      try {
+        const headers = apiHeaders(false);
+        if (!force && state.etag) headers["If-None-Match"] = state.etag;
+        const res = await fetchTimeout("/api/snapshot" + (force ? "?force=true" : ""), { headers }, 45000);
+        if (res.status === 304 && state.snap) {
+          await enrichTradeDetail();
+          renderTabs();
+          render();
+          return;
+        }
+        state.snap = await res.json();
+        state.etag = res.headers.get("ETag") || state.snap.etag || state.etag;
+        await enrichTradeDetail();
+        renderTabs();
+        render();
+      } catch (e) {
+        document.getElementById("status").textContent = "ошибка загрузки: " + e;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    document.getElementById("refresh").onclick = () => load(true);
+    document.getElementById("autoToggle").onclick = () => toggleAuto();
+    document.getElementById("modalCancel").onclick = closeTrade;
+    document.getElementById("modalPreview").onclick = () => sendOrder(false);
+    document.getElementById("modalConfirm").onclick = () => {
+      const msg = getLang() === "en"
+        ? "Send market order to KuCoin? This is live execution."
+        : "Отправить market-ордер на KuCoin? Это реальное исполнение.";
+      if (!confirm(msg)) return;
+      sendOrder(true);
+    };
+    document.getElementById("modalBg").addEventListener("click", (e) => {
+      if (e.target.id === "modalBg") closeTrade();
+    });
+    document.getElementById("langRu").onclick = () => setLang("ru");
+    document.getElementById("langEn").onclick = () => setLang("en");
+    document.getElementById("fxGo").onclick = () => runFx();
+
+    applyI18n();
+    loadWorldClock();
+    setInterval(() => loadWorldClock(), 30000);
+    loadBubbles(false);
+    setInterval(() => loadBubbles(false), 30000);
+    renderTabs();
+    load(false);
+    setInterval(() => load(false), 60000);
+  </script>
+</body>
+</html>

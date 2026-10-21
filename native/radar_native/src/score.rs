@@ -535,6 +535,134 @@ fn score_memes(universe: &Value, cfg: &Value) -> Vec<Value> {
             "memes", row, score, setup, &entry, risks, metrics,
         ));
     }
+
+    // CEX spot memes (KuCoin-first) — auto-tradeable; DEX rows stay watchlist-only.
+    let include_cex = sec
+        .get("include_cex_spot")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    if include_cex {
+        let keywords = str_list(cfg, "meme_keywords");
+        let stables = str_list(cfg, "stable_bases");
+        let min_cex_vol = cfg_usdt_micros(sec.get("min_cex_quote_volume_usdt"), 200_000);
+        let mut seen: Vec<String> = out
+            .iter()
+            .filter_map(|c| c.get("symbol").and_then(|s| s.as_str()).map(|s| s.to_uppercase()))
+            .collect();
+        let venue_rank = |v: &str| -> i32 {
+            match v {
+                "kucoin" => 0,
+                "binance" => 1,
+                "bybit" => 2,
+                "mexc" => 3,
+                _ => 9,
+            }
+        };
+        let mut best: Map<String, Value> = Map::new();
+        if let Some(spot_rows) = universe.get("spot").and_then(|v| v.as_array()) {
+            for row in spot_rows {
+                let venue = row
+                    .get("venue")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+                if !matches!(venue.as_str(), "kucoin" | "binance" | "bybit" | "mexc") {
+                    continue;
+                }
+                let Some(sym) = row.get("symbol").and_then(|s| s.as_str()) else {
+                    continue;
+                };
+                if !is_usdt_pair(sym) || is_stable_symbol(sym, &stables) {
+                    continue;
+                }
+                if !is_meme_symbol(sym, &keywords) {
+                    continue;
+                }
+                let sym_u = sym.to_uppercase();
+                if seen.iter().any(|s| s == &sym_u) {
+                    continue;
+                }
+                let Some(price) = as_i64(row.get("price_i")) else {
+                    continue;
+                };
+                let Some(vol) = as_i64(row.get("quote_volume_i")) else {
+                    continue;
+                };
+                let Some(chg_bps) = as_i64(row.get("change_bps")) else {
+                    continue;
+                };
+                let _ = (price, chg_bps);
+                if vol < min_cex_vol / 4 {
+                    continue;
+                }
+                if let Some(prev) = best.get(&sym_u) {
+                    let prev_v = prev
+                        .get("venue")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_lowercase();
+                    if venue_rank(&venue) >= venue_rank(&prev_v) {
+                        continue;
+                    }
+                }
+                best.insert(sym_u, row.clone());
+            }
+        }
+        for (_sym_u, row) in best {
+            let Some(vol) = as_i64(row.get("quote_volume_i")) else {
+                continue;
+            };
+            let Some(chg_bps) = as_i64(row.get("change_bps")) else {
+                continue;
+            };
+            let chg_1h = as_i64(row.get("change_bps_1h"));
+            let chg_15m = as_i64(row.get("change_bps_15m"));
+            let chg_4h = as_i64(row.get("change_bps_4h"));
+            let mut risks = Vec::new();
+            let (mom, mtf_risks) = blend_mtf_momentum(chg_bps, chg_1h, chg_15m, chg_4h);
+            risks.extend(mtf_risks);
+            let vol_vs = as_i64(row.get("vol_vs_median_bps"));
+            let vol_s = blend_volume_score_i(Some(vol), min_cex_vol, vol_vs);
+            if vol < min_cex_vol {
+                risks.push("below_vol_floor".into());
+            }
+            let score = clamp_i(
+                mul_div(50, mom, 100) + mul_div(50, vol_s, 100),
+                0,
+                100 * SCORE_CENTI,
+            );
+            let bias = mtf_bias_bps(chg_bps, chg_1h, chg_15m);
+            let setup = if bias >= 0 { "buy-watch" } else { "fade-watch" };
+            let venue = row
+                .get("venue")
+                .and_then(|v| v.as_str())
+                .unwrap_or("cex");
+            let entry = format!("CEX meme ({venue}); spot MTF watch");
+            let mut metrics = Map::new();
+            metrics.insert("change_bps".into(), json!(chg_bps));
+            metrics.insert("quote_volume_i".into(), json!(vol));
+            metrics.insert("source".into(), json!("cex"));
+            metrics.insert("venue".into(), json!(venue));
+            if let Some(c) = chg_1h {
+                metrics.insert("change_bps_1h".into(), json!(c));
+            }
+            if let Some(c) = chg_15m {
+                metrics.insert("change_bps_15m".into(), json!(c));
+            }
+            if let Some(c) = chg_4h {
+                metrics.insert("change_bps_4h".into(), json!(c));
+            }
+            if let Some(v) = vol_vs {
+                metrics.insert("vol_vs_median_bps".into(), json!(v));
+            }
+            out.push(candidate(
+                "memes", &row, score, setup, &entry, risks, metrics,
+            ));
+            if let Some(sym) = row.get("symbol").and_then(|s| s.as_str()) {
+                seen.push(sym.to_uppercase());
+            }
+        }
+    }
     out
 }
 

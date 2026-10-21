@@ -1,13 +1,11 @@
 name: ci-native
 
-# Optional native parity — not the default python-lab CI.
+# Native parity job — runs on PRs and main (in addition to python-lab CI).
 on:
   workflow_dispatch:
+  pull_request:
   push:
-    paths:
-      - "native/radar_native/**"
-      - "tests/test_score_parity.py"
-      - ".github/workflows/ci-native.yml"
+    branches: [main, master]
 
 jobs:
   native-parity:
@@ -36,4 +34,4 @@ jobs:
           PYTHONPATH: src
           RADAR_NATIVE_PREFER: "1"
           RADAR_NATIVE_FAIL_CLOSED: "1"
-        run: python -m pytest tests/test_score_parity.py -q --tb=short
+        run: python -m pytest tests/test_score_parity.py tests/test_non_crypto_fut.py -q --tb=short

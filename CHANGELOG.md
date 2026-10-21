@@ -1,5 +1,12 @@
 # Changelog — DUP Market Radar
 
+## 0.2.62
+
+- Memes: CEX keyword path (KuCoin-first) into memes sector — auto-eligible; DEX still skipped
+- Config: include_cex_spot / min_cex_quote_volume_usdt; memes back in llowed_sectors
+- CI: ci-native.yml on every PR + main
+- Docs: LIVE_MONEY.md checklist before dry_run: false
+
 ## 0.2.61
 
 - Ensure: empty target set is N/A (not fake 1.0); all-empty → mtf_ensure_empty_targets / mtf_ensure_ok=false

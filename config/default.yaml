@@ -107,7 +107,7 @@ auto_trade:
   dry_run: true
   allowed_sectors:
     - spot_alts
-    # memes excluded: DEX rows are skipped in auto (_collect_buys); keep watchlist-only
+    - memes   # CEX keyword memes (KuCoin…) are auto-eligible; DEX rows still skipped
     - listings
   buy_setups:
     - buy-watch
@@ -141,6 +141,8 @@ sectors:
     min_liquidity_usd: 50000
     max_age_hours: 168
     chains: ["solana", "ethereum", "bsc", "base"]
+    include_cex_spot: true              # score CEX keyword memes into memes sector (auto-tradeable)
+    min_cex_quote_volume_usdt: 200000
   stables:
     poll_sec: 60
     depeg_warn_pct: 0.3

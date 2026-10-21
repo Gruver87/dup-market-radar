@@ -16,7 +16,7 @@ Config: `config/default.yaml` → `auto_trade`.
 | Rule | Behavior |
 |------|----------|
 | Default | **OFF** |
-| Sectors | `spot_alts` / `memes` / `listings` only — futures blocked in config validation |
+| Sectors | `spot_alts` / `memes` (CEX only) / `listings` — futures blocked; DEX memes skipped |
 | Dry run | `dry_run: true` → log only |
 | Degraded snap (`ok=false`, `mtf_ensure_ok=false`, native-prefer + python backend) | **No buys** |
 | Degraded / empty sectors **with** open positions | **Stop-only** via KuCoin public mark (`get_spot_mark_price_i`) |
@@ -44,3 +44,5 @@ Trade events → `data/trade_events.jsonl` (gitignored). Messages redacted.
 ## Outside-top Telegram stops
 
 If a watched spot symbol drops out of top-N, alerts can still fire **stop-loss only** using KuCoin mark (`telegram.outside_top_mark_alerts`, default true). Fade/setup alerts still need a scored row.
+
+See [`LIVE_MONEY.md`](LIVE_MONEY.md) before disabling dry_run.

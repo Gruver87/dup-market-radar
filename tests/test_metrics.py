@@ -36,6 +36,7 @@ def test_prometheus_contains_core_gauges():
                 "alerts_sent": 9,
                 "alerts_skipped_stale": 2,
                 "alerts_skipped_empty": 1,
+                "alerts_skipped_degraded": 4,
                 "watch_add_fail": 3,
             },
         },
@@ -56,6 +57,7 @@ def test_prometheus_contains_core_gauges():
     assert "radar_telegram_alerts_sent_total 9" in text
     assert "radar_telegram_alerts_skipped_stale_total 2" in text
     assert "radar_telegram_alerts_skipped_empty_total 1" in text
+    assert "radar_telegram_alerts_skipped_degraded_total 4" in text
     assert "radar_telegram_watch_add_fail_total 3" in text
     assert "radar_auth_ok_total 5" in text
     assert "radar_auth_fail_total 2" in text

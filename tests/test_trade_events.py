@@ -39,6 +39,9 @@ def test_auto_on_action_emits(tmp_path, monkeypatch):
     eng = AutoTradeEngine(
         KuCoinManualTrader(enforce_symbol_meta=False),
         lambda: {
+            "ok": True,
+            "mtf_ensure_ok": True,
+            "score_backend": "radar_native",
             "sectors": {
                 "spot_alts": [
                     {

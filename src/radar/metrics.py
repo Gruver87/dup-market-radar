@@ -66,6 +66,7 @@ def build_metrics_payload(
             "alerts_sent": int(tg_stats.get("alerts_sent") or 0),
             "alerts_skipped_stale": int(tg_stats.get("alerts_skipped_stale") or 0),
             "alerts_skipped_empty": int(tg_stats.get("alerts_skipped_empty") or 0),
+            "alerts_skipped_degraded": int(tg_stats.get("alerts_skipped_degraded") or 0),
             "watch_add_fail": int(tg_stats.get("watch_add_fail") or 0),
             "cmd_rate_refused": int(tg_stats.get("cmd_rate_refused") or 0),
         },
@@ -156,6 +157,7 @@ def to_prometheus(payload: Dict[str, Any]) -> str:
     gauge("radar_telegram_alerts_sent_total", tg.get("alerts_sent"))
     gauge("radar_telegram_alerts_skipped_stale_total", tg.get("alerts_skipped_stale"))
     gauge("radar_telegram_alerts_skipped_empty_total", tg.get("alerts_skipped_empty"))
+    gauge("radar_telegram_alerts_skipped_degraded_total", tg.get("alerts_skipped_degraded"))
     gauge("radar_telegram_watch_add_fail_total", tg.get("watch_add_fail"))
     gauge("radar_telegram_cmd_rate_refused_total", tg.get("cmd_rate_refused"))
 

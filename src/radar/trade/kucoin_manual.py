@@ -525,6 +525,45 @@ class KuCoinManualTrader:
             return "sell size unparseable for meta gate"
         return meta.validate_sell(int(size))
 
+    def get_spot_mark_price_i(self, symbol: str) -> Optional[int]:
+        """Public KuCoin level1 last → PRICE_SCALE. Fail-closed: None on any error."""
+        from radar.money import price_i as to_price_i
+
+        pair = to_kucoin_symbol(symbol)
+        self.refresh_creds()
+        base = str(self._creds.get("base_url") or "https://api.kucoin.com").rstrip("/")
+        if not base.startswith("https://"):
+            logger.warning("mark price refused: non-https base_url")
+            return None
+        path = f"/api/v1/market/orderbook/level1?symbol={pair}"
+        from radar.http_client import SIGNED_MAX_RESPONSE_BYTES, read_capped_json
+
+        try:
+            with self._signed_client() as client:
+                resp = client.get(f"{base}{path}", headers={
+                    "User-Agent": "DUP-Market-Radar/0.2.58-manual",
+                })
+                resp.raise_for_status()
+                body = read_capped_json(
+                    resp, SIGNED_MAX_RESPONSE_BYTES, label="kucoin-level1"
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "mark price fetch failed %s: %s",
+                pair,
+                redact_exc(exc, max_len=128),
+            )
+            return None
+        if str(body.get("code")) != "200000":
+            return None
+        data = body.get("data")
+        if not isinstance(data, dict):
+            return None
+        pi = to_price_i(data.get("price"))
+        if pi is None or int(pi) <= 0:
+            return None
+        return int(pi)
+
     def get_available_base_i(self, currency: str) -> int:
         """Trade-account available balance → base_size_i (1e8)."""
         from radar.trade.symbol_validate import SymbolValidationError, validate_currency
@@ -642,7 +681,7 @@ class KuCoinManualTrader:
             "KC-API-PASSPHRASE": pp,
             "KC-API-KEY-VERSION": "2",
             "Content-Type": "application/json",
-            "User-Agent": "DUP-Market-Radar/0.2.57-manual",
+            "User-Agent": "DUP-Market-Radar/0.2.58-manual",
         }
 
     @staticmethod

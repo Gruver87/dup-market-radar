@@ -121,7 +121,7 @@ def _fetch_markets(*, top_n: int) -> List[Dict[str, Any]]:
             resp = client.get(
                 url,
                 params=params,
-                headers={"User-Agent": "DUP-Market-Radar/0.2.57-bubbles"},
+                headers={"User-Agent": "DUP-Market-Radar/0.2.58-bubbles"},
             )
             resp.raise_for_status()
             data = read_capped_json(resp, CG_MAX_RESPONSE_BYTES, label="coingecko-bubbles")

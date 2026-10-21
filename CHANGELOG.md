@@ -1,5 +1,20 @@
 # Changelog — DUP Market Radar
 
+## 0.2.58
+
+- Auto: on degraded/empty snap with open positions → **stop-only** via KuCoin mark (buys refused; no silent hold without stop path)
+- Trader: `get_spot_mark_price_i` (public level1)
+- Dashboard status: `mtf_ensure_ok` + ensure fill ratios
+- CI: explicit `python-lab-only` job name / profile step
+- Ensure honesty: after rounds, fill <85% on spot/futures/listings top-N sets `mtf_ensure_ok=false` (no silent green); listings included in early-exit fill check
+- Metrics: `alerts_skipped_degraded` in JSON + Prometheus
+- Fail-closed: auto cycle refuses when `ok=false`, `mtf_ensure_ok=false`, native-prefer + python backend, or empty sectors with open positions
+- Telegram alerts skip degraded snapshots (`ok=false`); counter `alerts_skipped_degraded`
+- Pipeline: ensure exception → `mtf_ensure_ok=false` and snapshot `ok=false` (visible degrade); `empty_snapshot` sets `mtf_ensure_ok=false`
+- Dashboard: `canTradeRow` refuses futures / futures sectors (manual Buy/Sell hidden)
+- Docker compose: honest `lab-python` profile comments (no maturin wheel / not native fail-closed)
+- Help/i18n: `/buy` `/sell` documented; package / FastAPI / User-Agent / `__version__` `0.2.58`
+
 ## 0.2.57
 
 - Speed: HTTP GETs no longer hold client lock during network I/O; parallel kline fan-out (8 workers)

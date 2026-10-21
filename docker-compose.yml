@@ -1,6 +1,11 @@
 # DUP Market Radar — local ops compose
 # Usage: copy .env.example → .env, then: docker compose up --build
 # Secrets never baked into the image.
+#
+# PROFILE HONESTY: this compose is lab-python (no maturin wheel in image).
+# config/default.yaml wants native.prefer+fail_closed — override here so the
+# container does not refuse to score. For prod-like native: build wheel into
+# image and set RADAR_NATIVE_PREFER=1 / FAIL_CLOSED=1. Auto refuses ok=false snaps.
 
 services:
   radar:
@@ -10,6 +15,7 @@ services:
       # Loopback publish by default — override to 0.0.0.0:8787:8787 only behind a reverse proxy
       - "127.0.0.1:8787:8787"
     environment:
+      # lab-python profile (see header) — not the same as default.yaml native fail-closed
       RADAR_NATIVE_PREFER: "0"
       RADAR_NATIVE_FAIL_CLOSED: "0"
       # Fail-closed trade gate: set RADAR_API_KEY or override REQUIRE to 0 for lab-only

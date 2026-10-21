@@ -292,6 +292,10 @@ class TelegramBot:
         if not snap:
             TG_STATS.inc("alerts_skipped_empty")
             return
+        if snap.get("ok") is False:
+            logger.warning("telegram alerts skipped — snapshot ok=false")
+            TG_STATS.inc("alerts_skipped_degraded")
+            return
         max_age = int(cfg.get("snapshot_max_age_ms") or 180_000)
         if max_age > 0:
             gen = snap.get("generated_at_ms")

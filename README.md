@@ -1,123 +1,127 @@
-# DUP Market Radar
+﻿# DUP Market Radar
 
-Monitoring market analyzer for crypto spot, futures, memes, stables, new listings, and large prints.
+**Version:** 0.2.58 · **Org:** [DUP Labs](https://github.com/Gruver87) · **Author:** Uladzimir Dabranski
 
-**Not an auto-trading bot.** Scanner never places orders. Optional **manual** KuCoin Buy/Sell buttons require your click + confirm + API keys in `.env`. Not financial advice.
+Hybrid **Python + Rust** market watchlist for crypto spot, USDT-M futures (watch-only), memes, stables, listings, and large prints — with optional **KuCoin spot** manual orders and **opt-in auto-trade** (spot/memes/listings only; **never futures**).
 
-## What it does
+> [!IMPORTANT]
+> **Not financial advice. Not a broker. Not investment management.**
+> Heuristic rankings ≠ predictions of profit. You alone decide and execute risk.
+> **The author and DUP Labs accept no liability** for losses, missed stops, API/outage errors, or misuse.
+> Full text: [`docs/DISCLAIMER.md`](docs/DISCLAIMER.md).
 
-Polls public exchange / DexScreener / CoinGecko endpoints, classifies instruments into sectors, scores each sector with its own interval and rules, and surfaces **top-N (default 10)** candidates per sector in an ops dashboard.
+| Layer | Role |
+|-------|------|
+| Watchlist / MTF / dashboard / Telegram alerts | Primary product |
+| Manual KuCoin Buy/Sell | Opt-in; confirm required |
+| Auto ON/OFF | Default **OFF**; fail-closed on degraded snapshots; stop-only path if bags open |
 
-**Primary venue:** [KuCoin](https://www.kucoin.com/) (spot + USDT-M futures). Binance / Bybit / MEXC remain as cross-checks in `config/default.yaml`.
+Companion to industrial L1 work ([`dup-protocol`](https://github.com/Gruver87/dup-protocol) / [`dup-protocol-experimental`](https://github.com/Gruver87/dup-protocol-experimental)) — **standalone**; not the L1 pin and not a “mainnet trading stack.”
 
-| Sector | Focus |
-|--------|--------|
-| `spot_alts` | CEX spot alts (momentum + volume surge) |
-| `futures` | USDT-M perps (OI + funding confluence → long/short watch) |
-| `memes` | DEX pairs (liquidity / vol / age) |
-| `stables` | Peg deviation from $1 |
-| `listings` | Recently appeared CEX pairs |
-| `whales` | Large agg-trade prints (size-based; not labeled Nansen wallets) |
+---
 
-## Quick start
+## Features (honest)
+
+- **Sectors:** `spot_alts`, `futures` (+ long/short views), `memes`, `stables`, `listings`, `whales` (size proxy — **not** smart-money labels).
+- **MTF short windows** (15m / 1h / 4h) for sampled **top-N** (not full universe); KuCoin → Binance → Bybit → MEXC fallbacks.
+- **Listings:** live book join; ghost listings skipped; `cross_venue_live` flags.
+- **Integer money** only (price `1e8`, USDT micros `1e6`, bps, score centi) — no float on money paths.
+- **Security posture:** HTTPS allowlist, TLS verify on, CORS deny `*`, API key gate for trade mutations, secret redaction in logs.
+- **Hybrid score:** Rust `radar_native` (PyO3) when built; Docker/CI default to **python-lab** profile (native prefer off) — see honesty below.
+- **Auto fail-closed:** refuses buys on `ok=false` / `mtf_ensure_ok=false` / native-prefer + python backend; with open positions runs **stop-only** via KuCoin mark.
+
+---
+
+## Quick start (Windows)
 
 ```powershell
-cd C:\Users\vovun\Desktop\dup-market-radar
+cd dup-market-radar
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-.\scripts\build_native.ps1   # Rust hot path (radar_native) — optional but recommended
+# Recommended for prod-like scoring:
+.\scripts\build_native.ps1
+copy .env.example .env   # fill keys only if you trade
 .\scripts\run_radar.ps1
 ```
 
-Open http://127.0.0.1:8787/
+Open [http://127.0.0.1:8787/](http://127.0.0.1:8787/) — bind is loopback by default in Docker compose.
 
 ```powershell
-# Offline gates (no network)
-.\.venv\Scripts\python.exe scripts\radar_smoke_lab.py
-# One live ingest+score (network)
-.\.venv\Scripts\python.exe scripts\radar_smoke_lab.py --live
-# Docker (Python scorers; native prefer off via env)
+# Offline unit + smoke (no live venues)
+$env:PYTHONPATH="src"; $env:RADAR_NATIVE_PREFER="0"; $env:RADAR_NATIVE_FAIL_CLOSED="0"
+python -m pytest tests/ -q
+python scripts/radar_smoke_lab.py
+
+# One live ingest+score (network; evidence only)
+python scripts/radar_smoke_lab.py --live
+```
+
+### Docker (lab-python)
+
+```powershell
 docker compose up --build
 ```
 
-## Hybrid architecture (like L1 abs_native)
+Compose sets `RADAR_NATIVE_PREFER=0` / `FAIL_CLOSED=0` on purpose (no maturin wheel in the image). That is **not** the same as `config/default.yaml` native fail-closed. See [`docs/OPS.md`](docs/OPS.md).
 
-| Layer | Tech | Owns |
-|-------|------|------|
-| Orchestration / API / trade / UI | Python | FastAPI, KuCoin keys, auto ON/OFF, dashboard |
-| Ingest | Python parallel workers | public REST (allowlist + TLS verify) |
-| Score + rank hot path | **Rust** `radar_native` (PyO3) | sector scorers, top-N |
+---
 
-Snapshot field `score_backend` is `radar_native` or `python` (honest fallback if native not built).
+## Documentation
 
-**Money:** integer fixed-point only (no float for price/size/score). Scales in `radar/money.py` — price `1e8`, USDT micros `1e6`, change **bps**, score **centi**. Ingest keeps exchange **strings** (`radar/ingest/parse.py`); Decimal only for fraction→percent. Trade API: `quote_usdt_micros` / `base_size_i`. Rust `radar_native` ≥0.2; `native.prefer` + `fail_closed: true` — no silent Python rank swap. HTTP timeouts in **ms** (`http_timeout_ms`).
+| Doc | Contents |
+|-----|----------|
+| [`docs/DISCLAIMER.md`](docs/DISCLAIMER.md) | **No liability** — read before enabling trade |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layers, MTF ensure, hybrid native |
+| [`docs/OPS.md`](docs/OPS.md) | Run, Docker, metrics, profiles |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | Keys, CORS, rate limits, exposure |
+| [`docs/TRADE.md`](docs/TRADE.md) | Manual / auto / Telegram trade gates |
+| [`CHANGELOG.md`](CHANGELOG.md) | Release notes |
+
+---
 
 ## Config
 
-[`config/default.yaml`](config/default.yaml) — venues (KuCoin first), thresholds, `top_n`, `http_timeout_ms`, ingest retries. Loaded via `radar.config.load_config` with **fail-closed validation** (no futures in `auto_trade.allowed_sectors`, KuCoin required).
+[`config/default.yaml`](config/default.yaml) — venues (KuCoin first), thresholds, `top_n`, ingest, `auto_trade`, Telegram. Validated fail-closed (no futures in `auto_trade.allowed_sectors`).
 
-## Manual + auto KuCoin trade
+Copy [`.env.example`](.env.example) → `.env`. **Never commit `.env`.**
 
-1. Copy `.env.example` → `.env`
-2. Fill `KUCOIN_API_KEY`, `KUCOIN_API_SECRET`, `KUCOIN_API_PASSPHRASE` (spot trade; IP whitelist recommended)
-3. **Manual:** table buttons **Купить** / **Продать** → Превью → Подтвердить
-4. **Auto ON/OFF:** header button. Default **OFF**. When ON, engine buys/sells on a cycle for `spot_alts` / `memes` / `listings` only — **never futures**. Limits in `config/default.yaml` → `auto_trade`.
-5. Optional paper mode: `auto_trade.dry_run: true` (logs only, no orders)
-
-Manual buttons keep working while auto is ON or OFF.
+---
 
 ## Ops endpoints
 
 | Path | Purpose |
 |------|---------|
-| `/api/live` | liveness (process up) |
-| `/api/ready` | readiness (503 until warm snap / if persist broken) |
-| `/api/health` | honest ops health (scan / persist / native / circuit) |
-| `/api/metrics` | JSON counters |
-| `/api/metrics/prometheus` | Prometheus text |
-| `/api/snapshot` | sector tops + cache stats |
-| `/api/trade/events` | last N trade audit events |
-| `/api/telegram/status` | bot / watches / circuit |
+| `GET /api/live` | Liveness |
+| `GET /api/ready` | Readiness (503 if cold / persist broken) |
+| `GET /api/health` | Honest ops health |
+| `GET /api/metrics` · `/api/metrics/prometheus` | Counters |
+| `GET /api/snapshot` | Sector tops + ensure / poll / errors |
+| `POST /api/trade/*` | Manual / auto (API key when required) |
+| `GET /api/telegram/status` | Bot / watches / circuit |
 
-CORS is an explicit allow-list (`api.cors_origins`) — never `*`. Trade routes soft-refuse at `api.trade_rate_limit_per_min`.
+---
 
-Optional `RADAR_API_KEY` in `.env`: when set, `POST /api/trade/*` requires header `X-Radar-Api-Key`. Dashboard reads `localStorage.radar_api_key`. Every response includes `X-Request-Id`.
+## Telegram (optional)
 
-## Telegram bot
+Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (or allow-list), `TELEGRAM_ENABLED=1`. Commands include `/watch`, `/nearest`, `/buy`, `/sell`, `/top`, `/positions`, `/status`. Futures watches are **warn-only** (no futures orders). Alerts skip degraded (`ok=false`) and stale snapshots.
 
-1. Create a bot via [@BotFather](https://t.me/BotFather), copy the token
-2. Message the bot once, get your chat id (e.g. via `@userinfobot`)
-3. In `.env`:
+---
 
-```text
-TELEGRAM_BOT_TOKEN=...
-TELEGRAM_CHAT_ID=123456789
-TELEGRAM_ENABLED=1
-```
+## Honesty / known limits
 
-4. Restart Radar — bot starts with the API process (`/api/telegram/status`)
+- Scores are **heuristics**, not alpha guarantees.
+- MTF is **sampled top-N**, not every symbol on the book.
+- Whales = notional size proxy; **not** labeled smart money.
+- CI workflow is **`python-lab-only`** (native prefer off). Maturin native CI is not in this pin yet.
+- `elapsed_ok` in smoke is **evidence**, not a hard fail gate.
+- No 48h soak claim without an on-disk evidence pack.
+- Opening port `8787` to the internet without reverse-proxy + API key is **operator negligence**.
 
-| Command | Purpose |
-|---------|---------|
-| `/watch BTCUSDT` | spot watch + alerts when fade/stop says sell |
-| `/watch ETHUSDT long 2500` | futures LONG watch (warn to close — no auto orders) |
-| `/watch SOLUSDT short` | futures SHORT watch |
-| `/nearest BTCUSDT buy` | ближайшая точка входа по анализу (±1.5% зона) |
-| `/nearest ETHUSDT sell` | ближайшая точка выхода/слива |
-| `/buy BTCUSDT 10` | preview; `/buy BTCUSDT 10 confirm` — spot market |
-| `/sell ETHUSDT 0.01 confirm` | spot sell |
-| `/top spot_alts` · `/positions` · `/alerts` · `/status` | ops |
+---
 
-Alerts fire when analysis flips to fade / stop-loss / opposite futures setup, and include the **nearest analysis exit**. That point is a heuristic zone from `price_i`, **not** the exchange order book.
+## License & brand
 
-## Honesty
+See [`LICENSE`](LICENSE). Brand: **DUP Labs** / **DUP Protocol** companion tooling. Canonical L1 repos remain `Gruver87/dup-protocol` and `Gruver87/dup-protocol-experimental`.
 
-- Public market data APIs (rate limits apply).
-- Whale tab is **notional size**, not smart-money labels.
-- Scores are heuristic watchlist ranks, not predictions of profit.
-- Secrets never committed (`.env` is gitignored).
-
-## Brand
-
-DUP Labs · companion to industrial L1 work; standalone from the protocol pin and from PSI-MEXC-BOT until a later read-only bridge.
+**By using this software you accept [`docs/DISCLAIMER.md`](docs/DISCLAIMER.md).**

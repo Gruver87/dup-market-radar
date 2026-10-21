@@ -188,17 +188,87 @@ def run_scan(
                     for r in rank_top(score_futures(universe, cfg), top_n)
                     if r.get("symbol")
                 }
+                list_top = [
+                    r
+                    for r in rank_top(score_listings(universe, cfg), top_n)
+                    if r.get("symbol")
+                ]
+                list_spot = {
+                    str(r.get("symbol") or "")
+                    for r in list_top
+                    if str(r.get("market") or "spot").lower() != "futures"
+                }
+                list_fut = {
+                    str(r.get("symbol") or "")
+                    for r in list_top
+                    if str(r.get("market") or "spot").lower() == "futures"
+                }
                 if (
                     _ensure_fill_ratio(universe, spot_top, "spot") >= 0.85
                     and _ensure_fill_ratio(universe, fut_top, "futures") >= 0.85
+                    and _ensure_fill_ratio(universe, list_spot, "spot") >= 0.85
+                    and _ensure_fill_ratio(universe, list_fut, "futures") >= 0.85
                 ):
                     break
+            # Final honesty: incomplete top-N fill is not "ensure ok".
+            spot_top = {
+                str(r.get("symbol") or "")
+                for r in rank_top(score_spot_alts(universe, cfg), top_n)
+                if r.get("symbol")
+            }
+            fut_top = {
+                str(r.get("symbol") or "")
+                for r in rank_top(score_futures(universe, cfg), top_n)
+                if r.get("symbol")
+            }
+            list_top = [
+                r
+                for r in rank_top(score_listings(universe, cfg), top_n)
+                if r.get("symbol")
+            ]
+            list_spot = {
+                str(r.get("symbol") or "")
+                for r in list_top
+                if str(r.get("market") or "spot").lower() != "futures"
+            }
+            list_fut = {
+                str(r.get("symbol") or "")
+                for r in list_top
+                if str(r.get("market") or "spot").lower() == "futures"
+            }
+            spot_fill = _ensure_fill_ratio(universe, spot_top, "spot")
+            fut_fill = _ensure_fill_ratio(universe, fut_top, "futures")
+            list_spot_fill = _ensure_fill_ratio(universe, list_spot, "spot")
+            list_fut_fill = _ensure_fill_ratio(universe, list_fut, "futures")
+            ensure_acc["spot_fill_ratio"] = round(spot_fill, 4)
+            ensure_acc["fut_fill_ratio"] = round(fut_fill, 4)
+            ensure_acc["list_spot_fill_ratio"] = round(list_spot_fill, 4)
+            ensure_acc["list_fut_fill_ratio"] = round(list_fut_fill, 4)
             universe["short_window_ensure"] = ensure_acc
+            if (
+                spot_fill >= 0.85
+                and fut_fill >= 0.85
+                and list_spot_fill >= 0.85
+                and list_fut_fill >= 0.85
+            ):
+                universe["mtf_ensure_ok"] = True
+            else:
+                universe["mtf_ensure_ok"] = False
+                errs = list(universe.get("errors") or [])
+                errs.append(
+                    "mtf_ensure_incomplete:"
+                    f"spot={spot_fill:.2f},fut={fut_fill:.2f},"
+                    f"list_spot={list_spot_fill:.2f},list_fut={list_fut_fill:.2f}"
+                )
+                universe["errors"] = errs[:32]
         except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "short-window ensure soft-fail: %s",
-                redact_exc(exc, max_len=128),
-            )
+            safe_ens = redact_exc(exc, max_len=128)
+            logger.warning("short-window ensure soft-fail: %s", safe_ens)
+            universe["short_window_ensure"] = {"error": safe_ens}
+            universe["mtf_ensure_ok"] = False
+            errs = list(universe.get("errors") or [])
+            errs.append(f"mtf_ensure_failed:{safe_ens}")
+            universe["errors"] = errs[:32]
         t_score = int(time.time() * 1000)
         try:
             sectors, backend = score_sectors(universe, cfg, top_n)
@@ -209,6 +279,11 @@ def run_scan(
                 for e in (universe.get("errors") or [])[:32]
             ]
             ok = True
+            mtf_ensure_ok = universe.get("mtf_ensure_ok")
+            if mtf_ensure_ok is False:
+                errors.append("mtf_ensure_failed")
+                # Analysis may still score on 24h-only — mark degraded for auto/TG gates.
+                ok = False
             if backend.startswith("python_") and (cfg.get("native") or {}).get("prefer"):
                 errors.append(f"score_backend_degraded:{backend}")
                 ok = False
@@ -219,6 +294,7 @@ def run_scan(
 
         return {
             "ok": ok,
+            "mtf_ensure_ok": universe.get("mtf_ensure_ok"),
             "schema_version": 2,
             "product": "DUP Market Radar",
             "disclaimer": "Watchlist · ручные ордера · авто ON/OFF (без фьючерсов). Не финансовый совет.",
@@ -255,6 +331,7 @@ def empty_snapshot(
     meta = sector_meta_for(cfg) if cfg is not None else SECTOR_META
     return {
         "ok": False,
+        "mtf_ensure_ok": False,
         "schema_version": 2,
         "product": "DUP Market Radar",
         "disclaimer": "Watchlist · ручные ордера · авто ON/OFF (без фьючерсов). Не финансовый совет.",

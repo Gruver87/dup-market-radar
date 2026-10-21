@@ -192,8 +192,53 @@ class AutoTradeEngine:
             return summary
 
         cfg = load_config().get("auto_trade") or {}
-        snap = self._snapshot_fn()
+        snap = self._snapshot_fn() or {}
         sectors = snap.get("sectors") or {}
+        backend = str(snap.get("score_backend") or "")
+        native_cfg = load_config().get("native") or {}
+        backend_degraded = (
+            backend.startswith("python_") or backend in {"", "none", "unavailable"}
+        ) and bool(native_cfg.get("prefer"))
+        analysis_degraded = (
+            (not snap.get("ok", False))
+            or (snap.get("mtf_ensure_ok") is False)
+            or backend_degraded
+        )
+        allowed_preview = [
+            s
+            for s in (cfg.get("allowed_sectors") or [])
+            if s not in FUTURES_BLOCK
+        ]
+        sectors_empty = not any(sectors.get(k) for k in allowed_preview)
+        # Degraded / empty analysis: never buy. With open bags → stop-only via
+        # exchange mark (audit must-fix). Without bags → refuse cleanly.
+        if analysis_degraded or (sectors_empty and self._positions):
+            reason = (
+                "snapshot not ok"
+                if not snap.get("ok", False)
+                else (
+                    "mtf ensure failed"
+                    if snap.get("mtf_ensure_ok") is False
+                    else (
+                        f"score_backend degraded ({backend})"
+                        if backend_degraded
+                        else "sectors empty with open positions"
+                    )
+                )
+            )
+            if not self._positions:
+                summary = {
+                    "at": int(time.time()),
+                    "ok": False,
+                    "enabled": bool(self._state.get("enabled")),
+                    "error": f"{reason} — auto cycle refused",
+                    "actions": [],
+                    "open_positions": 0,
+                }
+                self._last_cycle = summary
+                logger.warning("auto cycle refused: %s", reason)
+                return summary
+            return self._run_stop_only_unlocked(cfg, reason=reason)
         allowed = [s for s in (cfg.get("allowed_sectors") or []) if s not in FUTURES_BLOCK]
         buy_setups = set(cfg.get("buy_setups") or ["buy-watch"])
         sell_setups = set(cfg.get("sell_setups") or ["fade-watch"])
@@ -353,6 +398,87 @@ class AutoTradeEngine:
         }
         self._last_cycle = summary
         self._append_log(summary)
+        return summary
+
+
+    def _run_stop_only_unlocked(
+        self, cfg: Dict[str, Any], *, reason: str
+    ) -> Dict[str, Any]:
+        """Sell-only on degraded snap: stop-loss via KuCoin mark; no buys / no fade."""
+        dry = bool(cfg.get("dry_run"))
+        stop_loss_bps = int(
+            cfg.get("stop_loss_bps") or pct_to_bps(cfg.get("stop_loss_pct") or 12) or 1200
+        )
+        max_sells = int(cfg.get("max_sells_per_cycle") or 5)
+        actions: List[Dict[str, Any]] = []
+        with self._lock:
+            positions = dict(self._positions)
+        sells = 0
+        mark_miss = 0
+        for sym, pos in list(positions.items()):
+            if sells >= max_sells:
+                break
+            entry_i = int(pos.get("entry_price_i") or 0)
+            size_i = int(pos.get("base_size_i") or 0)
+            if entry_i <= 0 or size_i <= 0:
+                continue
+            try:
+                price_i = self._trader.get_spot_mark_price_i(str(sym))
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "stop-only mark failed %s: %s",
+                    sym,
+                    redact_exc(exc, max_len=128),
+                )
+                price_i = None
+            if not price_i:
+                mark_miss += 1
+                continue
+            drop = drop_bps(entry_i, int(price_i))
+            if drop < stop_loss_bps:
+                continue
+            sell_reason = f"stop_loss_degraded drop_bps={drop} ({reason})"
+            result = self._exec_sell(sym, size_i, sell_reason, dry)
+            actions.append(result)
+            self._emit_action(
+                {**result, "source": "auto", "entry_price_i": pos.get("entry_price_i")}
+            )
+            sells += 1
+            if result.get("ok"):
+                with self._lock:
+                    self._positions.pop(sym, None)
+                    self._save_positions_locked()
+                    positions = dict(self._positions)
+            else:
+                logger.warning(
+                    "stop-only sell failed %s: %s",
+                    sym,
+                    redact_text(str(result.get("message") or ""))[:256],
+                )
+        with self._lock:
+            open_n = len(self._positions)
+        err = f"{reason} — buys refused; stop-only"
+        if mark_miss and not actions:
+            err = f"{reason} — buys refused; mark unavailable for {mark_miss} bag(s)"
+        summary = {
+            "at": int(time.time()),
+            "ok": False,
+            "enabled": bool(self._state.get("enabled")),
+            "dry_run": dry,
+            "error": err,
+            "mode": "stop_only",
+            "actions": actions,
+            "open_positions": open_n,
+            "mark_miss": mark_miss,
+        }
+        self._last_cycle = summary
+        self._append_log(summary)
+        logger.warning(
+            "auto stop-only cycle: reason=%s actions=%s mark_miss=%s",
+            reason,
+            len(actions),
+            mark_miss,
+        )
         return summary
 
     def _collect_buys(

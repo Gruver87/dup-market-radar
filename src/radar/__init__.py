@@ -1,3 +1,3 @@
-"""DUP Market Radar — monitoring analyzer (no execution)."""
+"""DUP Market Radar — watchlist analyzer + optional KuCoin spot manual/auto (never futures)."""
 
-__version__ = "0.2.57"
+__version__ = "0.2.58"

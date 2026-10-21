@@ -89,6 +89,9 @@ def test_auto_buy_uses_reconciled_size(tmp_path, monkeypatch):
     eng = AutoTradeEngine(
         FakeTrader(),
         lambda: {
+            "ok": True,
+            "mtf_ensure_ok": True,
+            "score_backend": "radar_native",
             "sectors": {
                 "spot_alts": [
                     {
@@ -158,6 +161,9 @@ def test_auto_buy_falls_back_to_estimate_on_reconcile_fail(tmp_path, monkeypatch
     eng = AutoTradeEngine(
         FakeTrader(),
         lambda: {
+            "ok": True,
+            "mtf_ensure_ok": True,
+            "score_backend": "radar_native",
             "sectors": {
                 "spot_alts": [
                     {

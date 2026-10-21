@@ -144,7 +144,7 @@ def test_empty_snapshot_scrubs_reason():
 def test_fastapi_app_version_matches_package():
     from radar.api.app import app
 
-    assert app.version == "0.2.57"
+    assert app.version == "0.2.58"
 
 
 def test_redact_text_truncates_huge_input():

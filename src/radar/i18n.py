@@ -40,10 +40,15 @@ _STRINGS: Dict[str, Dict[Lang, str]] = {
             "/fx AMOUNT FROM TO — курс (ECB/frankfurter), напр. /fx 100 USD EUR\n"
             "/bubbles — топ рост/падение ~6м (crypto bubbles)\n"
             "/lang en|ru — язык ответов\n\n"
+            "<b>Сделка (KuCoin spot only)</b>\n"
+            "/buy SYMBOL USDT — market buy (нужны ключи)\n"
+            "/sell SYMBOL SIZE — market sell\n"
+            "  — futures из бота не торгуются\n\n"
             "<b>Статус</b>\n"
             "/status — radar / auto / watches\n"
             "/help\n\n"
             "<i>Алерты: fade / stop-loss / разворот futures → предупреждение.\n"
+            "Алерты пропускаются при ok=false / stale snapshot.\n"
             "Nearest = зона анализа, не стакан. Не финсовет.</i>"
         ),
         "en": (
@@ -64,10 +69,15 @@ _STRINGS: Dict[str, Dict[Lang, str]] = {
             "/fx AMOUNT FROM TO — FX (ECB/frankfurter), e.g. /fx 100 USD EUR\n"
             "/bubbles — top gainers/losers ~6m (crypto bubbles)\n"
             "/lang en|ru — reply language\n\n"
+            "<b>Trade (KuCoin spot only)</b>\n"
+            "/buy SYMBOL USDT — market buy (keys required)\n"
+            "/sell SYMBOL SIZE — market sell\n"
+            "  — no futures orders from the bot\n\n"
             "<b>Status</b>\n"
             "/status — radar / auto / watches\n"
             "/help\n\n"
             "<i>Alerts: fade / stop-loss / futures flip → warning.\n"
+            "Alerts skipped when snapshot ok=false or stale.\n"
             "Nearest = analysis zone, not the order book. Not financial advice.</i>"
         ),
     },

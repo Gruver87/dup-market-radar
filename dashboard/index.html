@@ -811,10 +811,12 @@
     }
 
     function canTradeRow(r) {
-      // Manual KuCoin spot only — skip pure DEX / stables monitor rows without CEX symbol
+      // Manual KuCoin spot only — never futures / DEX / stables / whales
       if (!r || !r.symbol) return false;
-      if (r.market === "dex" || r.venue === "dexscreener" || r.venue === "coingecko") return false;
+      if (r.market === "futures" || r.market === "dex") return false;
+      if (r.venue === "dexscreener" || r.venue === "coingecko") return false;
       if (state.sector === "stables" || state.sector === "whales") return false;
+      if (state.sector === "futures" || state.sector === "futures_long" || state.sector === "futures_short") return false;
       return true;
     }
 
@@ -1082,6 +1084,11 @@
         snap.disclaimer || "Watchlist + ручные ордера. Автоторговли нет. Не финансовый совет.";
       const when = snap.generated_at ? new Date(snap.generated_at * 1000).toLocaleString() : "—";
       const backend = snap.score_backend || "?";
+      const ens = snap.short_window_ensure || {};
+      const ensTag = ens.rounds != null
+        ? `ensure r${ens.rounds} spot=${ens.spot_fill_ratio ?? "—"} fut=${ens.fut_fill_ratio ?? "—"}`
+        : (ens.error ? "ensure=ERR" : "");
+      const mtfTag = snap.mtf_ensure_ok === false ? "mtf=FAIL" : (snap.mtf_ensure_ok === true ? "mtf=OK" : "");
       const scoreMs = snap.score_ms != null ? `${snap.score_ms}ms` : "—";
       const dedupe = snap.dedupe || {};
       const spotDrop = (dedupe.spot && dedupe.spot.dropped) || 0;
@@ -1094,7 +1101,9 @@
         (spotDrop ? ` · dedupe_spot=-${spotDrop}` : "") +
         (httpTag ? ` · ${httpTag}` : "") +
         ` · ${when}` +
-        (snap.ok ? "" : " · СБОЙ ДАННЫХ");
+        (snap.ok ? "" : " · СБОЙ ДАННЫХ") +
+        (mtfTag ? " · " + mtfTag : "") +
+        (ensTag ? " · " + ensTag : "");
 
       const rows = ((snap.sectors || {})[state.sector]) || [];
       renderWatchbox(rows);

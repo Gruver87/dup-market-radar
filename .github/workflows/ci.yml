@@ -7,7 +7,9 @@ on:
   workflow_dispatch:
 
 jobs:
+  # PROFILE: python-lab-only (RADAR_NATIVE_*=0). Native maturin job not in this workflow.
   test:
+    name: test (python-lab-only)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -26,6 +28,9 @@ jobs:
           python -m pip install -U pip
           pip install -r requirements.txt
           pip install pytest ruff
+
+      - name: Profile honesty
+        run: echo "CI profile=python-lab-only native prefer/fail_closed off"
 
       - name: Ruff lint
         run: ruff check src tests scripts

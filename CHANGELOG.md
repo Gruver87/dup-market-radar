@@ -1,5 +1,11 @@
 # Changelog — DUP Market Radar
 
+## 0.2.63
+
+- Auto: `memes_soft_risk_flags` (default `below_vol_floor`) — sector soft-flag map
+- Scripts: `radar_soak_lab.py` (multi-cycle live gate + `hard_fails`) and `evidence_retention.py`
+- Smoke `--evidence` runs retention; docs EVIDENCE / LIVE_MONEY / TRADE updated
+
 ## 0.2.62
 
 - Memes: CEX keyword path (KuCoin-first) into memes sector — auto-eligible; DEX still skipped

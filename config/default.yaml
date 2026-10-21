@@ -103,6 +103,9 @@ auto_trade:
   # require_no_risk_flags=true (any other flag still blocks auto-buy).
   listings_soft_risk_flags:
     - cross_venue_live
+  # CEX meme informational vol flag — still refuse other risks
+  memes_soft_risk_flags:
+    - below_vol_floor
   # Lab-safe default: log-only until operator explicitly sets dry_run false + keys.
   dry_run: true
   allowed_sectors:

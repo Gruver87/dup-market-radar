@@ -24,3 +24,13 @@ Default config is **lab-safe**: `auto_trade.dry_run: true`, auto **OFF**.
 ## Rollback
 
 Set `dry_run: true` or Auto OFF immediately. Stops still run on degrade via mark when bags are open.
+
+## Soak evidence
+
+Before large size, run a short soak and keep the pack:
+
+```powershell
+python scripts/radar_soak_lab.py --cycles 5 --interval-sec 60
+```
+
+Require `hard_fails=0` in `data/evidence/LATEST_SOAK.json`.

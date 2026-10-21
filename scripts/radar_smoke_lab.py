@@ -218,6 +218,12 @@ def live(*, write_evidence: bool = False) -> int:
         latest = ev_dir / "LATEST.json"
         latest.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
         print(f"evidence_pack={path}")
+        try:
+            sys.path.insert(0, str(ROOT / "scripts"))
+            from evidence_retention import retain  # type: ignore
+            print(json.dumps({"retention": retain(keep=20)}, ensure_ascii=False))
+        except Exception as exc:  # noqa: BLE001
+            print(f"evidence_retention_soft_fail={exc}")
     # Soft speed gate: still return 0 on ok snapshot; elapsed_ok is evidence only.
     return 0 if snap.get("ok") else 1
 

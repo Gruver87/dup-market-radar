@@ -46,3 +46,7 @@ Trade events → `data/trade_events.jsonl` (gitignored). Messages redacted.
 If a watched spot symbol drops out of top-N, alerts can still fire **stop-loss only** using KuCoin mark (`telegram.outside_top_mark_alerts`, default true). Fade/setup alerts still need a scored row.
 
 See [`LIVE_MONEY.md`](LIVE_MONEY.md) before disabling dry_run.
+
+## Memes soft risk flags
+
+`auto_trade.memes_soft_risk_flags` (default: `below_vol_floor`) soft-allows that flag on CEX meme rows under `require_no_risk_flags`. Any other flag still blocks. DEX memes remain skipped.

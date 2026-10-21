@@ -252,6 +252,11 @@ class AutoTradeEngine:
             for x in (cfg.get("listings_soft_risk_flags") or ["cross_venue_live"])
             if x
         }
+        memes_soft = {
+            str(x)
+            for x in (cfg.get("memes_soft_risk_flags") or ["below_vol_floor"])
+            if x
+        }
         quote_micros = int(
             cfg.get("quote_usdt_micros_per_buy")
             or quote_i(cfg.get("quote_usdt_per_buy") or 10)
@@ -334,7 +339,10 @@ class AutoTradeEngine:
             min_score_centi,
             require_clean,
             positions,
-            listings_soft_flags=listings_soft,
+            soft_flags_by_sector={
+                "listings": listings_soft,
+                "memes": memes_soft,
+            },
         )
         for row in candidates:
             if buys >= max_buys or open_n >= max_open:
@@ -502,8 +510,14 @@ class AutoTradeEngine:
         positions: Dict[str, Any],
         *,
         listings_soft_flags: set | None = None,
+        soft_flags_by_sector: dict | None = None,
     ) -> List[Dict[str, Any]]:
-        soft = set(listings_soft_flags or ())
+        # Back-compat: listings_soft_flags alone still works.
+        soft_map: Dict[str, set] = {}
+        if soft_flags_by_sector:
+            soft_map = {str(k): set(v or ()) for k, v in soft_flags_by_sector.items()}
+        elif listings_soft_flags:
+            soft_map["listings"] = set(listings_soft_flags)
         out: List[Dict[str, Any]] = []
         for sector in allowed:
             if sector in FUTURES_BLOCK:
@@ -522,11 +536,9 @@ class AutoTradeEngine:
                     continue
                 if require_clean:
                     flags = {str(f) for f in (row.get("risk_flags") or []) if f}
-                    if sector == "listings":
-                        hard = flags - soft
-                        if hard:
-                            continue
-                    elif flags:
+                    soft = soft_map.get(sector, set())
+                    hard = flags - soft
+                    if hard:
                         continue
                 item = dict(row)
                 item["sector"] = sector

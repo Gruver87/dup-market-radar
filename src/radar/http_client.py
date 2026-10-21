@@ -98,7 +98,7 @@ class AllowlistHttp:
             timeout=httpx.Timeout(read_s, connect=connect_s),
             verify=True,
             follow_redirects=False,
-            headers={"User-Agent": "DUP-Market-Radar/0.2.62"},
+            headers={"User-Agent": "DUP-Market-Radar/0.2.63"},
         )
         self.errors: list[str] = []
         self.stats: Dict[str, int] = {

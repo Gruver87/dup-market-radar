@@ -49,6 +49,10 @@ api:
   max_order_quote_usdt_micros: 500000000   # 500 USDT
   max_order_base_size_i: 100000000000000   # 1e6 base units * 1e8
   warm_scan_on_startup: true
+  # Snapshot auth: false = loopback dashboard OK without key.
+  # non_loopback=true → remote clients need X-Radar-Api-Key when key is set.
+  snapshot_require_api_key: false
+  snapshot_require_api_key_non_loopback: true
 
 # Money: integer fixed-point only (no float). See radar/money.py
 # PRICE_SCALE=1e8, QUOTE_SCALE=1e6 (USDT micros), SCORE_CENTI=100, change in bps
@@ -71,6 +75,7 @@ telegram:
   watch_ttl_sec: 1209600                 # 14d — prune stale /watch entries (0=off)
   max_watches: 2000                      # soft refuse new /watch when full
   snapshot_max_age_ms: 180000            # skip alerts if snapshot older than 3m
+  outside_top_mark_alerts: true          # stop-loss via KuCoin mark if not in top-N
   cmd_rate_limit_per_min: 30             # soft refuse flood per chat
 
 # Auto-trade (OFF by default). Futures never included. Integer amounts only.
@@ -94,6 +99,10 @@ auto_trade:
   audit_log_max_bytes: 5242880           # rotate auto_trade_log.jsonl at 5 MiB
   audit_log_keep: 5
   require_no_risk_flags: true
+  # Listings may carry informational flags; only these are soft-allowed when
+  # require_no_risk_flags=true (any other flag still blocks auto-buy).
+  listings_soft_risk_flags:
+    - cross_venue_live
   dry_run: false
   allowed_sectors:
     - spot_alts

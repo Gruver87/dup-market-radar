@@ -1,5 +1,14 @@
 # Changelog — DUP Market Radar
 
+## 0.2.60
+
+- Auto: `listings_soft_risk_flags` (default `cross_venue_live`) soft-allows listing buys under `require_no_risk_flags`
+- Telegram: outside-top stop-loss via KuCoin mark (`outside_top_mark_alerts`)
+- API: `snapshot_require_api_key` / `snapshot_require_api_key_non_loopback`; server refuses futures/`USDTM` on `/api/trade/order`
+- Smoke: `--live --evidence` → `data/evidence/` pack; `docs/EVIDENCE.md`
+- Docker: `Dockerfile.native` + `docker-compose.native.yml`; HEALTHCHECK uses `/api/ready`
+- Dashboard: poll due groups + circuit_open in status line
+
 ## 0.2.59
 
 - Futures: drop commodity/FX/index USDT-M bases (XAU, USOIL, …); config `sectors.futures.exclude_bases`

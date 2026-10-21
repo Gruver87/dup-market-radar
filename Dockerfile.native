@@ -1,0 +1,37 @@
+# DUP Market Radar — native-enabled image (maturin wheel baked in)
+# Build: docker build -f Dockerfile.native -t dup-market-radar:native .
+# Prefer docker-compose.native.yml for local ops.
+FROM rust:1.83-bookworm AS native-build
+WORKDIR /build
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-pip python3-venv python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+COPY native/radar_native ./native/radar_native
+COPY requirements.txt .
+RUN pip3 install --break-system-packages --no-cache-dir maturin
+WORKDIR /build/native/radar_native
+RUN maturin build --release -o /wheels
+
+FROM python:3.12-slim-bookworm
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app/src \
+    RADAR_NATIVE_PREFER=1 \
+    RADAR_NATIVE_FAIL_CLOSED=1 \
+    RADAR_REQUIRE_API_KEY=1
+WORKDIR /app
+RUN useradd --create-home --uid 10001 radar
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY --from=native-build /wheels /wheels
+RUN pip install --no-cache-dir /wheels/*.whl && rm -rf /wheels
+COPY config ./config
+COPY dashboard ./dashboard
+COPY src ./src
+COPY scripts ./scripts
+RUN mkdir -p /app/data && chown -R radar:radar /app
+USER radar
+EXPOSE 8787
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=5 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/api/ready', timeout=3)"
+CMD ["python", "-m", "uvicorn", "radar.api.app:app", "--host", "0.0.0.0", "--port", "8787", "--limit-concurrency", "128", "--timeout-keep-alive", "30"]

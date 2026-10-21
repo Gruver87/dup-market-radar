@@ -36,3 +36,11 @@ Fade / setup sells require a healthy analysis row. Hard stop-loss on degrade use
 ## Audit
 
 Trade events → `data/trade_events.jsonl` (gitignored). Messages redacted.
+
+## Listings soft risk flags
+
+`auto_trade.listings_soft_risk_flags` (default: `cross_venue_live`) may appear on listing rows without blocking auto-buy when `require_no_risk_flags` is true. Any other flag still blocks.
+
+## Outside-top Telegram stops
+
+If a watched spot symbol drops out of top-N, alerts can still fire **stop-loss only** using KuCoin mark (`telegram.outside_top_mark_alerts`, default true). Fade/setup alerts still need a scored row.

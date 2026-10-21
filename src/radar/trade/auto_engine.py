@@ -247,6 +247,11 @@ class AutoTradeEngine:
             or ((int(cfg.get("min_score") or 55)) * SCORE_CENTI)
         )
         require_clean = bool(cfg.get("require_no_risk_flags", True))
+        listings_soft = {
+            str(x)
+            for x in (cfg.get("listings_soft_risk_flags") or ["cross_venue_live"])
+            if x
+        }
         quote_micros = int(
             cfg.get("quote_usdt_micros_per_buy")
             or quote_i(cfg.get("quote_usdt_per_buy") or 10)
@@ -323,7 +328,13 @@ class AutoTradeEngine:
         open_n = len(positions)
         buys = 0
         candidates = self._collect_buys(
-            sectors, allowed, buy_setups, min_score_centi, require_clean, positions
+            sectors,
+            allowed,
+            buy_setups,
+            min_score_centi,
+            require_clean,
+            positions,
+            listings_soft_flags=listings_soft,
         )
         for row in candidates:
             if buys >= max_buys or open_n >= max_open:
@@ -489,7 +500,10 @@ class AutoTradeEngine:
         min_score_centi: int,
         require_clean: bool,
         positions: Dict[str, Any],
+        *,
+        listings_soft_flags: set | None = None,
     ) -> List[Dict[str, Any]]:
+        soft = set(listings_soft_flags or ())
         out: List[Dict[str, Any]] = []
         for sector in allowed:
             if sector in FUTURES_BLOCK:
@@ -506,8 +520,14 @@ class AutoTradeEngine:
                     continue
                 if int(row.get("score_centi") or 0) < int(min_score_centi):
                     continue
-                if require_clean and (row.get("risk_flags") or []):
-                    continue
+                if require_clean:
+                    flags = {str(f) for f in (row.get("risk_flags") or []) if f}
+                    if sector == "listings":
+                        hard = flags - soft
+                        if hard:
+                            continue
+                    elif flags:
+                        continue
                 item = dict(row)
                 item["sector"] = sector
                 out.append(item)

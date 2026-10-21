@@ -35,6 +35,12 @@ def apply_env_overrides(cfg: Dict[str, Any]) -> Dict[str, Any]:
     if prefer is not None or fail_closed is not None:
         cfg = dict(cfg)
         cfg["native"] = native
+    snap_req = os.environ.get("RADAR_SNAPSHOT_REQUIRE_API_KEY")
+    if snap_req is not None:
+        cfg = dict(cfg)
+        api = dict(cfg.get("api") or {})
+        api["snapshot_require_api_key"] = snap_req.strip() in {"1", "true", "True", "yes", "YES"}
+        cfg["api"] = api
     return cfg
 
 

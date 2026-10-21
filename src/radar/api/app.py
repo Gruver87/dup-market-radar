@@ -225,6 +225,26 @@ def _check_auth_fail_rate(request: Request) -> None:
         )
 
 
+
+def _client_is_loopback(request: Request) -> bool:
+    host = ""
+    if request.client is not None:
+        host = str(request.client.host or "")
+    return host in {"127.0.0.1", "::1", "localhost", "testclient"}
+
+
+def _check_snapshot_auth(request: Request) -> None:
+    """Optional API key for /api/snapshot|/api/sector (ops exposure gate)."""
+    api = _api_cfg()
+    always = bool(api.get("snapshot_require_api_key"))
+    non_loop = bool(api.get("snapshot_require_api_key_non_loopback", True))
+    if always:
+        _check_api_key(request)
+        return
+    if non_loop and not _client_is_loopback(request) and api_key_required():
+        _check_api_key(request)
+
+
 def _check_api_key(request: Request) -> None:
     """When RADAR_API_KEY is set, require matching X-Radar-Api-Key.
 
@@ -354,6 +374,7 @@ def _build_telegram() -> TelegramBot:
         lambda: _get_snapshot(force=False),
         auto_status_fn=lambda: _auto.status(),
         trade_place_fn=_tg_trade_place,
+        mark_price_fn=_trader.get_spot_mark_price_i,
     )
 
 
@@ -546,7 +567,7 @@ def _openapi_enabled() -> bool:
 _OPENAPI_ON = _openapi_enabled()
 app = FastAPI(
     title="DUP Market Radar",
-    version="0.2.59",
+    version="0.2.60",
     lifespan=_lifespan,
     docs_url="/docs" if _OPENAPI_ON else None,
     redoc_url="/redoc" if _OPENAPI_ON else None,
@@ -931,6 +952,22 @@ def trade_order(request: Request, body: ManualOrderBody) -> Dict[str, Any]:
     """Manual KuCoin spot market order. Requires confirm=true to send to exchange."""
     _check_api_key(request)
     _check_trade_rate(request)
+    # Server-side policy: never place futures / USDTM from this surface.
+    sym_u = str(body.symbol or "").upper().replace("-", "").replace("_", "")
+    if sym_u.endswith("USDTM") or "USDTM" in sym_u:
+        raise HTTPException(400, detail="futures symbols refused — spot only")
+    try:
+        snap = _cache.peek() or {}
+        row = find_row_public(snap, body.symbol)
+        if row and str(row.get("market") or "").lower() == "futures":
+            raise HTTPException(400, detail="futures market refused — spot only")
+        sec = str(row.get("sector") or row.get("_sector") or "") if row else ""
+        if sec.startswith("futures"):
+            raise HTTPException(400, detail="futures sector refused — spot only")
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("futures gate check soft-fail: %s", redact_exc(exc, max_len=128))
     result = _trader.place(
         TradeRequest(
             symbol=body.symbol,
@@ -1016,6 +1053,7 @@ def _snapshot_etag(body: Dict[str, Any]) -> str:
 @app.get("/api/snapshot")
 def snapshot(request: Request, force: bool = False) -> Response:
     _check_snapshot_rate(request)
+    _check_snapshot_auth(request)
     if force:
         _check_force_scan_rate(request)
     snap = dict(_get_snapshot(force=force))
@@ -1043,6 +1081,7 @@ def sector(request: Request, sector_id: str, force: bool = False) -> Dict[str, A
     if len(sid) < 2 or len(sid) > 32 or not sid.replace("_", "").isalnum():
         raise HTTPException(400, detail="invalid sector_id")
     _check_snapshot_rate(request)
+    _check_snapshot_auth(request)
     if force:
         _check_force_scan_rate(request)
     snap = _get_snapshot(force=force)

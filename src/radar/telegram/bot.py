@@ -41,10 +41,12 @@ class TelegramBot:
         *,
         auto_status_fn: Optional[Callable[[], Dict[str, Any]]] = None,
         trade_place_fn: Optional[Callable[..., Any]] = None,
+        mark_price_fn: Optional[Callable[[str], Optional[int]]] = None,
     ) -> None:
         self._snapshot_fn = snapshot_fn
         self._auto_status_fn = auto_status_fn
         self._trade_place_fn = trade_place_fn
+        self._mark_price_fn = mark_price_fn
         self._stop = threading.Event()
         self._poll_thread: Optional[threading.Thread] = None
         self._alert_thread: Optional[threading.Thread] = None
@@ -316,7 +318,11 @@ class TelegramBot:
                     )
                     TG_STATS.inc("alerts_skipped_stale")
                     return
+        mark_fn = None
+        if bool(cfg.get("outside_top_mark_alerts", True)):
+            mark_fn = self._mark_price_fn
         alerts = scan_all(
+
             self._book,
             snap,
             stop_loss_bps=int(
@@ -326,6 +332,7 @@ class TelegramBot:
             ),
             take_profit_warn_bps=int(cfg.get("take_profit_warn_bps") or 800),
             alert_cooldown_ms=int(cfg.get("alert_cooldown_ms") or 300_000),
+            mark_price_fn=mark_fn,
         )
         for alert in alerts:
             chat_id = int(alert.get("chat_id") or 0)

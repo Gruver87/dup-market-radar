@@ -61,18 +61,72 @@ def evaluate_watch(
     stop_loss_bps: int = 1200,
     take_profit_warn_bps: int = 800,
     alert_cooldown_ms: int = 300_000,
+    mark_price_fn: Optional[Any] = None,
 ) -> Optional[Dict[str, Any]]:
-    """Return alert dict or None. Fail-closed: no row → no spam (skip)."""
+    """Return alert dict or None.
+
+    If symbol is outside top-N snapshot but ``mark_price_fn`` is set and the
+    watch has ``entry_price_i``, still evaluate **spot stop-loss only** (no
+    fade/setup spam without a scored row).
+    """
     market = str(watch.get("market") or "spot")
     symbol = str(watch.get("symbol") or "")
     row = _find_row(snap, symbol)
+    entry_i = watch.get("entry_price_i")
+    entry_i = int(entry_i) if entry_i else None
+
     if not row:
+        if (
+            market == "spot"
+            and entry_i
+            and entry_i > 0
+            and callable(mark_price_fn)
+        ):
+            try:
+                mark = mark_price_fn(symbol)
+            except Exception:  # noqa: BLE001
+                return None
+            if not mark or int(mark) <= 0:
+                return None
+            price_i = int(mark)
+            drop = drop_bps(entry_i, price_i)
+            if drop < stop_loss_bps:
+                return None
+            now_ms = int(time.time() * 1000)
+            last_ms = int(watch.get("last_alert_at_ms") or 0)
+            last_key = str(watch.get("last_alert_key") or "")
+            reasons = [
+                f"stop-loss drop={display_bps(drop)} ≥ {display_bps(stop_loss_bps)}",
+                "outside_top_mark — symbol not in current top-N; mark from exchange",
+            ]
+            alert_key = f"critical|sell|outside_top|{reasons[0][:40]}"
+            if alert_key == last_key and (now_ms - last_ms) < alert_cooldown_ms:
+                return None
+            nearest = nearest_for_action(
+                action="sell",
+                price_i=price_i,
+                setup="fade-watch",
+                entry_price_i=entry_i,
+            )
+            return {
+                "symbol": symbol,
+                "market": market,
+                "severity": "critical",
+                "action_suggest": "sell",
+                "reasons": reasons,
+                "setup": "outside_top",
+                "price_i": price_i,
+                "price_display": display_price(price_i),
+                "score_display": "—",
+                "sector": None,
+                "nearest": nearest,
+                "alert_key": alert_key,
+                "chat_id": watch.get("chat_id"),
+            }
         return None
 
     price_i = int(row.get("price_i") or 0)
     setup = str(row.get("setup") or "")
-    entry_i = watch.get("entry_price_i")
-    entry_i = int(entry_i) if entry_i else None
     score = row.get("score_centi")
     now_ms = int(time.time() * 1000)
     last_ms = int(watch.get("last_alert_at_ms") or 0)
@@ -196,6 +250,7 @@ def scan_all(
     stop_loss_bps: int = 1200,
     take_profit_warn_bps: int = 800,
     alert_cooldown_ms: int = 300_000,
+    mark_price_fn: Optional[Any] = None,
 ) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     for w in book.all():
@@ -205,6 +260,7 @@ def scan_all(
             stop_loss_bps=stop_loss_bps,
             take_profit_warn_bps=take_profit_warn_bps,
             alert_cooldown_ms=alert_cooldown_ms,
+            mark_price_fn=mark_price_fn,
         )
         if alert:
             out.append(alert)

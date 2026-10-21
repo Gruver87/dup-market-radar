@@ -31,3 +31,8 @@ Trade, force-scan, snapshot, ops, metrics, probe, and auth-fail paths are rate-l
 ## Disclaimer
 
 Security hardening does **not** transfer liability. See [`DISCLAIMER.md`](DISCLAIMER.md).
+
+## Snapshot auth
+
+- `api.snapshot_require_api_key` — always require key for `/api/snapshot` and `/api/sector`.
+- `api.snapshot_require_api_key_non_loopback` (default true) — when `RADAR_API_KEY` is set, remote clients must send `X-Radar-Api-Key`; loopback dashboard stays usable without the header.

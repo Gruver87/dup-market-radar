@@ -25,7 +25,8 @@ USER radar
 EXPOSE 8787
 
 # Liveness only — readiness is /api/ready (may 503 until warm scan)
-HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/api/live', timeout=3)"
+# Readiness (may 503 until warm scan) — start-period gives first scan time
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=5 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/api/ready', timeout=3)"
 
 CMD ["python", "-m", "uvicorn", "radar.api.app:app", "--host", "0.0.0.0", "--port", "8787", "--limit-concurrency", "128", "--timeout-keep-alive", "30"]

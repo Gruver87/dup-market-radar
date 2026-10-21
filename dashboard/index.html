@@ -1089,6 +1089,13 @@
         ? `ensure r${ens.rounds} spot=${ens.spot_fill_ratio ?? "—"} fut=${ens.fut_fill_ratio ?? "—"}`
         : (ens.error ? "ensure=ERR" : "");
       const mtfTag = snap.mtf_ensure_ok === false ? "mtf=FAIL" : (snap.mtf_ensure_ok === true ? "mtf=OK" : "");
+      const poll = snap.poll || {};
+      const due = Array.isArray(snap.due_groups) ? snap.due_groups.join(",") : "";
+      const pollTag = due ? `poll_due=${due}` : (poll.last_groups ? `poll=${JSON.stringify(poll.last_groups).slice(0,48)}` : "");
+      const circ = snap.circuit || {};
+      const circOpen = circ.open_remaining_ms && typeof circ.open_remaining_ms === "object"
+        ? Object.keys(circ.open_remaining_ms).length : 0;
+      const circTag = circOpen ? `circuit_open=${circOpen}` : "";
       const scoreMs = snap.score_ms != null ? `${snap.score_ms}ms` : "—";
       const dedupe = snap.dedupe || {};
       const spotDrop = (dedupe.spot && dedupe.spot.dropped) || 0;
@@ -1103,7 +1110,9 @@
         ` · ${when}` +
         (snap.ok ? "" : " · СБОЙ ДАННЫХ") +
         (mtfTag ? " · " + mtfTag : "") +
-        (ensTag ? " · " + ensTag : "");
+        (ensTag ? " · " + ensTag : "") +
+        (pollTag ? " · " + pollTag : "") +
+        (circTag ? " · " + circTag : "");
 
       const rows = ((snap.sectors || {})[state.sector]) || [];
       renderWatchbox(rows);

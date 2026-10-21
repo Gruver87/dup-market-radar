@@ -55,3 +55,19 @@ docker compose up --build
 ## No soak claim
 
 Do not report “48h soak passed” unless you ran it and stored an evidence pack on disk.
+
+## Native Docker
+
+```powershell
+docker compose -f docker-compose.native.yml up --build
+```
+
+Uses `Dockerfile.native` (maturin wheel, `RADAR_NATIVE_PREFER=1`). Lab compose remains python-only.
+
+## Evidence
+
+```powershell
+python scripts/radar_smoke_lab.py --live --evidence
+```
+
+See [`EVIDENCE.md`](EVIDENCE.md).

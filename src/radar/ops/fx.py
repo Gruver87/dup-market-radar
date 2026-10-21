@@ -78,7 +78,7 @@ def _fetch_rates(base: str) -> Dict[str, int]:
             resp = client.get(
                 url,
                 params={"from": base},
-                headers={"User-Agent": "DUP-Market-Radar/0.2.58-fx"},
+                headers={"User-Agent": "DUP-Market-Radar/0.2.59-fx"},
             )
             resp.raise_for_status()
             data = read_capped_json(resp, FX_MAX_RESPONSE_BYTES, label="fx")

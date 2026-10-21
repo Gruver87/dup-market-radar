@@ -33,3 +33,55 @@ def is_meme_symbol(symbol: str | None, keywords: Iterable[str]) -> bool:
     if base in keys:
         return True
     return any(k in base for k in keys if len(k) >= 4)
+
+
+# USDT-M bases that are commodities / FX / equity indices — not crypto alts.
+# Override / extend via sectors.futures.exclude_bases in config.
+DEFAULT_NON_CRYPTO_FUT_BASES = frozenset(
+    {
+        "XAU",
+        "XAG",
+        "XPD",
+        "XPT",
+        "USOIL",
+        "UKOIL",
+        "WTI",
+        "BRENT",
+        "NATGAS",
+        "COPPER",
+        "ALUMINIUM",
+        "ALUMINUM",
+        "NICKEL",
+        "WHEAT",
+        "CORN",
+        "SOYBEAN",
+        "COTTON",
+        "SUGAR",
+        "COFFEE",
+        "SPX",
+        "NDX",
+        "DJI",
+        "HSI",
+        "FTSE",
+        "GER40",
+        "US30",
+        "NAS100",
+        "EURUSD",
+        "GBPUSD",
+        "USDJPY",
+        "USDCNH",
+    }
+)
+
+
+def is_non_crypto_futures_symbol(
+    symbol: str | None, extra_bases: Iterable[str] | None = None
+) -> bool:
+    """True if futures symbol base is commodity/FX/index noise for crypto radar."""
+    base = base_asset(symbol)
+    if not base:
+        return False
+    blocked = set(DEFAULT_NON_CRYPTO_FUT_BASES)
+    if extra_bases:
+        blocked |= {str(x).upper() for x in extra_bases if x}
+    return base in blocked

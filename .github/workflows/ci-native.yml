@@ -1,0 +1,39 @@
+name: ci-native
+
+# Optional native parity — not the default python-lab CI.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "native/radar_native/**"
+      - "tests/test_score_parity.py"
+      - ".github/workflows/ci-native.yml"
+
+jobs:
+  native-parity:
+    name: maturin + score parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install Python deps + maturin
+        run: |
+          python -m pip install -U pip
+          pip install -r requirements.txt
+          pip install pytest maturin
+      - name: Build radar_native
+        run: |
+          cd native/radar_native
+          maturin develop --release
+      - name: Parity tests (native prefer)
+        env:
+          PYTHONPATH: src
+          RADAR_NATIVE_PREFER: "1"
+          RADAR_NATIVE_FAIL_CLOSED: "1"
+        run: python -m pytest tests/test_score_parity.py -q --tb=short

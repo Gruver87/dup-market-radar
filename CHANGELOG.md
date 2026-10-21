@@ -1,5 +1,11 @@
 # Changelog — DUP Market Radar
 
+## 0.2.59
+
+- Futures: drop commodity/FX/index USDT-M bases (XAU, USOIL, …); config `sectors.futures.exclude_bases`
+- Native crate version aligned to app pin `0.2.59` (was `0.2.0`)
+- Docs: public GitHub pin + disclaimer pack (from 0.2.58 release)
+
 ## 0.2.58
 
 - Auto: on degraded/empty snap with open positions → **stop-only** via KuCoin mark (buys refused; no silent hold without stop path)

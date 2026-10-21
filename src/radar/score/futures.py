@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from radar.classify.sectors import is_usdt_pair
+from radar.classify.sectors import is_non_crypto_futures_symbol, is_usdt_pair
 from radar.money import QUOTE_SCALE, SCORE_CENTI, display_price, mul_div, price_i, quote_i
 from radar.score.common import (
     blend_mtf_momentum,
@@ -27,6 +27,9 @@ def score_futures(universe: Dict[str, Any], cfg: Dict[str, Any]) -> List[Dict[st
     for row in universe.get("futures") or []:
         sym = row.get("symbol")
         if not is_usdt_pair(sym):
+            continue
+        extra = sec.get("exclude_bases") or []
+        if is_non_crypto_futures_symbol(sym, extra):
             continue
         price = row.get("price_i")
         chg_bps = row.get("change_bps")

@@ -44,6 +44,24 @@ pub fn is_meme_symbol(symbol: &str, keywords: &[String]) -> bool {
     false
 }
 
+const DEFAULT_NON_CRYPTO_FUT_BASES: &[&str] = &[
+    "XAU", "XAG", "XPD", "XPT", "USOIL", "UKOIL", "WTI", "BRENT", "NATGAS",
+    "COPPER", "ALUMINIUM", "ALUMINUM", "NICKEL", "WHEAT", "CORN", "SOYBEAN",
+    "COTTON", "SUGAR", "COFFEE", "SPX", "NDX", "DJI", "HSI", "FTSE", "GER40",
+    "US30", "NAS100", "EURUSD", "GBPUSD", "USDJPY", "USDCNH",
+];
+
+pub fn is_non_crypto_futures_symbol(symbol: &str, extra_bases: &[String]) -> bool {
+    let base = base_asset(symbol);
+    if base.is_empty() {
+        return false;
+    }
+    if DEFAULT_NON_CRYPTO_FUT_BASES.iter().any(|b| *b == base) {
+        return true;
+    }
+    extra_bases.iter().any(|x| x.to_uppercase() == base)
+}
+
 pub fn normalize_kucoin_symbol(sym: &str, futures: bool) -> String {
     let mut s = sym
         .to_uppercase()
@@ -72,5 +90,7 @@ mod tests {
         ));
         assert!(is_meme_symbol("1000PEPEUSDT", &["PEPE".into()]));
         assert_eq!(normalize_kucoin_symbol("XBTUSDTM", true), "BTCUSDT");
+        assert!(is_non_crypto_futures_symbol("XAUUSDT", &[]));
+        assert!(!is_non_crypto_futures_symbol("BTCUSDT", &[]));
     }
 }

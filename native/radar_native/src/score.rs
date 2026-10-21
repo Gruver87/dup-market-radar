@@ -1,6 +1,6 @@
 use serde_json::{json, Map, Value};
 
-use crate::classify::{is_meme_symbol, is_stable_symbol, is_usdt_pair};
+use crate::classify::{is_meme_symbol, is_stable_symbol, is_usdt_pair, is_non_crypto_futures_symbol};
 use crate::rank::{
     as_i64, blend_volume_score_i, candidate, cfg_funding_i, cfg_pct_bps, cfg_price_i,
     cfg_usdt_micros, clamp_i, log_volume_score_i, mul_div, price_str, rank_top, spread_bps_i,
@@ -305,6 +305,18 @@ fn score_futures(universe: &Value, cfg: &Value) -> Vec<Value> {
             continue;
         };
         if !is_usdt_pair(sym) {
+            continue;
+        }
+        let extra: Vec<String> = sec
+            .get("exclude_bases")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        if is_non_crypto_futures_symbol(sym, &extra) {
             continue;
         }
         let Some(price) = as_i64(row.get("price_i")) else {

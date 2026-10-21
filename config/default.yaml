@@ -124,6 +124,8 @@ sectors:
     min_open_interest_usdt: 1000000
     extreme_funding_abs: 0.0005
     extreme_funding_rate_i: 50000       # 0.0005 * 1e8
+    # Commodity / FX / index USDT-M noise (merged with built-in defaults)
+    exclude_bases: []
   memes:
     poll_sec: 30
     min_liquidity_usd: 50000

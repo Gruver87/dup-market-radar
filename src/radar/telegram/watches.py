@@ -158,6 +158,24 @@ class WatchBook:
             w["last_alert_key"] = alert_key
             self._save_unlocked()
 
+    def set_last_setup(
+        self, chat_id: int, symbol: str, market: str, setup: str
+    ) -> None:
+        """Persist last observed scored setup (for outside-top fade alerts)."""
+        setup_s = str(setup or "").strip()[:64]
+        if not setup_s:
+            return
+        key = self._key(chat_id, symbol, market)
+        with self._lock:
+            w = self._watches.get(key)
+            if not w:
+                return
+            if w.get("last_setup") == setup_s:
+                return
+            w["last_setup"] = setup_s
+            w["last_setup_at_ms"] = int(time.time() * 1000)
+            self._save_unlocked()
+
     def ensure(
         self,
         chat_id: int,

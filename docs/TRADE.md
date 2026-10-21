@@ -41,12 +41,27 @@ Trade events → `data/trade_events.jsonl` (gitignored). Messages redacted.
 
 `auto_trade.listings_soft_risk_flags` (default: `cross_venue_live`) may appear on listing rows without blocking auto-buy when `require_no_risk_flags` is true. Any other flag still blocks.
 
-## Outside-top Telegram stops
+## Outside-top Telegram stops + fade
 
-If a watched spot symbol drops out of top-N, alerts can still fire **stop-loss only** using KuCoin mark (`telegram.outside_top_mark_alerts`, default true). Fade/setup alerts still need a scored row.
+If a watched spot symbol drops out of top-N, alerts can still fire **stop-loss** using KuCoin mark (`telegram.outside_top_mark_alerts`, default true).
+
+When the watch previously saw a scored `fade-watch` / `short` (`last_setup` persisted) and mark is in profit ≥ `take_profit_warn_bps`, a **warn** alert fires even outside top-N (`telegram.outside_top_fade_alerts`, default true). Fade is never invented without a remembered setup.
 
 See [`LIVE_MONEY.md`](LIVE_MONEY.md) before disabling dry_run.
 
 ## Memes soft risk flags
 
-`auto_trade.memes_soft_risk_flags` (default: `below_vol_floor`) soft-allows that flag on CEX meme rows under `require_no_risk_flags`. Any other flag still blocks. DEX memes remain skipped.
+`auto_trade.memes_soft_risk_flags` (default: `below_vol_floor`) soft-allows that flag on CEX meme rows under `require_no_risk_flags`. Any other flag still blocks. DEX memes remain skipped. CEX meme tops are included in MTF ensure targets.
+
+## Symbol blacklist / whitelist
+
+`auto_trade.symbol_blacklist` / `symbol_whitelist` (empty whitelist = all allowed). Applies to **auto buys only** — stops/sells are never blocked by lists.
+
+## Paper ledger
+
+Dry-run buys/sells append to `data/paper_ledger.json` (integer USDT micros). Ops: `GET /api/trade/paper` (API key when configured). Not a live exchange balance.
+
+## Webhook + WebSocket
+
+- `RADAR_WEBHOOK_URL` or `DISCORD_WEBHOOK_URL` — HTTPS Discord/Slack allowlist; mirrors TG alerts + trade events.
+- `GET /ws` — live ticks (`snapshot` / `alert` / `trade` / `ping`). Auth via `?api_key=` when snapshot/trade key required.

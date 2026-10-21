@@ -36,3 +36,6 @@ Security hardening does **not** transfer liability. See [`DISCLAIMER.md`](DISCLA
 
 - `api.snapshot_require_api_key` — always require key for `/api/snapshot` and `/api/sector`.
 - `api.snapshot_require_api_key_non_loopback` (default true) — when `RADAR_API_KEY` is set, remote clients must send `X-Radar-Api-Key`; loopback dashboard stays usable without the header.
+- Native compose sets `RADAR_SNAPSHOT_REQUIRE_API_KEY=1` by default (env overlay).
+- WebSocket `/ws` uses the same key gate when snapshot/trade key is required (`?api_key=` or `X-Radar-Api-Key`).
+- Webhook URL only from env (`RADAR_WEBHOOK_URL` / `DISCORD_WEBHOOK_URL`); HTTPS host allowlist (Discord/Slack).

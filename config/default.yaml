@@ -76,6 +76,7 @@ telegram:
   max_watches: 2000                      # soft refuse new /watch when full
   snapshot_max_age_ms: 180000            # skip alerts if snapshot older than 3m
   outside_top_mark_alerts: true          # stop-loss via KuCoin mark if not in top-N
+  outside_top_fade_alerts: true          # take-profit warn if last_setup=fade and not in top-N
   cmd_rate_limit_per_min: 30             # soft refuse flood per chat
 
 # Auto-trade (OFF by default). Futures never included. Integer amounts only.
@@ -118,6 +119,9 @@ auto_trade:
   sell_setups:
     - fade-watch
   stop_loss_bps: 1200                    # 12%
+  # Empty whitelist = all symbols allowed (minus blacklist). Non-empty = only listed.
+  symbol_blacklist: []
+  symbol_whitelist: []
 
 
 # Primary trading venue: KuCoin (spot + USDT-M futures public data)

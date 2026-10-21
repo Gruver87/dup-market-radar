@@ -322,7 +322,6 @@ class TelegramBot:
         if bool(cfg.get("outside_top_mark_alerts", True)):
             mark_fn = self._mark_price_fn
         alerts = scan_all(
-
             self._book,
             snap,
             stop_loss_bps=int(
@@ -333,6 +332,7 @@ class TelegramBot:
             take_profit_warn_bps=int(cfg.get("take_profit_warn_bps") or 800),
             alert_cooldown_ms=int(cfg.get("alert_cooldown_ms") or 300_000),
             mark_price_fn=mark_fn,
+            outside_top_fade_alerts=bool(cfg.get("outside_top_fade_alerts", True)),
         )
         for alert in alerts:
             chat_id = int(alert.get("chat_id") or 0)
@@ -346,6 +346,21 @@ class TelegramBot:
                 str(alert.get("market")),
                 str(alert.get("alert_key")),
             )
+            try:
+                from radar.notify.webhook import get_webhook_notifier
+
+                get_webhook_notifier().send_alert(alert)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "webhook alert mirror failed: %s",
+                    redact_exc(exc, max_len=128),
+                )
+            try:
+                from radar.api.ws_hub import HUB
+
+                HUB.publish({"type": "alert", "alert": alert})
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("ws alert publish: %s", redact_exc(exc, max_len=64))
 
     def _lang(self, chat_id: int):
         return self._prefs.lang_for(chat_id)

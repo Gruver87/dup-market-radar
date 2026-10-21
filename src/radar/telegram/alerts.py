@@ -63,12 +63,15 @@ def evaluate_watch(
     take_profit_warn_bps: int = 800,
     alert_cooldown_ms: int = 300_000,
     mark_price_fn: Optional[Any] = None,
+    outside_top_fade_alerts: bool = True,
 ) -> Optional[Dict[str, Any]]:
     """Return alert dict or None.
 
     If symbol is outside top-N snapshot but ``mark_price_fn`` is set and the
-    watch has ``entry_price_i``, still evaluate **spot stop-loss only** (no
-    fade/setup spam without a scored row).
+    watch has ``entry_price_i``, still evaluate **spot stop-loss** via mark.
+    When ``outside_top_fade_alerts`` and watch ``last_setup`` is fade/short,
+    also warn on take-profit (gain ≥ take_profit_warn_bps) — no inventing
+    fade without a previously observed setup.
     """
     market = str(watch.get("market") or "spot")
     symbol = str(watch.get("symbol") or "")
@@ -93,39 +96,77 @@ def evaluate_watch(
                 return None
             price_i = int(mark)
             drop = drop_bps(entry_i, price_i)
-            if drop < stop_loss_bps:
-                return None
             now_ms = int(time.time() * 1000)
             last_ms = int(watch.get("last_alert_at_ms") or 0)
             last_key = str(watch.get("last_alert_key") or "")
-            reasons = [
-                f"stop-loss drop={display_bps(drop)} ≥ {display_bps(stop_loss_bps)}",
-                "outside_top_mark — symbol not in current top-N; mark from exchange",
-            ]
-            alert_key = f"critical|sell|outside_top|{reasons[0][:40]}"
-            if alert_key == last_key and (now_ms - last_ms) < alert_cooldown_ms:
-                return None
-            nearest = nearest_for_action(
-                action="sell",
-                price_i=price_i,
-                setup="fade-watch",
-                entry_price_i=entry_i,
-            )
-            return {
-                "symbol": symbol,
-                "market": market,
-                "severity": "critical",
-                "action_suggest": "sell",
-                "reasons": reasons,
-                "setup": "outside_top",
-                "price_i": price_i,
-                "price_display": display_price(price_i),
-                "score_display": "—",
-                "sector": None,
-                "nearest": nearest,
-                "alert_key": alert_key,
-                "chat_id": watch.get("chat_id"),
-            }
+            last_setup = str(watch.get("last_setup") or "").strip()
+
+            if drop >= stop_loss_bps:
+                reasons = [
+                    f"stop-loss drop={display_bps(drop)} ≥ {display_bps(stop_loss_bps)}",
+                    "outside_top_mark — symbol not in current top-N; mark from exchange",
+                ]
+                alert_key = f"critical|sell|outside_top|{reasons[0][:40]}"
+                if alert_key == last_key and (now_ms - last_ms) < alert_cooldown_ms:
+                    return None
+                nearest = nearest_for_action(
+                    action="sell",
+                    price_i=price_i,
+                    setup="fade-watch",
+                    entry_price_i=entry_i,
+                )
+                return {
+                    "symbol": symbol,
+                    "market": market,
+                    "severity": "critical",
+                    "action_suggest": "sell",
+                    "reasons": reasons,
+                    "setup": "outside_top",
+                    "price_i": price_i,
+                    "price_display": display_price(price_i),
+                    "score_display": "—",
+                    "sector": None,
+                    "nearest": nearest,
+                    "alert_key": alert_key,
+                    "chat_id": watch.get("chat_id"),
+                }
+
+            # Fade / take-profit outside top — requires remembered last_setup.
+            if (
+                outside_top_fade_alerts
+                and last_setup in {"fade-watch", "short"}
+            ):
+                gain = -drop
+                if gain >= take_profit_warn_bps:
+                    reasons = [
+                        f"в плюсе ~{display_bps(gain)} и last_setup={last_setup} "
+                        f"(вне top-N) — зафиксировать прибыль?",
+                        "outside_top_fade — setup remembered from last scored row",
+                    ]
+                    alert_key = f"warn|sell|outside_top_fade|{reasons[0][:40]}"
+                    if alert_key == last_key and (now_ms - last_ms) < alert_cooldown_ms:
+                        return None
+                    nearest = nearest_for_action(
+                        action="sell",
+                        price_i=price_i,
+                        setup=last_setup,
+                        entry_price_i=entry_i,
+                    )
+                    return {
+                        "symbol": symbol,
+                        "market": market,
+                        "severity": "warn",
+                        "action_suggest": "sell",
+                        "reasons": reasons,
+                        "setup": "outside_top_fade",
+                        "price_i": price_i,
+                        "price_display": display_price(price_i),
+                        "score_display": "—",
+                        "sector": None,
+                        "nearest": nearest,
+                        "alert_key": alert_key,
+                        "chat_id": watch.get("chat_id"),
+                    }
         return None
 
     price_i = int(row.get("price_i") or 0)
@@ -254,9 +295,22 @@ def scan_all(
     take_profit_warn_bps: int = 800,
     alert_cooldown_ms: int = 300_000,
     mark_price_fn: Optional[Any] = None,
+    outside_top_fade_alerts: bool = True,
 ) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     for w in book.all():
+        # Remember last scored setup while symbol is still in top-N.
+        row = _find_row(snap, str(w.get("symbol") or ""))
+        if row and row.get("setup"):
+            try:
+                book.set_last_setup(
+                    int(w.get("chat_id") or 0),
+                    str(w.get("symbol") or ""),
+                    str(w.get("market") or "spot"),
+                    str(row.get("setup")),
+                )
+            except Exception:  # noqa: BLE001
+                pass
         alert = evaluate_watch(
             w,
             snap,
@@ -264,6 +318,7 @@ def scan_all(
             take_profit_warn_bps=take_profit_warn_bps,
             alert_cooldown_ms=alert_cooldown_ms,
             mark_price_fn=mark_price_fn,
+            outside_top_fade_alerts=outside_top_fade_alerts,
         )
         if alert:
             out.append(alert)

@@ -86,7 +86,28 @@ class SnapshotCache:
             self._ts_ms = int(time.time() * 1000)
             self._inflight = False
             self._cond.notify_all()
-            return snap
+        # Notify live subscribers outside the lock (WebSocket hub).
+        try:
+            from radar.api.ws_hub import HUB
+
+            HUB.publish(
+                {
+                    "type": "snapshot",
+                    "ok": bool(snap.get("ok")) if isinstance(snap, dict) else False,
+                    "generated_at_ms": (
+                        snap.get("generated_at_ms") if isinstance(snap, dict) else None
+                    ),
+                    "mtf_ensure_ok": (
+                        snap.get("mtf_ensure_ok") if isinstance(snap, dict) else None
+                    ),
+                    "universe_size": (
+                        snap.get("universe_size") if isinstance(snap, dict) else None
+                    ),
+                }
+            )
+        except Exception:  # noqa: BLE001
+            pass
+        return snap
 
     def status(self) -> Dict[str, Any]:
         with self._lock:

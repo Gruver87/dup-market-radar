@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import asyncio
+import json as _json
 import logging
 import os
 import sys
 import threading
+import time
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Dict, Optional
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
@@ -58,8 +61,11 @@ from radar.trade.kucoin_manual import (
 )
 from radar.telegram import TelegramBot
 from radar.telegram.alerts import find_row_public
+from radar.api.ws_hub import HUB
+from radar.notify.webhook import get_webhook_notifier
 from radar.trade.events import read_trade_events, record_trade_event
 from radar.trade.oid_ledger import ClientOidLedger
+from radar.trade.paper_ledger import PaperLedger
 from radar.trade.stats import TRADE_STATS
 from radar.trade.symbol_meta import SymbolMetaCache
 
@@ -91,8 +97,31 @@ def _build_trader() -> KuCoinManualTrader:
 
 
 _trader = _build_trader()
+_paper = PaperLedger()
 _tg: Optional[TelegramBot] = None
 _tg_start_error: Optional[str] = None
+
+
+def _mirror_trade_side_channels(event: Dict[str, Any]) -> None:
+    """Paper ledger + webhook + WS — never raises to trade path."""
+    try:
+        _paper.record_event(event)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("paper ledger: %s", redact_exc(exc, max_len=128))
+    try:
+        get_webhook_notifier().send_trade(event)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("webhook trade: %s", redact_exc(exc, max_len=128))
+    try:
+        HUB.publish({"type": "trade", "event": {
+            "ok": event.get("ok"),
+            "dry_run": event.get("dry_run"),
+            "side": event.get("side"),
+            "symbol": event.get("symbol"),
+            "source": event.get("source"),
+        }})
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("ws trade publish: %s", redact_exc(exc, max_len=64))
 
 
 def _api_cfg() -> Dict[str, Any]:
@@ -366,6 +395,7 @@ def _tg_trade_place(
                 redact_exc(exc, max_len=256),
             )
     record_trade_event(trade_ev)
+    _mirror_trade_side_channels(trade_ev)
     if _tg is not None:
         _tg.notify_trade(trade_ev)
         _tg_apply_position_hooks(trade_ev)
@@ -481,6 +511,7 @@ def _tg_apply_position_hooks(event: Dict[str, Any]) -> None:
 
 def _on_auto_action(event: Dict[str, Any]) -> None:
     record_trade_event(event)
+    _mirror_trade_side_channels(event)
     if _tg is None:
         return
     _tg.notify_trade(event)
@@ -535,6 +566,10 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         )
     if not api_key_gate_ok():
         logger.warning("api key gate degraded (pytest / lab)")
+    try:
+        HUB.bind_loop(asyncio.get_running_loop())
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("ws hub bind failed: %s", redact_exc(exc, max_len=128))
     _auto.start()
     _tg = _build_telegram()
     _auto.set_on_action(_on_auto_action)
@@ -554,6 +589,12 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
             "telegram start failed — continuing without bot: %s",
             _tg_start_error,
         )
+    wh = get_webhook_notifier().status()
+    logger.info(
+        "webhook configured=%s host_ok=%s",
+        wh.get("configured"),
+        wh.get("host_ok"),
+    )
     if bool(_api_cfg().get("warm_scan_on_startup", True)):
 
         def _warm() -> None:
@@ -586,7 +627,7 @@ def _openapi_enabled() -> bool:
 _OPENAPI_ON = _openapi_enabled()
 app = FastAPI(
     title="DUP Market Radar",
-    version="0.2.63",
+    version="0.2.64",
     lifespan=_lifespan,
     docs_url="/docs" if _OPENAPI_ON else None,
     redoc_url="/redoc" if _OPENAPI_ON else None,
@@ -1052,12 +1093,87 @@ def trade_order(request: Request, body: ManualOrderBody) -> Dict[str, Any]:
                 redact_exc(exc, max_len=256),
             )
     record_trade_event(trade_ev)
+    _mirror_trade_side_channels(trade_ev)
     if _tg is not None and (result.ok or not result.dry_run):
         _tg.notify_trade(trade_ev)
         _tg_apply_position_hooks(trade_ev)
     if result.ok:
         return payload
     raise HTTPException(400, detail=payload)
+
+
+@app.get("/api/trade/paper")
+def trade_paper(request: Request) -> Dict[str, Any]:
+    """Paper / dry-run P&L ledger (USDT micros). API-key gated like trade ops."""
+    _check_api_key(request)
+    marks: Dict[str, int] = {}
+    try:
+        st = _paper.status()
+        for row in st.get("open") or []:
+            sym = str(row.get("symbol") or "")
+            if not sym:
+                continue
+            try:
+                m = _trader.get_spot_mark_price_i(sym)
+            except Exception:  # noqa: BLE001
+                m = None
+            if m:
+                marks[sym] = int(m)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("paper marks: %s", redact_exc(exc, max_len=128))
+    return {"ok": True, **_redact_fs_paths(_paper.status(marks=marks or None))}
+
+
+@app.get("/api/notify/webhook")
+def webhook_status(request: Request) -> Dict[str, Any]:
+    _check_api_key(request)
+    return {"ok": True, "webhook": get_webhook_notifier().status(), "ws": HUB.status()}
+
+
+@app.websocket("/ws")
+async def ws_live(websocket: WebSocket) -> None:
+    """Live ticks: snapshot refresh, alerts, trades.
+
+    Auth: when ``snapshot_require_api_key`` or trade API key is set, client must
+    send ``?api_key=`` or header ``X-Radar-Api-Key`` matching ``RADAR_API_KEY``.
+    """
+    api = _api_cfg()
+    need = bool(api.get("snapshot_require_api_key")) or api_key_required()
+    if need:
+        key_q = (websocket.query_params.get("api_key") or "").strip()
+        key_h = (websocket.headers.get("x-radar-api-key") or "").strip()
+        presented = key_q or key_h
+        if not presented or not verify_api_key(presented):
+            await websocket.close(code=4401)
+            return
+    await websocket.accept()
+    q = HUB.subscribe()
+    try:
+        await websocket.send_text(
+            _json.dumps(
+                {
+                    "type": "hello",
+                    "product": "DUP Market Radar",
+                    "at_ms": int(time.time() * 1000),
+                    "ws": HUB.status(),
+                },
+                ensure_ascii=False,
+            )
+        )
+        while True:
+            try:
+                msg = await asyncio.wait_for(q.get(), timeout=25.0)
+                await websocket.send_text(_json.dumps(msg, ensure_ascii=False, default=str))
+            except asyncio.TimeoutError:
+                await websocket.send_text(
+                    _json.dumps({"type": "ping", "at_ms": int(time.time() * 1000)})
+                )
+    except WebSocketDisconnect:
+        pass
+    except Exception as exc:  # noqa: BLE001
+        logger.info("ws disconnect: %s", redact_exc(exc, max_len=64))
+    finally:
+        HUB.unsubscribe(q)
 
 
 def _snapshot_etag(body: Dict[str, Any]) -> str:

@@ -20,4 +20,6 @@ native/radar_native/target/
 data/*.jsonl
 
 data/evidence/*.json
+data/evidence/*.log
+data/evidence/*.err
 !data/evidence/.gitkeep

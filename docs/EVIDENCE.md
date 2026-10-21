@@ -25,7 +25,15 @@ python scripts/radar_soak_lab.py --cycles 3 --interval-sec 45
 
 Writes `data/evidence/soak_lab_<UTC>.json` and `LATEST_SOAK.json`. Exit code 1 if `hard_fails > 0`.
 
-**Do not claim 48h soak** unless you ran ~48h of cycles and the pack shows `hard_fails=0`.
+### 48h wall-clock soak (operator host)
+
+```powershell
+.\scripts\radar_soak_48h.ps1
+# or:
+python scripts/radar_soak_lab.py --duration-hours 48 --interval-sec 300
+```
+
+Pack sets `approx_48h_claim_ok=true` and `pack_kind=soak_lab_48h` only when duration≈48h **and** `hard_fails=0`. Until then: **do not claim 48h soak**.
 
 ## Retention
 

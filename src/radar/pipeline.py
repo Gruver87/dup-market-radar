@@ -38,9 +38,9 @@ SECTOR_META = {
         "method": "OI/volume × MTF momentum; extreme funding flips side vs short-window bias",
     },
     "memes": {
-        "title": "Memes (DEX)",
-        "poll_hint": "group poll_sec · DexScreener boosts + search; h24/h1/m5 fields",
-        "method": "liquidity + h24/h1/m5 momentum blend + age; thin liq flagged; no extra candle GET",
+        "title": "Memes (DEX + CEX keywords)",
+        "poll_hint": "group poll_sec · DexScreener h24/h1/m5 + CEX keyword memes; sampled KuCoin 15m/1h/4h for CEX top",
+        "method": "DEX liq/age + h24/h1/m5 blend; CEX MTF via ensure sample; thin liq flagged; DEX no extra candle GET",
     },
     "stables": {
         "title": "Stables",
@@ -159,7 +159,23 @@ def run_scan(
             from radar.rank.topn import rank_top
             from radar.score.futures import score_futures
             from radar.score.listings import score_listings
+            from radar.score.memes import score_memes
             from radar.score.spot_alts import score_spot_alts
+
+            def _cex_meme_syms(n: int) -> set[str]:
+                """CEX keyword memes only — DEX has no KuCoin candle path."""
+                out: set[str] = set()
+                for r in rank_top(score_memes(universe, cfg), n):
+                    if not isinstance(r, dict):
+                        continue
+                    m = r.get("metrics") if isinstance(r.get("metrics"), dict) else {}
+                    src = str(m.get("source") or "").lower()
+                    venue = str(r.get("venue") or m.get("venue") or "").lower()
+                    if src == "cex" or venue in {"kucoin", "binance", "bybit", "mexc"}:
+                        sym = str(r.get("symbol") or "")
+                        if sym:
+                            out.add(sym)
+                return out
 
             # Smaller prelim + adaptive 2nd round (profile: ensure was ~28s of ~42s).
             prelim_n = max(top_n * 2, 16)
@@ -182,6 +198,8 @@ def run_scan(
                         fut_syms.add(sym)
                     else:
                         spot_syms.add(sym)
+                # CEX memes share the spot candle book — include in ensure targets.
+                spot_syms |= _cex_meme_syms(prelim_n)
                 part = ensure_universe_short_windows(
                     http, universe, spot_symbols=spot_syms, fut_symbols=fut_syms
                 )
@@ -218,12 +236,14 @@ def run_scan(
                     for r in list_top
                     if str(r.get("market") or "spot").lower() == "futures"
                 }
+                meme_top = _cex_meme_syms(top_n)
                 if (
                     _ensure_bucket_ok(_ensure_fill_ratio(universe, spot_top, "spot"))
                     and _ensure_bucket_ok(_ensure_fill_ratio(universe, fut_top, "futures"))
                     and _ensure_bucket_ok(_ensure_fill_ratio(universe, list_spot, "spot"))
                     and _ensure_bucket_ok(_ensure_fill_ratio(universe, list_fut, "futures"))
-                    and bool(spot_top or fut_top or list_spot or list_fut)
+                    and _ensure_bucket_ok(_ensure_fill_ratio(universe, meme_top, "spot"))
+                    and bool(spot_top or fut_top or list_spot or list_fut or meme_top)
                 ):
                     break
             # Final honesty: incomplete top-N fill is not "ensure ok".
@@ -253,10 +273,12 @@ def run_scan(
                 for r in list_top
                 if str(r.get("market") or "spot").lower() == "futures"
             }
+            meme_top = _cex_meme_syms(top_n)
             spot_fill = _ensure_fill_ratio(universe, spot_top, "spot")
             fut_fill = _ensure_fill_ratio(universe, fut_top, "futures")
             list_spot_fill = _ensure_fill_ratio(universe, list_spot, "spot")
             list_fut_fill = _ensure_fill_ratio(universe, list_fut, "futures")
+            meme_fill = _ensure_fill_ratio(universe, meme_top, "spot")
             ensure_acc["spot_fill_ratio"] = (
                 None if spot_fill is None else round(spot_fill, 4)
             )
@@ -269,13 +291,18 @@ def run_scan(
             ensure_acc["list_fut_fill_ratio"] = (
                 None if list_fut_fill is None else round(list_fut_fill, 4)
             )
+            ensure_acc["meme_cex_fill_ratio"] = (
+                None if meme_fill is None else round(meme_fill, 4)
+            )
+            ensure_acc["meme_cex_targets"] = len(meme_top)
             universe["short_window_ensure"] = ensure_acc
-            any_targets = bool(spot_top or fut_top or list_spot or list_fut)
+            any_targets = bool(spot_top or fut_top or list_spot or list_fut or meme_top)
             fills_ok = (
                 _ensure_bucket_ok(spot_fill)
                 and _ensure_bucket_ok(fut_fill)
                 and _ensure_bucket_ok(list_spot_fill)
                 and _ensure_bucket_ok(list_fut_fill)
+                and _ensure_bucket_ok(meme_fill)
             )
             if any_targets and fills_ok:
                 universe["mtf_ensure_ok"] = True
@@ -289,7 +316,8 @@ def run_scan(
                         "mtf_ensure_incomplete:"
                         f"spot={_fmt_fill(spot_fill)},fut={_fmt_fill(fut_fill)},"
                         f"list_spot={_fmt_fill(list_spot_fill)},"
-                        f"list_fut={_fmt_fill(list_fut_fill)}"
+                        f"list_fut={_fmt_fill(list_fut_fill)},"
+                        f"meme_cex={_fmt_fill(meme_fill)}"
                     )
                 universe["errors"] = errs[:32]
         except Exception as exc:  # noqa: BLE001

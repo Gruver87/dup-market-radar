@@ -83,6 +83,8 @@ class AutoTradeEngine:
                 "dry_run": bool(cfg.get("dry_run")),
                 "futures_excluded": True,
                 "allowed_sectors": list(cfg.get("allowed_sectors") or []),
+                "symbol_blacklist": list(cfg.get("symbol_blacklist") or []),
+                "symbol_whitelist": list(cfg.get("symbol_whitelist") or []),
                 "quote_usdt_micros_per_buy": cfg.get("quote_usdt_micros_per_buy")
                 or quote_i(cfg.get("quote_usdt_per_buy") or 10),
                 "max_open_positions": cfg.get("max_open_positions"),
@@ -511,6 +513,8 @@ class AutoTradeEngine:
         *,
         listings_soft_flags: set | None = None,
         soft_flags_by_sector: dict | None = None,
+        symbol_blacklist: set | None = None,
+        symbol_whitelist: set | None = None,
     ) -> List[Dict[str, Any]]:
         # Back-compat: listings_soft_flags alone still works.
         soft_map: Dict[str, set] = {}
@@ -518,6 +522,32 @@ class AutoTradeEngine:
             soft_map = {str(k): set(v or ()) for k, v in soft_flags_by_sector.items()}
         elif listings_soft_flags:
             soft_map["listings"] = set(listings_soft_flags)
+        cfg = load_config().get("auto_trade") or {}
+        if symbol_blacklist is None:
+            blacklist = {
+                str(s).upper().replace("-", "").replace("/", "")
+                for s in (cfg.get("symbol_blacklist") or [])
+                if s
+            }
+        else:
+            blacklist = {
+                str(s).upper().replace("-", "").replace("/", "")
+                for s in symbol_blacklist
+                if s
+            }
+        if symbol_whitelist is None:
+            whitelist_raw = [
+                str(s).upper().replace("-", "").replace("/", "")
+                for s in (cfg.get("symbol_whitelist") or [])
+                if s
+            ]
+            whitelist = set(whitelist_raw) if whitelist_raw else None
+        else:
+            whitelist = {
+                str(s).upper().replace("-", "").replace("/", "")
+                for s in symbol_whitelist
+                if s
+            } or None
         out: List[Dict[str, Any]] = []
         for sector in allowed:
             if sector in FUTURES_BLOCK:
@@ -529,6 +559,11 @@ class AutoTradeEngine:
                     continue
                 sym = row.get("symbol")
                 if not sym or sym in positions:
+                    continue
+                sym_u = str(sym).upper().replace("-", "").replace("/", "")
+                if sym_u in blacklist:
+                    continue
+                if whitelist is not None and sym_u not in whitelist:
                     continue
                 if row.get("setup") not in buy_setups:
                     continue
@@ -561,7 +596,15 @@ class AutoTradeEngine:
         if dry:
             msg = f"DRY buy {symbol} micros={quote_micros} @price_i={price_i}"
             logger.info(msg)
-            return {"ok": True, "dry_run": True, "side": "buy", "symbol": symbol, "message": msg}
+            return {
+                "ok": True,
+                "dry_run": True,
+                "side": "buy",
+                "symbol": symbol,
+                "message": msg,
+                "quote_usdt_micros": int(quote_micros),
+                "entry_price_i": int(price_i),
+            }
         client_oid = str(uuid.uuid4())
         result = self._trader.place(
             TradeRequest(

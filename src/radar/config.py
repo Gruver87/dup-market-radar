@@ -204,6 +204,17 @@ def validate_config(cfg: Dict[str, Any]) -> None:
                     errors.append("auto_trade.allowed_sectors must be list")
                 elif any(s in {"futures", "futures_long", "futures_short"} for s in allowed):
                     errors.append("auto_trade.allowed_sectors must not include futures")
+            for list_key in ("symbol_blacklist", "symbol_whitelist"):
+                lst = auto.get(list_key)
+                if lst is not None:
+                    if not isinstance(lst, list):
+                        errors.append(f"auto_trade.{list_key} must be list")
+                    elif len(lst) > 500:
+                        errors.append(f"auto_trade.{list_key} must have ≤500 entries")
+                    elif any(not isinstance(s, str) or not str(s).strip() for s in lst):
+                        errors.append(
+                            f"auto_trade.{list_key} entries must be non-empty strings"
+                        )
 
     tg = cfg.get("telegram")
     if tg is not None:

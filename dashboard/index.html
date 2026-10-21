@@ -1238,6 +1238,29 @@
     renderTabs();
     load(false);
     setInterval(() => load(false), 60000);
+
+    // Optional live ticks — HTTP poll remains source of truth; WS only nudges refresh.
+    (function bindRadarWs() {
+      try {
+        const proto = location.protocol === "https:" ? "wss" : "ws";
+        const key = (localStorage.getItem("radar_api_key") || "").trim();
+        const q = key ? ("?api_key=" + encodeURIComponent(key)) : "";
+        const ws = new WebSocket(proto + "://" + location.host + "/ws" + q);
+        let lastNudge = 0;
+        ws.onmessage = (ev) => {
+          let msg;
+          try { msg = JSON.parse(ev.data); } catch (_) { return; }
+          if (!msg || !msg.type) return;
+          if (msg.type === "snapshot" || msg.type === "alert" || msg.type === "trade") {
+            const now = Date.now();
+            if (now - lastNudge < 5000) return;
+            lastNudge = now;
+            load(false);
+          }
+        };
+        ws.onerror = () => { try { ws.close(); } catch (_) {} };
+      } catch (_) { /* soft — poll continues */ }
+    })();
   </script>
 </body>
 </html>

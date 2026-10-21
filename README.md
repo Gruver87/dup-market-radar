@@ -1,6 +1,6 @@
 ﻿# DUP Market Radar
 
-**Version:** 0.2.63 · **Org:** [DUP Labs](https://github.com/Gruver87) · **Author:** Uladzimir Dabranski
+**Version:** 0.2.64 · **Org:** [DUP Labs](https://github.com/Gruver87) · **Author:** Uladzimir Dabranski
 
 Hybrid **Python + Rust** market watchlist for crypto spot, USDT-M futures (watch-only), memes, stables, listings, and large prints — with optional **KuCoin spot** manual orders and **opt-in auto-trade** (spot_alts / CEX memes / listings; **never futures**; DEX memes watchlist-only).
 
@@ -57,6 +57,8 @@ python scripts/radar_smoke_lab.py
 python scripts/radar_smoke_lab.py --live
 # Short soak gate (writes evidence; exit 1 on hard_fails)
 # python scripts/radar_soak_lab.py --cycles 3 --interval-sec 45
+# 48h wall-clock (claim only if pack approx_48h_claim_ok=true):
+# .\scripts\radar_soak_48h.ps1
 ```
 
 ### Docker (lab-python)

@@ -1,5 +1,16 @@
 # Changelog — DUP Market Radar
 
+## 0.2.64
+
+- Ensure: CEX keyword memes included in MTF short-window targets + `meme_cex_fill_ratio` honesty
+- Telegram: outside-top **fade take-profit** via remembered `last_setup` (`outside_top_fade_alerts`)
+- Native compose: `RADAR_SNAPSHOT_REQUIRE_API_KEY=1` by default
+- Paper ledger: dry-run P&L in USDT micros (`/api/trade/paper`)
+- Webhook mirror: Discord HTTPS allowlist (`RADAR_WEBHOOK_URL` / `DISCORD_WEBHOOK_URL`)
+- Auto: `symbol_blacklist` / `symbol_whitelist`
+- WebSocket: `/ws` live ticks (snapshot/alert/trade); dashboard soft reconnect nudge
+- Soak: `--duration-hours` + `scripts/radar_soak_48h.ps1` (48h claim only when pack says so)
+
 ## 0.2.63
 
 - Auto: `memes_soft_risk_flags` (default `below_vol_floor`) — sector soft-flag map

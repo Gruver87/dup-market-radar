@@ -31,8 +31,14 @@ def _one_cycle(force: bool = True) -> dict:
     from radar.pipeline import run_scan
 
     cfg = dict(load_config())
-    # Soft native for lab hosts without wheel — still records backend honesty
-    cfg["native"] = {**(cfg.get("native") or {}), "fail_closed": False}
+    # Soft native for lab hosts without wheel — still records backend in pack.
+    # prefer=false so missing radar_native does not paint every cycle hard_fail
+    # via score_backend_degraded (honest lab soak, not silent prod green).
+    cfg["native"] = {
+        **(cfg.get("native") or {}),
+        "prefer": False,
+        "fail_closed": False,
+    }
     poll_state().reset()
     t0 = int(time.time() * 1000)
     snap = run_scan(cfg, force=force)

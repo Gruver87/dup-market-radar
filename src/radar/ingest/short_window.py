@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
 
 from radar.http_client import AllowlistHttp
 from radar.ingest.parse import abs_change_bps_sort_key, quote_volume_sort_key
@@ -25,6 +26,28 @@ DEFAULT_SHORT_SAMPLE_N = 24
 DEFAULT_FUTURES_SHORT_SAMPLE_N = 16
 # Not listed on Binance spot/fapi — skip to avoid 400 retry storms (Bybit/MEXC cover).
 _SKIP_BINANCE_KLINE_VENUES = frozenset({"bybit", "mexc"})
+# Parallel kline fan-out (AllowlistHttp lock no longer wraps network I/O).
+KLINE_PARALLEL_WORKERS = 8
+
+_T = TypeVar("_T")
+_R = TypeVar("_R")
+
+
+def _parallel_map(
+    items: List[_T], fn: Callable[[_T], _R], *, max_workers: int = KLINE_PARALLEL_WORKERS
+) -> List[_R]:
+    """Run fn over items; preserve input order. Sequential if ≤1 item."""
+    if not items:
+        return []
+    workers = max(1, min(int(max_workers), len(items)))
+    if workers == 1 or len(items) == 1:
+        return [fn(x) for x in items]
+    out: List[_R] = [None] * len(items)  # type: ignore[list-item]
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futs = {pool.submit(fn, item): i for i, item in enumerate(items)}
+        for fut in as_completed(futs):
+            out[futs[fut]] = fut.result()
+    return out
 
 
 def select_short_window_sample(
@@ -216,6 +239,40 @@ def vol_vs_median_bps_from_closed(
     return mul_div(recent, 10_000, baseline) - 10_000
 
 
+def _apply_kucoin_spot_buckets(
+    row: Dict[str, Any],
+    buckets: List[Any],
+    *,
+    now: int,
+    counts: Dict[str, int],
+) -> None:
+    closed = closed_buckets(buckets, period_sec=_PERIOD_15M, now_sec=now)
+    if not closed:
+        bucket = pick_closed_bucket(buckets, period_sec=_PERIOD_15M, now_sec=now)
+        if bucket:
+            bps_15 = candle_change_bps(bucket[1], bucket[2])
+            if bps_15 is not None:
+                row["change_pct_15m"] = bps_to_pct_str(bps_15)
+                counts["n_15m"] = int(counts.get("n_15m") or 0) + 1
+        return
+    bps_15 = candle_change_bps(closed[-1][1], closed[-1][2])
+    if bps_15 is not None:
+        row["change_pct_15m"] = bps_to_pct_str(bps_15)
+        counts["n_15m"] = int(counts.get("n_15m") or 0) + 1
+    bps_1h = change_bps_from_closed_span(closed, n_buckets=_BUCKETS_1H)
+    if bps_1h is not None:
+        row["change_pct_1h"] = bps_to_pct_str(bps_1h)
+        counts["n_1h"] = int(counts.get("n_1h") or 0) + 1
+    bps_4h = change_bps_from_closed_span(closed, n_buckets=_BUCKETS_4H)
+    if bps_4h is not None:
+        row["change_pct_4h"] = bps_to_pct_str(bps_4h)
+        counts["n_4h"] = int(counts.get("n_4h") or 0) + 1
+    vol_vs = vol_vs_median_bps_from_closed(closed, n_buckets=_BUCKETS_1H)
+    if vol_vs is not None:
+        row["vol_vs_median_bps"] = int(vol_vs)
+        counts["n_vol_vs"] = int(counts.get("n_vol_vs") or 0) + 1
+
+
 def attach_kucoin_short_windows(
     http: AllowlistHttp,
     spot_rows: List[Dict[str, Any]],
@@ -236,10 +293,11 @@ def attach_kucoin_short_windows(
     ]
     sample = select_short_window_sample(usdt, top_n=n)
     now = int(time.time())
-    for row in sample:
+
+    def _fetch(row: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[List[Any]]]:
         raw_sym = str(row.get("symbol_raw") or "")
         if not raw_sym:
-            continue
+            return row, None
         try:
             data = http.get_json(
                 "https://api.kucoin.com/api/v1/market/candles",
@@ -257,38 +315,13 @@ def attach_kucoin_short_windows(
                 raw_sym[:32],
                 redact_exc(exc, max_len=128),
             )
-            continue
+            return row, None
         buckets = data.get("data") if isinstance(data, dict) else None
-        if not isinstance(buckets, list):
-            continue
-        closed = closed_buckets(buckets, period_sec=_PERIOD_15M, now_sec=now)
-        if not closed:
-            # In-progress only — still use newest for soft 15m
-            bucket = pick_closed_bucket(
-                buckets, period_sec=_PERIOD_15M, now_sec=now
-            )
-            if bucket:
-                bps_15 = candle_change_bps(bucket[1], bucket[2])
-                if bps_15 is not None:
-                    row["change_pct_15m"] = bps_to_pct_str(bps_15)
-                    counts["n_15m"] += 1
-            continue
-        bps_15 = candle_change_bps(closed[-1][1], closed[-1][2])
-        if bps_15 is not None:
-            row["change_pct_15m"] = bps_to_pct_str(bps_15)
-            counts["n_15m"] += 1
-        bps_1h = change_bps_from_closed_span(closed, n_buckets=_BUCKETS_1H)
-        if bps_1h is not None:
-            row["change_pct_1h"] = bps_to_pct_str(bps_1h)
-            counts["n_1h"] += 1
-        bps_4h = change_bps_from_closed_span(closed, n_buckets=_BUCKETS_4H)
-        if bps_4h is not None:
-            row["change_pct_4h"] = bps_to_pct_str(bps_4h)
-            counts["n_4h"] += 1
-        vol_vs = vol_vs_median_bps_from_closed(closed, n_buckets=_BUCKETS_1H)
-        if vol_vs is not None:
-            row["vol_vs_median_bps"] = int(vol_vs)
-            counts["n_vol_vs"] += 1
+        return row, buckets if isinstance(buckets, list) else None
+
+    for row, buckets in _parallel_map(sample, _fetch):
+        if buckets:
+            _apply_kucoin_spot_buckets(row, buckets, now=now, counts=counts)
     return counts
 
 
@@ -522,10 +555,11 @@ def attach_binance_spot_short_windows(
     now = int(time.time())
     now_ms = now * 1000
     from_ms = now_ms - (_LOOKBACK_SEC * 1000)
-    for row in sample:
+
+    def _fetch(row: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[List[Any]]]:
         sym = str(row.get("symbol") or "")
         if not sym:
-            continue
+            return row, None
         try:
             data = http.get_json(
                 "https://api.binance.com/api/v3/klines",
@@ -544,12 +578,12 @@ def attach_binance_spot_short_windows(
                 sym[:32],
                 redact_exc(exc, max_len=128),
             )
-            continue
-        buckets = data if isinstance(data, list) else None
-        if isinstance(buckets, list):
-            _apply_ohlc_mtf(
-                row, buckets, now=now, counts=counts, quote_vol_idx=7
-            )
+            return row, None
+        return row, data if isinstance(data, list) else None
+
+    for row, buckets in _parallel_map(sample, _fetch):
+        if buckets:
+            _apply_ohlc_mtf(row, buckets, now=now, counts=counts, quote_vol_idx=7)
     return counts
 
 
@@ -567,10 +601,11 @@ def attach_bybit_spot_short_windows(
     now = int(time.time())
     now_ms = now * 1000
     from_ms = now_ms - (_LOOKBACK_SEC * 1000)
-    for row in sample:
+
+    def _fetch(row: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[List[Any]]]:
         sym = str(row.get("symbol") or "")
         if not sym:
-            continue
+            return row, None
         try:
             data = http.get_json(
                 "https://api.bybit.com/v5/market/kline",
@@ -590,15 +625,15 @@ def attach_bybit_spot_short_windows(
                 sym[:32],
                 redact_exc(exc, max_len=128),
             )
-            continue
+            return row, None
         if not isinstance(data, dict) or int(data.get("retCode") or 0) != 0:
-            continue
+            return row, None
         buckets = (data.get("result") or {}).get("list")
-        if isinstance(buckets, list):
-            # Bybit quote turnover is index 6; list is newest-first (sorted in parse).
-            _apply_ohlc_mtf(
-                row, buckets, now=now, counts=counts, quote_vol_idx=6
-            )
+        return row, buckets if isinstance(buckets, list) else None
+
+    for row, buckets in _parallel_map(sample, _fetch):
+        if buckets:
+            _apply_ohlc_mtf(row, buckets, now=now, counts=counts, quote_vol_idx=6)
     return counts
 
 
@@ -622,10 +657,11 @@ def attach_binance_futures_short_windows(
     now = int(time.time())
     now_ms = now * 1000
     from_ms = now_ms - (_LOOKBACK_SEC * 1000)
-    for row in sample:
+
+    def _fetch(row: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[List[Any]]]:
         sym = str(row.get("symbol") or "")
         if not sym:
-            continue
+            return row, None
         try:
             data = http.get_json(
                 "https://fapi.binance.com/fapi/v1/klines",
@@ -644,9 +680,11 @@ def attach_binance_futures_short_windows(
                 sym[:32],
                 redact_exc(exc, max_len=128),
             )
-            continue
-        buckets = data if isinstance(data, list) else None
-        if isinstance(buckets, list):
+            return row, None
+        return row, data if isinstance(data, list) else None
+
+    for row, buckets in _parallel_map(sample, _fetch):
+        if buckets:
             _apply_ohlc_mtf(row, buckets, now=now, counts=counts)
     return counts
 
@@ -665,10 +703,11 @@ def attach_bybit_futures_short_windows(
     now = int(time.time())
     now_ms = now * 1000
     from_ms = now_ms - (_LOOKBACK_SEC * 1000)
-    for row in sample:
+
+    def _fetch(row: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[List[Any]]]:
         sym = str(row.get("symbol") or "")
         if not sym:
-            continue
+            return row, None
         try:
             data = http.get_json(
                 "https://api.bybit.com/v5/market/kline",
@@ -688,11 +727,14 @@ def attach_bybit_futures_short_windows(
                 sym[:32],
                 redact_exc(exc, max_len=128),
             )
-            continue
+            return row, None
         if not isinstance(data, dict) or int(data.get("retCode") or 0) != 0:
-            continue
+            return row, None
         buckets = (data.get("result") or {}).get("list")
-        if isinstance(buckets, list):
+        return row, buckets if isinstance(buckets, list) else None
+
+    for row, buckets in _parallel_map(sample, _fetch):
+        if buckets:
             _apply_ohlc_mtf(row, buckets, now=now, counts=counts)
     return counts
 
@@ -710,10 +752,11 @@ def attach_mexc_futures_short_windows(
         return counts
     now = int(time.time())
     start_sec = now - _LOOKBACK_SEC
-    for row in sample:
+
+    def _fetch(row: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[List[Any]]]:
         path_sym = mexc_futures_contract_path(row)
         if not path_sym:
-            continue
+            return row, None
         try:
             data = http.get_json(
                 f"https://contract.mexc.com/api/v1/contract/kline/{path_sym}",
@@ -730,13 +773,15 @@ def attach_mexc_futures_short_windows(
                 path_sym[:32],
                 redact_exc(exc, max_len=128),
             )
-            continue
+            return row, None
         if not isinstance(data, dict) or data.get("success") is False:
-            continue
+            return row, None
         payload = data.get("data")
         if not isinstance(payload, dict):
-            continue
-        buckets = mexc_parallel_klines_to_ohlc(payload, cutoff_sec=start_sec)
+            return row, None
+        return row, mexc_parallel_klines_to_ohlc(payload, cutoff_sec=start_sec) or None
+
+    for row, buckets in _parallel_map(sample, _fetch):
         if buckets:
             _apply_ohlc_mtf(row, buckets, now=now, counts=counts)
     return counts
@@ -896,10 +941,11 @@ def attach_kucoin_futures_short_windows(
     # KuCoin futures kline from/to are milliseconds (spot candles use seconds).
     now_ms = now * 1000
     from_ms = now_ms - (_LOOKBACK_SEC * 1000)
-    for row in sample:
+
+    def _fetch(row: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[List[Any]]]:
         raw_sym = str(row.get("symbol_raw") or "")
         if not raw_sym:
-            continue
+            return row, None
         try:
             data = http.get_json(
                 "https://api-futures.kucoin.com/api/v1/kline/query",
@@ -917,43 +963,11 @@ def attach_kucoin_futures_short_windows(
                 raw_sym[:32],
                 redact_exc(exc, max_len=128),
             )
-            continue
+            return row, None
         buckets = data.get("data") if isinstance(data, dict) else None
-        if not isinstance(buckets, list):
-            continue
-        closed = closed_buckets(buckets, period_sec=_PERIOD_15M, now_sec=now)
-        if not closed:
-            bucket = pick_closed_bucket(
-                buckets, period_sec=_PERIOD_15M, now_sec=now
-            )
-            if bucket and len(bucket) > _FUT_CLOSE_IDX:
-                bps_15 = candle_change_bps(bucket[_FUT_OPEN_IDX], bucket[_FUT_CLOSE_IDX])
-                if bps_15 is not None:
-                    row["change_pct_15m"] = bps_to_pct_str(bps_15)
-                    counts["n_15m"] += 1
-            continue
-        last = closed[-1]
-        if len(last) > _FUT_CLOSE_IDX:
-            bps_15 = candle_change_bps(last[_FUT_OPEN_IDX], last[_FUT_CLOSE_IDX])
-            if bps_15 is not None:
-                row["change_pct_15m"] = bps_to_pct_str(bps_15)
-                counts["n_15m"] += 1
-        bps_1h = change_bps_from_closed_span_ohlc(
-            closed,
-            n_buckets=_BUCKETS_1H,
-            open_idx=_FUT_OPEN_IDX,
-            close_idx=_FUT_CLOSE_IDX,
-        )
-        if bps_1h is not None:
-            row["change_pct_1h"] = bps_to_pct_str(bps_1h)
-            counts["n_1h"] += 1
-        bps_4h = change_bps_from_closed_span_ohlc(
-            closed,
-            n_buckets=_BUCKETS_4H,
-            open_idx=_FUT_OPEN_IDX,
-            close_idx=_FUT_CLOSE_IDX,
-        )
-        if bps_4h is not None:
-            row["change_pct_4h"] = bps_to_pct_str(bps_4h)
-            counts["n_4h"] += 1
+        return row, buckets if isinstance(buckets, list) else None
+
+    for row, buckets in _parallel_map(sample, _fetch):
+        if buckets:
+            _apply_ohlc_mtf(row, buckets, now=now, counts=counts)
     return counts

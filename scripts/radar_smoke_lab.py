@@ -194,8 +194,11 @@ def live() -> int:
             "n": len(sectors.get("listings") or []),
         },
         "short_window_ensure": snap.get("short_window_ensure"),
+        "elapsed_budget_ms": 25_000,
+        "elapsed_ok": int(snap.get("elapsed_ms") or 0) <= 25_000,
     }
     print(json.dumps(summary, indent=2, ensure_ascii=False))
+    # Soft speed gate: still return 0 on ok snapshot; elapsed_ok is evidence only.
     return 0 if snap.get("ok") else 1
 
 

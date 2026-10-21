@@ -95,6 +95,27 @@ def _http_timeouts(cfg: Dict[str, Any]) -> tuple[int, int]:
     return timeout_ms, ttl_ms
 
 
+def _ensure_fill_ratio(
+    universe: Dict[str, Any], symbols: set[str], book: str
+) -> float:
+    """Fraction of symbols that already have 15m short-window on the live book."""
+    if not symbols:
+        return 1.0
+    by_sym = {
+        str(r.get("symbol") or ""): r
+        for r in (universe.get(book) or [])
+        if isinstance(r, dict) and r.get("symbol")
+    }
+    ok = 0
+    for sym in symbols:
+        row = by_sym.get(sym)
+        if row is None:
+            continue
+        if row.get("change_bps_15m") is not None or row.get("change_pct_15m") is not None:
+            ok += 1
+    return ok / float(len(symbols))
+
+
 def run_scan(
     cfg: Dict[str, Any] | None = None, *, force: bool = False
 ) -> Dict[str, Any]:
@@ -125,9 +146,10 @@ def run_scan(
             from radar.score.listings import score_listings
             from radar.score.spot_alts import score_spot_alts
 
-            prelim_n = max(top_n * 3, 24)
+            # Smaller prelim + adaptive 2nd round (profile: ensure was ~28s of ~42s).
+            prelim_n = max(top_n * 2, 16)
             ensure_acc: Dict[str, Any] = {}
-            for _round in range(2):
+            for rnd in range(2):
                 spot_syms = {
                     str(r.get("symbol") or "")
                     for r in rank_top(score_spot_alts(universe, cfg), prelim_n)
@@ -148,13 +170,29 @@ def run_scan(
                 part = ensure_universe_short_windows(
                     http, universe, spot_symbols=spot_syms, fut_symbols=fut_syms
                 )
-                # accumulate counts across rounds
                 for section in ("spot", "futures"):
                     dst = ensure_acc.setdefault(section, {})
                     for k, v in (part.get(section) or {}).items():
                         dst[k] = int(dst.get(k) or 0) + int(v or 0)
                 ensure_acc["spot_targets"] = int(part.get("spot_targets") or 0)
                 ensure_acc["fut_targets"] = int(part.get("fut_targets") or 0)
+                ensure_acc["rounds"] = rnd + 1
+                # Early-exit only when *final* top-N books are filled (prelim can lie).
+                spot_top = {
+                    str(r.get("symbol") or "")
+                    for r in rank_top(score_spot_alts(universe, cfg), top_n)
+                    if r.get("symbol")
+                }
+                fut_top = {
+                    str(r.get("symbol") or "")
+                    for r in rank_top(score_futures(universe, cfg), top_n)
+                    if r.get("symbol")
+                }
+                if (
+                    _ensure_fill_ratio(universe, spot_top, "spot") >= 0.85
+                    and _ensure_fill_ratio(universe, fut_top, "futures") >= 0.85
+                ):
+                    break
             universe["short_window_ensure"] = ensure_acc
         except Exception as exc:  # noqa: BLE001
             logger.warning(

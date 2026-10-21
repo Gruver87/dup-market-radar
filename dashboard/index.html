@@ -1104,9 +1104,19 @@
         return;
       }
       const head = `<table><thead><tr>
-        <th>#</th><th>Монета</th><th>Биржа</th><th>Цена</th><th>Δ%</th><th>Объём</th>
+        <th>#</th><th>Монета</th><th>Биржа</th><th>Цена</th><th>Δ%</th><th>MTF</th><th>Объём</th>
         <th>Score</th><th>Что делать</th><th>Зона входа</th><th>Риски</th><th>Сделка</th>
       </tr></thead><tbody>`;
+      const fmtMtf = (r) => {
+        const m = r.metrics || {};
+        const parts = [];
+        if (m.change_bps_15m != null) parts.push("15m " + fmtBps(m.change_bps_15m));
+        if (m.change_bps_1h != null) parts.push("1h " + fmtBps(m.change_bps_1h));
+        if (m.change_bps_4h != null) parts.push("4h " + fmtBps(m.change_bps_4h));
+        if (m.age_hours != null) parts.push("age " + m.age_hours + "h");
+        if (m.live_venue && m.live_venue !== r.venue) parts.push("live@" + m.live_venue);
+        return parts.length ? parts.join(" · ") : "—";
+      };
       const body = rows.map((r, i) => {
         const href = safeHref(r.url);
         const link = href
@@ -1119,12 +1129,14 @@
           : "—";
         const venue = esc(r.venue || "—") + (r.chain ? " / " + esc(r.chain) : "");
         const flags = esc((r.risk_flags || []).join(", ") || "—");
+        const mtf = esc(fmtMtf(r));
         return `<tr>
           <td class="num">${i + 1}</td>
           <td>${link}</td>
           <td>${venue}</td>
           <td class="num">${esc(fmtPriceI(r.price_i))}</td>
           <td class="${pctClass(r.change_bps)}">${esc(fmtBps(r.change_bps))}</td>
+          <td class="flags">${mtf}</td>
           <td class="num">${esc(fmtQuoteI(r.quote_volume_i))}</td>
           <td class="num">${esc(fmtScoreCenti(r.score_centi))}</td>
           <td class="${esc(s.cls)}">${esc(s.label)}</td>

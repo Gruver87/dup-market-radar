@@ -98,7 +98,7 @@ class AllowlistHttp:
             timeout=httpx.Timeout(read_s, connect=connect_s),
             verify=True,
             follow_redirects=False,
-            headers={"User-Agent": "DUP-Market-Radar/0.2.56"},
+            headers={"User-Agent": "DUP-Market-Radar/0.2.57"},
         )
         self.errors: list[str] = []
         self.stats: Dict[str, int] = {
@@ -180,41 +180,44 @@ class AllowlistHttp:
         last_exc: Optional[BaseException] = None
         for attempt in range(attempts):
             try:
+                # Network I/O outside lock — httpx.Client is thread-safe; lock only
+                # protects stats/cache (was serializing all GETs → ~40s ensure).
                 with self._lock:
                     self.stats["gets"] += 1
-                    resp = self._client.get(url, params=params)
-                    status = resp.status_code
-                    if status == 429:
+                resp = self._client.get(url, params=params)
+                status = resp.status_code
+                if status == 429:
+                    with self._lock:
                         self.stats["rate_limited"] += 1
-                    if status == 429 or status >= 500:
-                        body_text = redact_text(resp.text[:200])[:200]
-                        last_exc = httpx.HTTPStatusError(
-                            f"{status} {body_text}",
-                            request=resp.request,
-                            response=resp,
-                        )
-                        retryable = attempt < attempts - 1
-                        if retryable:
+                if status == 429 or status >= 500:
+                    body_text = redact_text(resp.text[:200])[:200]
+                    last_exc = httpx.HTTPStatusError(
+                        f"{status} {body_text}",
+                        request=resp.request,
+                        response=resp,
+                    )
+                    retryable = attempt < attempts - 1
+                    if retryable:
+                        with self._lock:
                             self.stats["retries"] += 1
-                        else:
-                            resp.raise_for_status()
-                    else:
-                        resp.raise_for_status()
-                        body = self._decode_json(resp, host)
-                        now_put = int(time.time() * 1000)
-                        self._cache[cache_key] = (now_put, body)
-                        self._prune_cache_unlocked(now_put)
-                        return body
-                # Soft-refuse: backoff outside lock (P2P-style, not hard ban)
-                delay = self._backoff_ms * (2**attempt)
-                logger.warning(
-                    "soft-refuse retry host=%s status=%s attempt=%s sleep_ms=%s",
-                    host,
-                    status,
-                    attempt + 1,
-                    delay,
-                )
-                time.sleep(delay / 1000.0)
+                        delay = self._backoff_ms * (2**attempt)
+                        logger.warning(
+                            "soft-refuse retry host=%s status=%s attempt=%s sleep_ms=%s",
+                            host,
+                            status,
+                            attempt + 1,
+                            delay,
+                        )
+                        time.sleep(delay / 1000.0)
+                        continue
+                    resp.raise_for_status()
+                resp.raise_for_status()
+                body = self._decode_json(resp, host)
+                now_put = int(time.time() * 1000)
+                with self._lock:
+                    self._cache[cache_key] = (now_put, body)
+                    self._prune_cache_unlocked(now_put)
+                return body
             except PermissionError:
                 raise
             except Exception as exc:  # noqa: BLE001
@@ -239,5 +242,6 @@ class AllowlistHttp:
                 raise
 
         msg = f"{host}: exhausted retries ({redact_exc(last_exc, max_len=200) if last_exc else '?'})"
-        self._push_error(msg)
+        with self._lock:
+            self._push_error(msg)
         raise RuntimeError(msg)

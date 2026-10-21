@@ -92,3 +92,66 @@ def test_watch_book_persist(tmp_path):
     book2 = WatchBook(tmp_path / "tg_watches.json")
     assert len(book2.list_for_chat(7)) == 2
     assert book2.remove(7, "ETHUSDT") == 1
+
+
+def test_alert_includes_mtf_and_listing_flags():
+    snap = {
+        "sectors": {
+            "spot_alts": [
+                {
+                    "symbol": "SOLUSDT",
+                    "setup": "fade-watch",
+                    "price_i": 140 * PRICE_SCALE,
+                    "score_centi": 5500,
+                    "risk_flags": [],
+                    "metrics": {"change_bps_15m": -80, "change_bps_1h": -120},
+                }
+            ],
+            "listings": [
+                {
+                    "symbol": "NEWUSDT",
+                    "venue": "kucoin",
+                    "setup": "new-listing-watch",
+                    "price_i": 2 * PRICE_SCALE,
+                    "score_centi": 4000,
+                    "risk_flags": ["cross_venue_live"],
+                    "metrics": {
+                        "age_hours": 3,
+                        "live_venue": "binance",
+                        "change_bps_15m": 90,
+                    },
+                }
+            ],
+        }
+    }
+    fade = evaluate_watch(
+        {
+            "chat_id": 1,
+            "symbol": "SOLUSDT",
+            "market": "spot",
+            "entry_price_i": 150 * PRICE_SCALE,
+            "last_alert_at_ms": 0,
+            "last_alert_key": "",
+        },
+        snap,
+    )
+    assert fade is not None
+    joined = " ".join(fade["reasons"])
+    assert "mtf_15m" in joined
+    assert "mtf_1h" in joined
+
+    listing = evaluate_watch(
+        {
+            "chat_id": 1,
+            "symbol": "NEWUSDT",
+            "market": "spot",
+            "entry_price_i": 2 * PRICE_SCALE,
+            "last_alert_at_ms": 0,
+            "last_alert_key": "",
+        },
+        snap,
+    )
+    # Found in listings sector via _find_row; market=spot path still applies flags+mtf
+    assert listing is not None
+    lj = " ".join(listing["reasons"])
+    assert "cross_venue_live" in lj or "live_venue" in lj or "mtf_15m" in lj

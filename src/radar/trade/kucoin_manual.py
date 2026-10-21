@@ -642,7 +642,7 @@ class KuCoinManualTrader:
             "KC-API-PASSPHRASE": pp,
             "KC-API-KEY-VERSION": "2",
             "Content-Type": "application/json",
-            "User-Agent": "DUP-Market-Radar/0.2.56-manual",
+            "User-Agent": "DUP-Market-Radar/0.2.57-manual",
         }
 
     @staticmethod

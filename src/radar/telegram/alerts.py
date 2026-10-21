@@ -11,6 +11,24 @@ from radar.telegram.nearest import nearest_for_action
 from radar.telegram.watches import WatchBook, norm_symbol
 
 
+def _append_mtf_reasons(row: Dict[str, Any], reasons: List[str]) -> None:
+    """Surface short-window MTF from metrics (honesty with dashboard)."""
+    m = row.get("metrics") if isinstance(row.get("metrics"), dict) else {}
+    bps_15 = m.get("change_bps_15m")
+    bps_1h = m.get("change_bps_1h")
+    if bps_15 is not None and abs(int(bps_15)) >= 30:
+        reasons.append(f"mtf_15m={display_bps(int(bps_15))}")
+    if bps_1h is not None and abs(int(bps_1h)) >= 50:
+        reasons.append(f"mtf_1h={display_bps(int(bps_1h))}")
+    age = m.get("age_hours")
+    if age is not None and int(age) <= 24:
+        reasons.append(f"listing_age_h={int(age)}")
+    live_v = m.get("live_venue")
+    row_v = row.get("venue")
+    if live_v and row_v and str(live_v) != str(row_v):
+        reasons.append(f"live_venue={str(live_v)[:32]}")
+
+
 def _find_row(snap: Dict[str, Any], symbol: str) -> Optional[Dict[str, Any]]:
     sym = norm_symbol(symbol)
     sectors = snap.get("sectors") or {}
@@ -89,6 +107,7 @@ def evaluate_watch(
             reasons.append("risk_flags=" + ",".join(flags))
             if severity == "info":
                 severity = "warn"
+        _append_mtf_reasons(row, reasons)
 
     elif market == "futures_long":
         nearest_action = "close_long"
@@ -106,6 +125,7 @@ def evaluate_watch(
                 reasons.append(f"LONG stop-loss drop={display_bps(drop)}")
                 severity = "critical"
                 action_suggest = "close_long"
+        _append_mtf_reasons(row, reasons)
 
     elif market == "futures_short":
         nearest_action = "close_short"
@@ -120,6 +140,23 @@ def evaluate_watch(
                 reasons.append(f"SHORT против нас rise={display_bps(rise)}")
                 severity = "critical"
                 action_suggest = "close_short"
+        _append_mtf_reasons(row, reasons)
+
+    else:
+        # listings / whales / unknown market — still surface MTF + listing flags
+        _append_mtf_reasons(row, reasons)
+        flags = [str(f)[:64] for f in (row.get("risk_flags") or [])[:8]]
+        if "cross_venue_live" in flags:
+            reasons.append("cross_venue_live — тикер с другой биржи")
+            if severity == "info":
+                severity = "warn"
+        if "no_live_volume" in flags:
+            reasons.append("no_live_volume — тонкий стакан")
+            if severity == "info":
+                severity = "warn"
+        if setup == "new-listing-watch" and not reasons:
+            # Fresh listing alone is not an exit alert; skip spam.
+            return None
 
     if not reasons:
         return None

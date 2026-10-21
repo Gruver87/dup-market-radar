@@ -1,5 +1,14 @@
 # Changelog — DUP Market Radar
 
+## 0.2.57
+
+- Speed: HTTP GETs no longer hold client lock during network I/O; parallel kline fan-out (8 workers)
+- Ensure: smaller prelim (2×top_n) + adaptive 2nd round only if final top-N fill <85%
+- Smoke reports `elapsed_ok` vs 25s budget (evidence; does not fail lab)
+- Dashboard: MTF column (15m/1h/4h, listing age, cross-venue live)
+- Telegram alerts: surface MTF / listing flags in reasons
+- Package / FastAPI / User-Agent / `__version__` `0.2.57`
+
 ## 0.2.56
 
 - Listings: require live book (skip ghosts); join spot/futures + symbol-only fallback; `cross_venue_live`

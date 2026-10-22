@@ -2,6 +2,7 @@
 
 ## 0.2.87
 
+- Ops: `scripts/test_all.ps1` + verify `-Profile Full` (gate/ruff/pytest/offline/warm/live; no soak)
 - Docs: `ARCHITECTURE_BLUEPRINT.md` — column constructor template (full repo module map)
 - CI: `ci-native.yml` uses `maturin build` + pip install (develop needs venv); ruff unused-import / E401 clean for `ci.yml`
 - Docs honesty: README/OPS/ARCHITECTURE/PROFILES/DISCLAIMER — `ci-native.yml` exists (maturin + parity on PR/main); stop claiming “Maturin native CI not in this pin”

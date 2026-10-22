@@ -46,6 +46,15 @@ Dashboard Watchlist status line surfaces `СБОЙ ДАННЫХ`, `mtf=OK|FAIL`,
 $env:PYTHONPATH="src"
 python scripts/radar_smoke_lab.py          # offline
 python scripts/radar_smoke_lab.py --live   # network
+python scripts/radar_warm_smoke_lab.py     # warm stale-OK + MTF cache
+```
+
+Operator full local check (**no soak**):
+
+```powershell
+.\scripts\test_all.ps1
+# or: .\scripts\verify.ps1 -Profile Full
+.\scripts\verify.ps1 -Profile List
 ```
 
 `elapsed_ok` vs ~25s is **evidence**, not a hard CI fail.

@@ -1,8 +1,9 @@
 # DUP Market Radar - unified verification entry (operator).
 #
 # Profiles:
-#   Quick    - pytest + smoke offline (no network, no native rebuild)
+#   Quick    - gate + pytest + smoke offline (no network, no native rebuild)
 #   Lab      - Quick + live smoke --evidence (needs network)
+#   Full     - gate + ruff + pytest + offline + warm + live (NO soak) — operator “check all”
 #   PreSoak  - native build + Lab + short soak (before 48h)
 #   Soak48h  - PreSoak (unless -SkipPreSoak) + 48h wall-clock soak
 #   Native   - build_native.ps1 only
@@ -12,6 +13,8 @@
 #   .\scripts\verify.ps1
 #   .\scripts\verify.ps1 -Profile Quick
 #   .\scripts\verify.ps1 -Profile Lab
+#   .\scripts\verify.ps1 -Profile Full
+#   .\scripts\test_all.ps1
 #   .\scripts\verify.ps1 -Profile PreSoak
 #   .\scripts\verify.ps1 -Profile PreSoak -SkipBuild
 #   .\scripts\verify.ps1 -Profile Soak48h
@@ -20,7 +23,7 @@
 # Exit 1 on hard fail. 48h claim only if pack approx_48h_claim_ok=true.
 # Not financial advice. See docs/DISCLAIMER.md.
 param(
-    [ValidateSet("Quick", "Lab", "PreSoak", "Soak48h", "Native", "List")]
+    [ValidateSet("Quick", "Lab", "Full", "PreSoak", "Soak48h", "Native", "List")]
     [string]$Profile = "Lab",
     [switch]$SkipBuild,
     [switch]$SkipPreSoak,
@@ -93,9 +96,36 @@ function Invoke-SmokeOffline {
 
 function Invoke-SmokeLive {
     Step "smoke live --evidence"
+    if (($env:RADAR_VERIFY_SKIP_LIVE -or "") -in @("1", "true", "True", "yes", "YES")) {
+        Write-Host "RADAR_VERIFY_SKIP_LIVE set — skip live smoke"
+        return
+    }
     $py = Get-RadarPython
     $env:PYTHONPATH = "src"
     & $py scripts/radar_smoke_lab.py --live --evidence
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+
+function Invoke-Ruff {
+    Step "ruff check"
+    $py = Get-RadarPython
+    & $py -m ruff check src tests scripts
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+
+function Invoke-WarmSmoke {
+    Step "warm smoke (stale-OK + MTF cache; ~1–2 min)"
+    if (($env:RADAR_VERIFY_SKIP_WARM -or "") -in @("1", "true", "True", "yes", "YES")) {
+        Write-Host "RADAR_VERIFY_SKIP_WARM set — skip warm smoke"
+        return
+    }
+    $py = Get-RadarPython
+    $env:PYTHONPATH = "src"
+    $warm = Join-Path $Root "scripts\radar_warm_smoke_lab.py"
+    if (-not (Test-Path $warm)) {
+        Write-Error "missing scripts/radar_warm_smoke_lab.py"
+    }
+    & $py $warm
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
@@ -123,14 +153,17 @@ function Invoke-Soak48h {
 function Show-List {
     Write-Host "DUP Market Radar - verify profiles"
     Write-Host ""
-    Write-Host "  Quick     pytest + smoke offline"
+    Write-Host "  Quick     gate + pytest + smoke offline"
     Write-Host "  Lab       Quick + live smoke --evidence          (default)"
+    Write-Host "  Full      gate + ruff + pytest + offline + warm + live (NO soak)"
     Write-Host "  PreSoak   native + Lab + short soak              (before 48h)"
     Write-Host "  Soak48h   PreSoak then 48h wall-clock"
     Write-Host "  Native    build_native only"
     Write-Host "  List      this help"
     Write-Host ""
     Write-Host "Examples:"
+    Write-Host "  .\scripts\test_all.ps1"
+    Write-Host "  .\scripts\verify.ps1 -Profile Full"
     Write-Host "  .\scripts\verify.ps1 -Profile Quick"
     Write-Host "  .\scripts\verify.ps1 -Profile Lab"
     Write-Host "  .\scripts\verify.ps1 -Profile PreSoak"
@@ -172,6 +205,21 @@ switch ($Profile) {
         Write-Host ""
         Write-Host "VERIFY Lab: PASS"
         Write-Host "Next before 48h: .\scripts\verify.ps1 -Profile PreSoak"
+        exit 0
+    }
+    "Full" {
+        # Operator “check everything” before soak — no short/48h soak here.
+        Invoke-NativeBuild -Skip:$SkipBuild
+        Invoke-RadarGate
+        Invoke-Ruff
+        Invoke-Pytest
+        Invoke-SmokeOffline
+        Invoke-WarmSmoke
+        Invoke-SmokeLive
+        Write-Host ""
+        Write-Host "VERIFY Full: PASS (soak not run)"
+        Write-Host "Next: .\scripts\verify.ps1 -Profile PreSoak"
+        Write-Host "Or:   .\scripts\test_all.ps1 -SkipWarm / -SkipLive"
         exit 0
     }
     "PreSoak" {

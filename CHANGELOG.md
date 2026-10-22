@@ -1,5 +1,11 @@
 # Changelog - DUP Market Radar
 
+## 0.2.84
+
+- KuCoin: phase1 allTickers||contracts; phase2 `/v2/symbols`||whale histories (histories never overlap allTickers)
+- Package / FastAPI / User-Agent / `__version__` / native pin `0.2.84`
+- Soak / 48h: **not** claimed this pin
+
 ## 0.2.83
 
 - Display ensure: skip residual network round when spot/futures boards already meet >=0.85 15m fill after patch-first (same bar as `mtf_ensure_ok`)

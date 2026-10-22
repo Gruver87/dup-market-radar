@@ -1,6 +1,6 @@
 # Evidence matrix — DUP Market Radar
 
-**Pin:** 0.2.83 · Companion product — **not** L1 mesh evidence.
+**Pin:** 0.2.84 · Companion product — **not** L1 mesh evidence.
 
 Claims require on-disk packs. Missing pack ⇒ **⏳** / do not invent PASS.
 
@@ -30,13 +30,14 @@ Claims require on-disk packs. Missing pack ⇒ **⏳** / do not invent PASS.
 | Secondary HTTP soft wall (0.2.81) | Dex/CG timeout 2500ms one-shot | live `venue_ms.dexscreener` / `coingecko` |
 | KuCoin bootstrap + httpx pool (0.2.82) | symbols after tickers∥contracts; Limits 32/16 | live `venue_ms.kucoin` |
 | Display skip on board coverage (0.2.83) | skip display GETs when board fill >=0.85 post-patch | live display_skipped_coverage / display_ensure_ms |
+| Whales after KuCoin tickers (0.2.84) | phase2 symbols||whales after allTickers||contracts | live venue_ms.kucoin |
 | Ensure GET budget | `ingest.max_kline_gets` + `http_stats.kline_gets` | incomplete fill still fail-closed |
 
 ## Latest packaged smokes (operator)
 
 | Label | Pack path | Notes |
 |-------|-----------|-------|
-| smoke-0.2.83 | [`evidence/runs/20261022T182414Z-smoke-0.2.83`](evidence/runs/20261022T182414Z-smoke-0.2.83/) | KuCoin bootstrap + pool |
+| smoke-0.2.84 | [`evidence/runs/20261022T182414Z-smoke-0.2.84`](evidence/runs/20261022T182414Z-smoke-0.2.84/) | KuCoin bootstrap + pool |
 | smoke-0.2.81 | [`evidence/runs/20261022T182004Z-smoke-0.2.81`](evidence/runs/20261022T182004Z-smoke-0.2.81/) | secondary soft wall |
 | smoke-0.2.80 | [`evidence/runs/20261022T181428Z-smoke-0.2.80`](evidence/runs/20261022T181428Z-smoke-0.2.80/) | display patch-first |
 | smoke-0.2.79 | [`evidence/runs/20261022T180604Z-smoke-0.2.79`](evidence/runs/20261022T180604Z-smoke-0.2.79/) | ensure_rank = cap (~6.5s best) |

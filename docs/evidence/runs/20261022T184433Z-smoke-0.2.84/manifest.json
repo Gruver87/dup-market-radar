@@ -1,0 +1,21 @@
+{
+  "product": "DUP Market Radar",
+  "run_id": "20261022T184433Z-smoke-0.2.84",
+  "created_at_utc": "20261022T184433Z",
+  "git_head": "ed61e9cddb197932962364da260e97be7d043d16",
+  "status": "ok",
+  "files": [
+    {
+      "source": "C:/Users/vovun/Desktop/dup-market-radar/data/evidence/LATEST.json",
+      "name": "LATEST.json",
+      "sha256": "4cd83f4a8695b039ee77b048762c1e03613ee13dd994b6acbc767fbbcd295883",
+      "status": "present",
+      "bytes": 4177,
+      "ok": true,
+      "hard_fails": null,
+      "approx_48h_claim_ok": null,
+      "pack_kind": "smoke_live"
+    }
+  ],
+  "honesty": "status=pass_48h only when a pack sets approx_48h_claim_ok=true and hard_fails=0; missing inputs never invent PASS"
+}

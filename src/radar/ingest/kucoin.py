@@ -12,15 +12,10 @@ from radar.secrets_redact import redact_exc
 logger = logging.getLogger("radar.ingest.kucoin")
 
 
-def _bootstrap_kucoin(
+def _bootstrap_kucoin_books(
     http: AllowlistHttp,
-) -> Tuple[Any, Any, Any]:
-    """Bootstrap KuCoin books.
-
-    Critical path (0.2.82): allTickers ∥ contracts only — spot ``/v2/symbols``
-    runs after, so listings meta does not contend with the heavy allTickers GET
-    on the same host (live venue_ms.kucoin was often the ingest wall).
-    """
+) -> Tuple[Any, Any]:
+    """Critical path only: allTickers ∥ contracts (no symbols, no whales)."""
 
     def _tickers() -> Any:
         return http.get_json("https://api.kucoin.com/api/v1/market/allTickers")
@@ -28,13 +23,9 @@ def _bootstrap_kucoin(
     def _contracts() -> Any:
         return http.get_json("https://api-futures.kucoin.com/api/v1/contracts/active")
 
-    def _symbols() -> Any:
-        return http.get_json("https://api.kucoin.com/api/v2/symbols")
-
     with ThreadPoolExecutor(max_workers=2) as pool:
         f_t = pool.submit(_tickers)
         f_c = pool.submit(_contracts)
-        # Tickers are hard-required; contracts soft-fail.
         spot_raw = f_t.result()
         try:
             contracts = f_c.result()
@@ -43,6 +34,22 @@ def _bootstrap_kucoin(
                 "kucoin futures tickers soft-fail: %s", redact_exc(exc, max_len=256)
             )
             contracts = None
+    return spot_raw, contracts
+
+
+def _bootstrap_kucoin(
+    http: AllowlistHttp,
+) -> Tuple[Any, Any, Any]:
+    """Bootstrap KuCoin books + symbols meta.
+
+    Critical path: allTickers ∥ contracts. Then ``/v2/symbols`` (0.2.82) so
+    listings meta does not contend with the heavy allTickers GET.
+    """
+
+    def _symbols() -> Any:
+        return http.get_json("https://api.kucoin.com/api/v2/symbols")
+
+    spot_raw, contracts = _bootstrap_kucoin_books(http)
     try:
         symbols = _symbols()
     except Exception as exc:  # noqa: BLE001
@@ -82,12 +89,34 @@ def fetch_kucoin(
     attach previously burned ~40 unbudgeted kline GETs per cex refresh.
     """
     watch = whale_symbols_kucoin(whale_symbols)
-    # Whales overlap with bootstrap (histories ∥ tickers/contracts/symbols).
+    # 0.2.84: phase1 = allTickers∥contracts; phase2 = symbols∥whales.
+    # Whale histories must not share the wire with the heavy allTickers GET
+    # (contended overlap spiked venue_ms.kucoin). Overlap them with /v2/symbols.
+    spot_raw, contracts = _bootstrap_kucoin_books(http)
+
+    def _symbols() -> Any:
+        try:
+            return http.get_json("https://api.kucoin.com/api/v2/symbols")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "kucoin spot listings soft-fail: %s", redact_exc(exc, max_len=256)
+            )
+            return None
+
+    def _whales() -> List[Dict[str, Any]]:
+        try:
+            return _sample_whales(http, watch)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "kucoin whales soft-fail: %s", redact_exc(exc, max_len=256)
+            )
+            return []
+
     with ThreadPoolExecutor(max_workers=2) as pool:
-        f_boot = pool.submit(_bootstrap_kucoin, http)
-        f_whales = pool.submit(_sample_whales, http, watch)
-        spot_raw, contracts, symbols_info = f_boot.result()
-        whales = f_whales.result()
+        f_s = pool.submit(_symbols)
+        f_w = pool.submit(_whales)
+        symbols_info = f_s.result()
+        whales = f_w.result()
     tickers = ((spot_raw or {}).get("data") or {}).get("ticker") or []
     spot_rows = [_norm_spot(r) for r in tickers if isinstance(r, dict)]
 

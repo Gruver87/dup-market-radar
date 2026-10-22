@@ -1,4 +1,12 @@
-﻿# Changelog — DUP Market Radar
+﻿# Changelog - DUP Market Radar
+
+## 0.2.78
+
+- Primary ensure: widen 24h gate to `top_n*2` (fill-check stays `top_n`) so post-MTF display tops fill in the parallel window
+- Display ensure: restore primary `short_window_ensure` after post-score fill (was clobbering fill ratios / rounds)
+- DexScreener: skip keyword search at >=12 boosted pairs (was 24) — cut search fan-out on slow Dex walls
+- Package / FastAPI / User-Agent / `__version__` / native pin `0.2.78`
+- Soak / 48h: **not** claimed this pin
 
 ## 0.2.77
 
@@ -617,3 +625,4 @@
 
 - Integer fixed-point money end-to-end; `radar_native` 0.2 int scorers
 - Config validation; HTTP retry; KuCoin-first dedupe
+

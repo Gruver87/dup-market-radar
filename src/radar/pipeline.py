@@ -373,15 +373,22 @@ def run_scan(
                 sm[k] = int(sm.get(k) or 0) + int(v or 0)
             acc["kline_budget"] = part.get("kline_budget") or budget_status(http)
 
-        def _top_buckets() -> tuple[set[str], set[str], set[str], set[str], set[str]]:
-            """Prefer native scorer for fill-check rank parity with final score."""
+        def _top_buckets(
+            n: int | None = None,
+        ) -> tuple[set[str], set[str], set[str], set[str], set[str]]:
+            """Prefer native scorer for fill-check rank parity with final score.
+
+            ``n`` overrides ``top_n`` — used to widen the ensure gate (0.2.78)
+            while fill ratios still check the display-sized top-N.
+            """
+            rn = max(1, int(n) if n is not None else int(top_n))
             try:
                 from radar.native_bridge import native_available, score_universe_native
 
                 if native_available() and bool(
                     (cfg.get("native") or {}).get("prefer", True)
                 ):
-                    sectors_n, _ = score_universe_native(universe, cfg, top_n)
+                    sectors_n, _ = score_universe_native(universe, cfg, rn)
                     spot_top = {
                         str(r.get("symbol") or "")
                         for r in (sectors_n.get("spot_alts") or [])
@@ -408,7 +415,7 @@ def run_scan(
                         if str(r.get("market") or "spot").lower() == "futures"
                     }
                     meme_top = _cex_meme_syms_from_rows(
-                        list(sectors_n.get("memes") or []), top_n
+                        list(sectors_n.get("memes") or []), rn
                     )
                     return spot_top, fut_top, list_spot, list_fut, meme_top
             except Exception as exc:  # noqa: BLE001
@@ -418,17 +425,17 @@ def run_scan(
                 )
             spot_top = {
                 str(r.get("symbol") or "")
-                for r in rank_top(score_spot_alts(universe, cfg), top_n)
+                for r in rank_top(score_spot_alts(universe, cfg), rn)
                 if r.get("symbol")
             }
             fut_top = {
                 str(r.get("symbol") or "")
-                for r in rank_top(score_futures(universe, cfg), top_n)
+                for r in rank_top(score_futures(universe, cfg), rn)
                 if r.get("symbol")
             }
             list_top = [
                 r
-                for r in rank_top(score_listings(universe, cfg), top_n)
+                for r in rank_top(score_listings(universe, cfg), rn)
                 if r.get("symbol")
             ]
             list_spot = {
@@ -442,7 +449,7 @@ def run_scan(
                 if str(r.get("market") or "spot").lower() == "futures"
             }
             meme_top = _cex_meme_syms_from_rows(
-                rank_top(score_memes(universe, cfg), top_n), top_n
+                rank_top(score_memes(universe, cfg), rn), rn
             )
             return spot_top, fut_top, list_spot, list_fut, meme_top
 
@@ -463,15 +470,20 @@ def run_scan(
             )
 
         # Cap total fan-out; gate symbols always retained when trimming.
+        # Widen 24h ensure gate to top_n*2 so post-MTF display tops usually
+        # land inside the parallel primary window (cheap expand alone missed
+        # them — live 0.2.78 attempt blew spot_kucoin without cutting display).
         ensure_cap = max(top_n * 3, 24)
         expand_n = max(8, top_n)
+        ensure_rank_n = max(top_n * 2, 16)
         ensure_acc: Dict[str, Any] = {}
         t_ensure = int(time.time() * 1000)
 
-        # Round 1 — fill-gate symbols first (24h score), then small cheap expand.
-        spot_top, fut_top, list_spot, list_fut, meme_top = _top_buckets()
-        gate_spot = set(spot_top) | set(list_spot) | set(meme_top)
-        gate_fut = set(fut_top) | set(list_fut)
+        # Fill-gate = display-sized top-N; ensure set = wider 24h rank.
+        spot_top, fut_top, list_spot, list_fut, meme_top = _top_buckets(top_n)
+        spot_e, fut_e, list_s_e, list_f_e, meme_e = _top_buckets(ensure_rank_n)
+        gate_spot = set(spot_e) | set(list_s_e) | set(meme_e)
+        gate_fut = set(fut_e) | set(list_f_e)
         spot_syms = set(gate_spot)
         fut_syms = set(gate_fut)
         spot_syms |= _cheap_book_syms(universe.get("spot") or [], n=expand_n)
@@ -492,6 +504,7 @@ def run_scan(
             fut_syms = set(gate_fut) | set(
                 extra[: max(0, ensure_cap - len(gate_fut))]
             )
+        ensure_acc["ensure_rank_n"] = ensure_rank_n
         part = ensure_universe_short_windows(
             http,
             universe,
@@ -589,6 +602,14 @@ def run_scan(
             if miss_spot or miss_fut:
                 t_disp = int(time.time() * 1000)
                 try:
+                    # Capture primary ensure acc — ensure_universe_short_windows
+                    # assigns universe["short_window_ensure"]=out and would wipe
+                    # fill ratios / ensure_rank_n / rounds (honesty).
+                    primary_acc = universe.get("short_window_ensure")
+                    if not isinstance(primary_acc, dict):
+                        primary_acc = {}
+                    else:
+                        primary_acc = dict(primary_acc)
                     disp = ensure_universe_short_windows(
                         http,
                         universe,
@@ -598,21 +619,18 @@ def run_scan(
                     )
                     disp_ms = int(time.time() * 1000) - t_disp
                     ensure_ms = int(ensure_ms) + disp_ms
-                    acc = universe.get("short_window_ensure")
-                    if isinstance(acc, dict):
-                        acc["display_ensure_ms"] = disp_ms
-                        acc["display_spot_targets"] = len(miss_spot)
-                        acc["display_fut_targets"] = len(miss_fut)
-                        acc["display_patched"] = _patch_sectors_mtf_from_universe(
-                            sectors, universe
-                        )
-                        acc["ensure_ms"] = ensure_ms
-                        acc["kline_budget"] = budget_status(http)
-                        sm = acc.setdefault("stage_ms", {})
-                        for k, v in (disp.get("stage_ms") or {}).items():
-                            sm[k] = int(sm.get(k) or 0) + int(v or 0)
-                    else:
-                        _patch_sectors_mtf_from_universe(sectors, universe)
+                    universe["short_window_ensure"] = primary_acc
+                    primary_acc["display_ensure_ms"] = disp_ms
+                    primary_acc["display_spot_targets"] = len(miss_spot)
+                    primary_acc["display_fut_targets"] = len(miss_fut)
+                    primary_acc["display_patched"] = _patch_sectors_mtf_from_universe(
+                        sectors, universe
+                    )
+                    primary_acc["ensure_ms"] = ensure_ms
+                    primary_acc["kline_budget"] = budget_status(http)
+                    sm = primary_acc.setdefault("stage_ms", {})
+                    for k, v in (disp.get("stage_ms") or {}).items():
+                        sm[k] = int(sm.get(k) or 0) + int(v or 0)
                 except Exception as disp_exc:  # noqa: BLE001
                     logger.warning(
                         "display MTF ensure soft-fail: %s",

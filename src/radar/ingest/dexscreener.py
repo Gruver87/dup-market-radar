@@ -15,7 +15,9 @@ _EXPAND_CAP = 12
 _TOKEN_BATCH_SIZE = 30
 _EXPAND_WORKERS = 4
 # Soft-skip keyword searches when boosted expands already filled the book.
-_SEARCH_SKIP_MIN_ROWS = 24
+# 12 (was 24): one batched /tokens/ GET usually yields ≥12 pairs; keyword
+# fan-out was dominating venue_ms spikes (live 0.2.77 dexscreener ~3.3s).
+_SEARCH_SKIP_MIN_ROWS = 12
 _SEARCH_QUERIES = ("PEPE", "BONK", "WIF", "DOGE", "POPCAT")
 
 

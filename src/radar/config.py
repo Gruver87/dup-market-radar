@@ -181,6 +181,7 @@ def validate_config(cfg: Dict[str, Any]) -> None:
                 "audit_log_keep",
                 "client_oid_ttl_sec",
                 "client_oid_max_entries",
+                "client_oid_write_behind_ms",
                 "symbol_meta_ttl_sec",
             ):
                 if k in auto and not isinstance(auto[k], int):
@@ -213,6 +214,13 @@ def validate_config(cfg: Dict[str, Any]) -> None:
                 auto["client_oid_max_entries"] < 100 or auto["client_oid_max_entries"] > 100_000
             ):
                 errors.append("auto_trade.client_oid_max_entries must be int 100..100000")
+            if "client_oid_write_behind_ms" in auto and (
+                auto["client_oid_write_behind_ms"] < 0
+                or auto["client_oid_write_behind_ms"] > 5_000
+            ):
+                errors.append(
+                    "auto_trade.client_oid_write_behind_ms must be int 0..5000"
+                )
             if "fill_reconcile_attempts" in auto and (
                 auto["fill_reconcile_attempts"] < 1 or auto["fill_reconcile_attempts"] > 30
             ):

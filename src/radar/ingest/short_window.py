@@ -27,6 +27,9 @@ DEFAULT_SHORT_SAMPLE_N = 24
 DEFAULT_FUTURES_SHORT_SAMPLE_N = 16
 # Not listed on Binance spot/fapi — skip to avoid 400 retry storms (Bybit/MEXC cover).
 _SKIP_BINANCE_KLINE_VENUES = frozenset({"bybit", "mexc"})
+# Per-venue waterfall stage cap — prevents prelim∪listings∪memes from burning
+# the whole kline budget before scored top-N round 2.
+_WATERFALL_STAGE_CAP = 24
 # Parallel kline fan-out (AllowlistHttp lock no longer wraps network I/O).
 KLINE_PARALLEL_WORKERS = 8
 
@@ -891,10 +894,12 @@ def ensure_universe_short_windows(
                 r["symbol_raw"] = derived
         kucoin_ready = [r for r in need if r.get("symbol_raw")]
 
+        stage_cap = max(int(spot_top_n), _WATERFALL_STAGE_CAP)
+
         def _kc() -> Dict[str, int]:
             if spot_symbols is None:
                 return attach_kucoin_short_windows(http, kucoin_ready, top_n=spot_top_n)
-            return _attach_spot_rows(http, kucoin_ready[: max(64, spot_top_n)])
+            return _attach_spot_rows(http, kucoin_ready[:stage_cap])
 
         sw = _timed("spot_kucoin_ms", _kc)
         for r in need:
@@ -908,7 +913,7 @@ def ensure_universe_short_windows(
             bw = _timed(
                 "spot_binance_ms",
                 lambda: attach_binance_spot_short_windows(
-                    http, still, top_n=max(len(still), spot_top_n)
+                    http, still, top_n=min(len(still), stage_cap)
                 ),
             )
             for r in still:
@@ -924,7 +929,7 @@ def ensure_universe_short_windows(
             yw = _timed(
                 "spot_bybit_ms",
                 lambda: attach_bybit_spot_short_windows(
-                    http, still, top_n=max(len(still), spot_top_n)
+                    http, still, top_n=min(len(still), stage_cap)
                 ),
             )
             for r in still:
@@ -965,12 +970,14 @@ def ensure_universe_short_windows(
             if r.get("symbol_raw") and str(r.get("venue") or "") == "kucoin"
         ]
 
+        stage_cap = max(int(fut_top_n), _WATERFALL_STAGE_CAP)
+
         def _kc() -> Dict[str, int]:
             if fut_symbols is None:
                 return attach_kucoin_futures_short_windows(
                     http, kucoin_fut, top_n=fut_top_n
                 )
-            return _attach_fut_rows(http, kucoin_fut[: max(64, fut_top_n)])
+            return _attach_fut_rows(http, kucoin_fut[:stage_cap])
 
         fw = _timed("fut_kucoin_ms", _kc)
         for r in need:
@@ -984,7 +991,7 @@ def ensure_universe_short_windows(
             bfw = _timed(
                 "fut_binance_ms",
                 lambda: attach_binance_futures_short_windows(
-                    http, still_f, top_n=max(len(still_f), fut_top_n)
+                    http, still_f, top_n=min(len(still_f), stage_cap)
                 ),
             )
             for r in still_f:
@@ -1000,7 +1007,7 @@ def ensure_universe_short_windows(
             yfw = _timed(
                 "fut_bybit_ms",
                 lambda: attach_bybit_futures_short_windows(
-                    http, still_f, top_n=max(len(still_f), fut_top_n)
+                    http, still_f, top_n=min(len(still_f), stage_cap)
                 ),
             )
             for r in still_f:
@@ -1016,7 +1023,7 @@ def ensure_universe_short_windows(
             mfw = _timed(
                 "fut_mexc_ms",
                 lambda: attach_mexc_futures_short_windows(
-                    http, still_f, top_n=max(len(still_f), fut_top_n)
+                    http, still_f, top_n=min(len(still_f), stage_cap)
                 ),
             )
             for r in still_f:

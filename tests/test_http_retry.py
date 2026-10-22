@@ -30,6 +30,28 @@ def test_retries_on_429_then_ok():
     http.close()
 
 
+def test_no_retry_on_400():
+    """Client errors must not burn retries (kline 400 spam)."""
+    http = AllowlistHttp({"api.example.com"}, timeout_ms=2000, retries=3, backoff_ms=1)
+    bad = MagicMock()
+    bad.status_code = 400
+    bad.text = "bad symbol"
+    bad.request = MagicMock()
+    bad.headers = {}
+    bad.content = b"bad"
+    bad.raise_for_status = MagicMock(
+        side_effect=httpx.HTTPStatusError(
+            "400 Bad Request", request=bad.request, response=bad
+        )
+    )
+    with patch.object(http._client, "get", return_value=bad) as get:
+        with pytest.raises(httpx.HTTPStatusError):
+            http.get_json("https://api.example.com/klines", use_cache=False)
+    assert get.call_count == 1
+    assert http.stats["retries"] == 0
+    http.close()
+
+
 def test_allowlist_still_refuses():
     http = AllowlistHttp({"api.binance.com"}, timeout_ms=1000, retries=0)
     with pytest.raises(PermissionError):

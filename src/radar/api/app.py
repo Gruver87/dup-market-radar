@@ -97,10 +97,12 @@ _SCAN_EXECUTOR = ThreadPoolExecutor(
 def _build_trader() -> KuCoinManualTrader:
     cfg = load_config().get("auto_trade") or {}
     ttl = int(cfg.get("client_oid_ttl_sec") or 604_800)
+    wb = cfg.get("client_oid_write_behind_ms")
     ledger = ClientOidLedger(
         ROOT / "data" / "client_oid_ledger.json",
         ttl_sec=ttl,
         max_entries=int(cfg.get("client_oid_max_entries") or 10_000),
+        write_behind_ms=int(wb) if wb is not None else 100,
     )
     sell_clamp = bool(cfg.get("sell_clamp_to_balance", True))
     meta_ttl = int(cfg.get("symbol_meta_ttl_sec") or 3600)
@@ -722,6 +724,10 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         close_http_pool()
     except Exception:  # noqa: BLE001
         pass
+    try:
+        _trader.close_ledger()
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _openapi_enabled() -> bool:
@@ -737,7 +743,7 @@ def _openapi_enabled() -> bool:
 _OPENAPI_ON = _openapi_enabled()
 app = FastAPI(
     title="DUP Market Radar",
-    version="0.2.71",
+    version="0.2.72",
     lifespan=_lifespan,
     docs_url="/docs" if _OPENAPI_ON else None,
     redoc_url="/redoc" if _OPENAPI_ON else None,

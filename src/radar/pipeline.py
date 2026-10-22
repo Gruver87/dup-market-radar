@@ -372,19 +372,36 @@ def run_scan(
                 and bool(spot_top or fut_top or list_spot or list_fut or meme_top)
             )
 
-        prelim_n = max(top_n * 2, 16)
+        # Cap total fan-out; gate symbols always retained when trimming.
+        ensure_cap = max(top_n * 3, 24)
+        expand_n = max(8, top_n)
         ensure_acc: Dict[str, Any] = {}
         t_ensure = int(time.time() * 1000)
 
-        # Round 1 — cheap prelim (no full Python sector score loops).
-        spot_syms = _cheap_book_syms(universe.get("spot") or [], n=prelim_n)
-        fut_syms = _cheap_book_syms(universe.get("futures") or [], n=prelim_n)
+        # Round 1 — fill-gate symbols first (24h score), then small cheap expand.
+        spot_top, fut_top, list_spot, list_fut, meme_top = _top_buckets()
+        gate_spot = set(spot_top) | set(list_spot) | set(meme_top)
+        gate_fut = set(fut_top) | set(list_fut)
+        spot_syms = set(gate_spot)
+        fut_syms = set(gate_fut)
+        spot_syms |= _cheap_book_syms(universe.get("spot") or [], n=expand_n)
+        fut_syms |= _cheap_book_syms(universe.get("futures") or [], n=expand_n)
         list_s, list_f = _cheap_listing_syms(
-            universe.get("listings") or [], n=prelim_n
+            universe.get("listings") or [], n=expand_n
         )
         spot_syms |= list_s
         fut_syms |= list_f
-        spot_syms |= _cheap_cex_meme_syms(universe, cfg, n=prelim_n)
+        spot_syms |= _cheap_cex_meme_syms(universe, cfg, n=expand_n)
+        if len(spot_syms) > ensure_cap:
+            extra = sorted(spot_syms - gate_spot)
+            spot_syms = set(gate_spot) | set(
+                extra[: max(0, ensure_cap - len(gate_spot))]
+            )
+        if len(fut_syms) > ensure_cap:
+            extra = sorted(fut_syms - gate_fut)
+            fut_syms = set(gate_fut) | set(
+                extra[: max(0, ensure_cap - len(gate_fut))]
+            )
         part = ensure_universe_short_windows(
             http,
             universe,
@@ -394,20 +411,17 @@ def run_scan(
         )
         _merge_ensure(ensure_acc, part, 1)
 
-        spot_top, fut_top, list_spot, list_fut, meme_top = _top_buckets()
+        # Freeze gate sets — re-ranking after partial MTF must not move the fill target.
         if not _fills_ok(spot_top, fut_top, list_spot, list_fut, meme_top):
-            # Round 2 — scored top-N only (missing-only inside ensure).
-            spot_syms2 = set(spot_top) | set(list_spot) | set(meme_top)
-            fut_syms2 = set(fut_top) | set(list_fut)
+            # Round 2 — same frozen gate (missing-only inside ensure).
             part2 = ensure_universe_short_windows(
                 http,
                 universe,
-                spot_symbols=spot_syms2,
-                fut_symbols=fut_syms2,
+                spot_symbols=gate_spot,
+                fut_symbols=gate_fut,
                 reuse_ttl_ms=reuse_ttl,
             )
             _merge_ensure(ensure_acc, part2, 2)
-            spot_top, fut_top, list_spot, list_fut, meme_top = _top_buckets()
 
         ensure_ms = int(time.time() * 1000) - t_ensure
 

@@ -156,6 +156,10 @@ def live(*, write_evidence: bool = False) -> int:
         "score_backend": snap.get("score_backend"),
         "universe_size": snap.get("universe_size"),
         "elapsed_ms": snap.get("elapsed_ms"),
+        "ingest_ms": snap.get("ingest_ms"),
+        "ensure_ms": snap.get("ensure_ms"),
+        "score_ms": snap.get("score_ms"),
+        "venue_ms": snap.get("venue_ms") or {},
         "errors": (snap.get("errors") or [])[:8],
         "counts": snap.get("counts"),
         "poll": snap.get("poll"),
@@ -163,6 +167,7 @@ def live(*, write_evidence: bool = False) -> int:
         "poll_skipped": snap.get("poll_skipped"),
         "circuit_skipped": snap.get("circuit_skipped"),
         "http_stats": snap.get("http_stats"),
+        "kline_gets": ((snap.get("http_stats") or {}) or {}).get("kline_gets"),
         "dedupe": snap.get("dedupe"),
         "spot_mtf": _mtf_coverage(
             sectors.get("spot_alts") or [],

@@ -32,8 +32,10 @@ def _entry_at_sec(entry: Dict[str, Any]) -> int:
 class ClientOidLedger:
     """Persisted set of clientOids already submitted (or in-flight).
 
-    claim() before POST. release() only on clear pre-exchange / soft refuse.
-    On uncertain network failure keep the claim (avoid accidental double-send).
+    claim() before POST — always sync-persisted (fail-closed before exchange).
+    mark_accepted() / release() use write-behind flush (default 100ms) so the
+    trade hot path does not fsync twice; crash before flush keeps the claim
+    (duplicate refuse), which is the safe outcome.
 
     Corrupt / checksum-mismatch ledger → persist_ok=False and claim() raises
     (fail-closed: no live submit without durable duplicate protection).
@@ -47,15 +49,20 @@ class ClientOidLedger:
         *,
         ttl_sec: int = 604_800,
         max_entries: int = 10_000,
+        write_behind_ms: int = 100,
     ) -> None:
         self._path = path
         self._ttl_sec = max(60, int(ttl_sec))
         self._max_entries = max(100, int(max_entries))
+        self._write_behind_ms = max(0, int(write_behind_ms))
         self._lock = threading.Lock()
         self._entries: Dict[str, Dict[str, Any]] = {}
         self._persist_ok = True
         self._persist_error: Optional[str] = None
         self._integrity: str = "absent"
+        self._dirty = False
+        self._flush_timer: Optional[threading.Timer] = None
+        self._closed = False
         self._load()
 
     def _load(self) -> None:
@@ -92,6 +99,44 @@ class ClientOidLedger:
         if persist:
             self._save_unlocked()
 
+    def _cancel_flush_timer_unlocked(self) -> None:
+        t = self._flush_timer
+        self._flush_timer = None
+        if t is not None:
+            t.cancel()
+
+    def _schedule_flush_unlocked(self) -> None:
+        """Debounce disk write for non-claim mutations."""
+        self._dirty = True
+        if self._write_behind_ms <= 0:
+            self._save_unlocked()
+            return
+        if self._closed:
+            self._save_unlocked()
+            return
+        if self._flush_timer is not None:
+            return
+        delay = self._write_behind_ms / 1000.0
+
+        def _fire() -> None:
+            with self._lock:
+                self._flush_timer = None
+                if not self._dirty:
+                    return
+                try:
+                    self._save_unlocked()
+                except Exception as exc:  # noqa: BLE001
+                    self._persist_ok = False
+                    self._persist_error = redact_text(str(exc))[:256]
+                    logger.error(
+                        "oid write-behind flush failed: %s", self._persist_error
+                    )
+
+        timer = threading.Timer(delay, _fire)
+        timer.daemon = True
+        self._flush_timer = timer
+        timer.start()
+
     def _save_unlocked(self) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         atomic_write_json(
@@ -103,6 +148,38 @@ class ClientOidLedger:
         self._persist_ok = True
         self._persist_error = None
         self._integrity = "ok"
+        self._dirty = False
+        self._cancel_flush_timer_unlocked()
+
+    def flush(self) -> None:
+        """Sync pending write-behind mutations to disk."""
+        with self._lock:
+            if not self._dirty:
+                self._cancel_flush_timer_unlocked()
+                return
+            try:
+                self._save_unlocked()
+            except Exception as exc:  # noqa: BLE001
+                self._persist_ok = False
+                self._persist_error = redact_text(str(exc))[:256]
+                logger.error("oid flush failed: %s", self._persist_error)
+                raise RuntimeError(
+                    f"oid ledger flush failed: {self._persist_error}"
+                ) from None
+
+    def close(self) -> None:
+        """Cancel timer and flush — call on API shutdown."""
+        with self._lock:
+            self._closed = True
+            self._cancel_flush_timer_unlocked()
+            if not self._dirty:
+                return
+            try:
+                self._save_unlocked()
+            except Exception as exc:  # noqa: BLE001
+                self._persist_ok = False
+                self._persist_error = redact_text(str(exc))[:256]
+                logger.error("oid close flush failed: %s", self._persist_error)
 
     def seen(self, oid: str) -> bool:
         with self._lock:
@@ -112,7 +189,8 @@ class ClientOidLedger:
     def claim(self, oid: str, *, side: str, symbol: str) -> bool:
         """Return True if newly claimed; False if duplicate.
 
-        Raises RuntimeError if ledger persist is degraded (fail-closed).
+        Always sync-persists before returning True (fail-closed before POST).
+        Raises RuntimeError if ledger persist is degraded.
         """
         key = str(oid).strip()
         if not key:
@@ -133,6 +211,7 @@ class ClientOidLedger:
                 "status": "claimed",
             }
             try:
+                # Sync path — also drains any dirty mark_accepted/release.
                 self._save_unlocked()
             except Exception as exc:  # noqa: BLE001
                 self._entries.pop(key, None)
@@ -155,7 +234,7 @@ class ClientOidLedger:
             if order_id:
                 ent["order_id"] = str(order_id)
             try:
-                self._save_unlocked()
+                self._schedule_flush_unlocked()
             except Exception as exc:  # noqa: BLE001
                 self._persist_ok = False
                 self._persist_error = redact_text(str(exc))[:256]
@@ -171,7 +250,7 @@ class ClientOidLedger:
                 return
             self._entries.pop(key, None)
             try:
-                self._save_unlocked()
+                self._schedule_flush_unlocked()
             except Exception as exc:  # noqa: BLE001
                 self._persist_ok = False
                 self._persist_error = redact_text(str(exc))[:256]
@@ -184,6 +263,8 @@ class ClientOidLedger:
                 "entries": len(self._entries),
                 "ttl_sec": self._ttl_sec,
                 "max_entries": self._max_entries,
+                "write_behind_ms": self._write_behind_ms,
+                "dirty": self._dirty,
                 "path": str(self._path),
                 "persist_ok": self._persist_ok,
                 "persist_error": self._persist_error,

@@ -1,5 +1,15 @@
 # Changelog — DUP Market Radar
 
+## 0.2.72
+
+- Smoke evidence: export `ingest_ms` / `ensure_ms` / `score_ms` / `venue_ms` / `kline_gets` in live packs
+- Oid ledger write-behind: `claim` still sync-persists (fail-closed before POST); `mark_accepted` / `release` debounce (`client_oid_write_behind_ms`, default 100); `flush()` / `close()` on API shutdown
+- HTTP: no retry on 4xx (except 429) — stop kline 400 retry storms; `max_kline_gets` default 112
+- Ensure: fill-gate symbols first + freeze gate sets (no re-rank mid-ensure); stage cap 24
+- Native wheel rebuilt `0.2.72`
+- Package / FastAPI / User-Agent / `__version__` / native pin `0.2.72`
+- Soak / 48h: **not** claimed this pin
+
 ## 0.2.71
 
 - DexScreener: parallel token expand + keyword search; soft-skip search when boosted rows ≥24

@@ -27,9 +27,44 @@ def test_persist_reload(tmp_path):
     a = ClientOidLedger(path, ttl_sec=3600)
     a.claim("oid-cccc-3333", side="buy", symbol="SOL-USDT")
     a.mark_accepted("oid-cccc-3333", order_id="ex-1")
+    a.flush()  # write-behind: drain before cross-process reload
     b = ClientOidLedger(path, ttl_sec=3600)
     assert b.seen("oid-cccc-3333") is True
     assert b.claim("oid-cccc-3333", side="buy", symbol="SOL-USDT") is False
+
+
+def test_write_behind_mark_accepted_defers_disk(tmp_path):
+    path = tmp_path / "oid.json"
+    led = ClientOidLedger(path, ttl_sec=3600, write_behind_ms=5_000)
+    assert led.claim("oid-wb-1111", side="buy", symbol="BTC-USDT") is True
+    before = path.read_text(encoding="utf-8")
+    led.mark_accepted("oid-wb-1111", order_id="ex-wb")
+    assert led.status()["dirty"] is True
+    # Disk still shows claimed until flush (debounce window)
+    mid = json.loads(path.read_text(encoding="utf-8"))
+    assert mid["entries"]["oid-wb-1111"]["status"] == "claimed"
+    assert "order_id" not in mid["entries"]["oid-wb-1111"]
+    led.flush()
+    after = json.loads(path.read_text(encoding="utf-8"))
+    assert after["entries"]["oid-wb-1111"]["status"] == "accepted"
+    assert after["entries"]["oid-wb-1111"]["order_id"] == "ex-wb"
+    assert led.status()["dirty"] is False
+    assert before  # claim wrote something durable
+
+
+def test_claim_sync_drains_dirty_release(tmp_path):
+    path = tmp_path / "oid.json"
+    led = ClientOidLedger(path, ttl_sec=3600, write_behind_ms=5_000)
+    assert led.claim("oid-rel-aaaa", side="buy", symbol="ETH-USDT") is True
+    led.release("oid-rel-aaaa")
+    assert led.status()["dirty"] is True
+    # Next claim sync-saves and clears dirty (release durable)
+    assert led.claim("oid-rel-bbbb", side="buy", symbol="ETH-USDT") is True
+    assert led.status()["dirty"] is False
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    assert "oid-rel-aaaa" not in raw["entries"]
+    assert "oid-rel-bbbb" in raw["entries"]
+    led.close()
 
 
 def test_trader_duplicate_oid_soft_refuse(tmp_path, monkeypatch):

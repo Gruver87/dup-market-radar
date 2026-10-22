@@ -98,7 +98,7 @@ class AllowlistHttp:
             timeout=httpx.Timeout(read_s, connect=connect_s),
             verify=True,
             follow_redirects=False,
-            headers={"User-Agent": "DUP-Market-Radar/0.2.71"},
+            headers={"User-Agent": "DUP-Market-Radar/0.2.72"},
         )
         self.errors: list[str] = []
         self.stats: Dict[str, int] = {
@@ -219,6 +219,34 @@ class AllowlistHttp:
                     self._prune_cache_unlocked(now_put)
                 return body
             except PermissionError:
+                raise
+            except httpx.HTTPStatusError as exc:
+                # 4xx (except 429, handled above): fail closed — no retry storm.
+                last_exc = exc
+                code = int(exc.response.status_code) if exc.response is not None else 0
+                if 400 <= code < 500 and code != 429:
+                    msg = f"{host}: {redact_exc(exc, max_len=200)}"
+                    with self._lock:
+                        self._push_error(msg)
+                    logger.warning("GET failed %s", msg)
+                    raise
+                if attempt < attempts - 1:
+                    with self._lock:
+                        self.stats["retries"] += 1
+                    delay = self._backoff_ms * (2**attempt)
+                    logger.warning(
+                        "GET retry host=%s attempt=%s sleep_ms=%s err=%s",
+                        host,
+                        attempt + 1,
+                        delay,
+                        redact_exc(exc, max_len=256),
+                    )
+                    time.sleep(delay / 1000.0)
+                    continue
+                msg = f"{host}: {redact_exc(exc, max_len=200)}"
+                with self._lock:
+                    self._push_error(msg)
+                logger.warning("GET failed %s", msg)
                 raise
             except Exception as exc:  # noqa: BLE001
                 last_exc = exc

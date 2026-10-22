@@ -25,7 +25,7 @@ ingest:
   max_response_bytes: 20971520          # 20 MiB — Binance allTickers ~18 MiB (live evidence)
   circuit_fail_threshold: 3
   circuit_open_ms: 60000
-  max_kline_gets: 96                    # hard ceiling on MTF ensure waterfall GETs / scan
+  max_kline_gets: 112                   # hard ceiling on MTF ensure waterfall GETs / scan
   mtf_reuse_ttl_ms: 450000              # skip re-fetch when stamped MTF younger than ~7.5m
   scan_executor_workers: 2              # dedicated pool for scan (API/ops stay responsive)
 
@@ -120,6 +120,7 @@ auto_trade:
   symbol_meta_ttl_sec: 3600
   client_oid_ttl_sec: 604800             # 7d ledger for duplicate clientOid refuse
   client_oid_max_entries: 10000
+  client_oid_write_behind_ms: 100        # mark_accepted/release debounce; claim always sync
   audit_log_max_bytes: 5242880           # rotate auto_trade_log.jsonl at 5 MiB
   audit_log_keep: 5
   require_no_risk_flags: true

@@ -1,6 +1,6 @@
 # Evidence matrix — DUP Market Radar
 
-**Pin:** 0.2.71 · Companion product — **not** L1 mesh evidence.
+**Pin:** 0.2.72 · Companion product — **not** L1 mesh evidence.
 
 Claims require on-disk packs. Missing pack ⇒ **⏳** / do not invent PASS.
 
@@ -15,7 +15,10 @@ Claims require on-disk packs. Missing pack ⇒ **⏳** / do not invent PASS.
 | Hashed run package | `scripts/package_radar_evidence.py` → `docs/evidence/runs/<id>/` | `manifest.status`; missing inputs ⇒ `incomplete` |
 | Static posture | `python scripts/radar_gate.py` | PASS needles (secrets/recovery/profiles) |
 | Phase timers (0.2.69+) | snapshot `ingest_ms`/`ensure_ms`/`score_ms` + Prom gauges | honesty only — not a soak gate |
-| Venue / ensure stage ms (0.2.71) | `venue_ms`, `short_window_ensure.stage_ms` + Prom | re-smoke after pin — not soak |
+| Venue / ensure stage ms (0.2.71+) | `venue_ms`, `short_window_ensure.stage_ms` + Prom | honesty — not soak |
+| Smoke phase export (0.2.72) | `radar_smoke_lab` summary: `ingest_ms`/`ensure_ms`/`venue_ms`/`kline_gets` | pack must include fields |
+| Oid write-behind (0.2.72) | `claim` sync; `mark_accepted`/`release` debounce + `close()` flush | unit tests; not soak |
+| Ensure gate freeze (0.2.72) | fill ratios vs frozen top-N (no mid-ensure re-rank) | live smoke `mtf_ensure_ok` |
 | Ensure GET budget | `ingest.max_kline_gets` + `http_stats.kline_gets` | incomplete fill still fail-closed |
 
 ## Packaging

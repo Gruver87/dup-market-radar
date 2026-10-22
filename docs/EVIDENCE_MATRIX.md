@@ -1,6 +1,6 @@
 # Evidence matrix — DUP Market Radar
 
-**Pin:** 0.2.86 · Companion product — **not** L1 mesh evidence.
+**Pin:** 0.2.87 · Companion product — **not** L1 mesh evidence.
 
 Claims require on-disk packs. Missing pack ⇒ **⏳** / do not invent PASS.
 
@@ -33,13 +33,15 @@ Claims require on-disk packs. Missing pack ⇒ **⏳** / do not invent PASS.
 | Whales after KuCoin tickers (0.2.84) | phase2 symbols||whales after allTickers||contracts | live venue_ms.kucoin |
 | Display ensure soft wall (0.2.85) | display_ensure_wall_ms=1500 timeout | live display_ensure_timeout_ms |
 | KuCoin stale-OK + display low-wall + secondary venue wall (0.2.86) | stale_ok_hits; display_ensure_wall_reason; secondary_venue_wall | live warm smoke + http_stats |
+| MTF process cache + light profile (0.2.87) | mtf_cache_hydrate_*; RADAR_PROFILE=light | live warm ensure_ms + unit |
 | Ensure GET budget | `ingest.max_kline_gets` + `http_stats.kline_gets` | incomplete fill still fail-closed |
 
 ## Latest packaged smokes (operator)
 
 | Label | Pack path | Notes |
 |-------|-----------|-------|
-| smoke-0.2.86 | [`evidence/runs/20261022T191118Z-smoke-0.2.86`](evidence/runs/20261022T191118Z-smoke-0.2.86/) | warm stale_ok=2; KuCoin ~2.2s; display low/base wall |
+| smoke-0.2.87 | [`evidence/runs/20261022T194443Z-smoke-0.2.87`](evidence/runs/20261022T194443Z-smoke-0.2.87/) | native; hydrate 46+35; kline 110→19; stale_ok=2 |
+| smoke-0.2.86 | [`evidence/runs/20261022T191118Z-smoke-0.2.86`](evidence/runs/20261022T191118Z-smoke-0.2.86/) | warm stale_ok=2; KuCoin ~2.2s |
 | smoke-0.2.85 | [`evidence/runs/20261022T184701Z-smoke-0.2.85`](evidence/runs/20261022T184701Z-smoke-0.2.85/) | display soft wall |
 | smoke-0.2.81 | [`evidence/runs/20261022T182004Z-smoke-0.2.81`](evidence/runs/20261022T182004Z-smoke-0.2.81/) | secondary soft wall |
 | smoke-0.2.80 | [`evidence/runs/20261022T181428Z-smoke-0.2.80`](evidence/runs/20261022T181428Z-smoke-0.2.80/) | display patch-first |

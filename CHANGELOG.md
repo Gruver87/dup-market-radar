@@ -1,5 +1,14 @@
 ﻿# Changelog - DUP Market Radar
 
+## 0.2.87
+
+- Ensure: process-lifetime MTF reuse cache — hydrate stamped short-windows onto fresh ingest rows before waterfall (`mtf_cache_hydrate_*`)
+- Profile: `RADAR_PROFILE=light` overlays `config/light.yaml` (KuCoin-only venues, slower memes/stables poll, tighter secondary walls)
+- Config: `RADAR_CONFIG` / `RADAR_CONFIG_PATH` for full alternate YAML
+- Native: local `radar_native` wheel rebuilt for prefer+fail_closed path
+- Package / FastAPI / User-Agent / `__version__` / native pin `0.2.87`
+- Soak / 48h: **not** claimed this pin
+
 ## 0.2.86
 
 - HTTP: stale-OK / last-good for warm polls (`stale_ok_ms`, `stale_on_error_ms`); KuCoin allTickers prefers stale within `kucoin_stale_ok_ms` (default 90s) on non-force

@@ -881,9 +881,17 @@ def ensure_universe_short_windows(
     If spot_symbols/fut_symbols given — target those (post prelim).
     Spot and futures waterfalls run in parallel (shared atomic kline budget).
     Short-circuits venue stages when target fill ≥ fill_threshold.
+    Process-lifetime MTF cache hydrates rows before the waterfall (0.2.87).
     """
+    from radar.ingest.mtf_cache import mtf_cache
+
     thr = float(fill_threshold)
     ttl = max(0, int(reuse_ttl_ms or 0))
+    cache = mtf_cache()
+    spot_all = [r for r in (universe.get("spot") or []) if isinstance(r, dict)]
+    fut_all = [r for r in (universe.get("futures") or []) if isinstance(r, dict)]
+    hyd_spot = cache.hydrate_rows(spot_all, market="spot", ttl_ms=ttl)
+    hyd_fut = cache.hydrate_rows(fut_all, market="futures", ttl_ms=ttl)
 
     def _run_spot() -> Tuple[Dict[str, int], List[Dict[str, Any]], List[str], Dict[str, int]]:
         skipped: List[str] = []
@@ -898,7 +906,7 @@ def ensure_universe_short_windows(
                     int(time.time() * 1000) - t0
                 )
 
-        spot = [r for r in (universe.get("spot") or []) if isinstance(r, dict)]
+        spot = spot_all
         need = [r for r in spot if _missing_15m(r, reuse_ttl_ms=ttl)]
         if spot_symbols is not None:
             need = [r for r in need if str(r.get("symbol") or "") in spot_symbols]
@@ -968,7 +976,7 @@ def ensure_universe_short_windows(
                     int(time.time() * 1000) - t0
                 )
 
-        fut = [r for r in (universe.get("futures") or []) if isinstance(r, dict)]
+        fut = fut_all
         need = [r for r in fut if _missing_15m(r, reuse_ttl_ms=ttl)]
         if fut_symbols is not None:
             need = [r for r in need if str(r.get("symbol") or "") in fut_symbols]
@@ -1057,6 +1065,8 @@ def ensure_universe_short_windows(
 
     stage_ms = {**stage_s, **stage_f}
     skipped_venues = skip_s + skip_f
+    rem_spot = cache.remember_rows(spot_all, market="spot")
+    rem_fut = cache.remember_rows(fut_all, market="futures")
     out = {
         "spot": sw,
         "futures": fw,
@@ -1068,6 +1078,10 @@ def ensure_universe_short_windows(
         "stage_ms": stage_ms,
         "books_parallel": True,
         "kline_budget": budget_status(http),
+        "mtf_cache_hydrate_spot": int(hyd_spot),
+        "mtf_cache_hydrate_fut": int(hyd_fut),
+        "mtf_cache_remember_spot": int(rem_spot),
+        "mtf_cache_remember_fut": int(rem_fut),
     }
     universe["short_window_ensure"] = out
     return out

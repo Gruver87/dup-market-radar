@@ -44,8 +44,18 @@ def apply_env_overrides(cfg: Dict[str, Any]) -> Dict[str, Any]:
     return cfg
 
 
-def load_config(path: Path | None = None) -> Dict[str, Any]:
-    cfg_path = path or DEFAULT_CONFIG
+def _deep_merge(base: Dict[str, Any], overlay: Dict[str, Any]) -> Dict[str, Any]:
+    """Merge overlay onto base (dicts recurse; lists/scalars replace)."""
+    out: Dict[str, Any] = dict(base)
+    for k, v in overlay.items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = _deep_merge(dict(out[k]), v)
+        else:
+            out[k] = v
+    return out
+
+
+def _read_yaml_mapping(cfg_path: Path) -> Dict[str, Any]:
     try:
         size = cfg_path.stat().st_size
     except OSError as exc:
@@ -60,6 +70,37 @@ def load_config(path: Path | None = None) -> Dict[str, Any]:
         data = yaml.safe_load(fh)
     if not isinstance(data, dict):
         raise ConfigError(f"config must be a mapping: {cfg_path.name}")
+    return data
+
+
+def resolve_config_path(path: Path | None = None) -> Path:
+    """Resolve config path: explicit > RADAR_CONFIG > default.
+
+    ``RADAR_PROFILE=light`` does **not** replace the path — it overlays
+    ``config/light.yaml`` onto default (see ``load_config``).
+    """
+    if path is not None:
+        return path
+    env = (os.environ.get("RADAR_CONFIG") or os.environ.get("RADAR_CONFIG_PATH") or "").strip()
+    if env:
+        return Path(env)
+    return DEFAULT_CONFIG
+
+
+def load_config(path: Path | None = None) -> Dict[str, Any]:
+    cfg_path = resolve_config_path(path)
+    data = _read_yaml_mapping(cfg_path)
+    # Named light overlay — only when loading default (not a full RADAR_CONFIG).
+    profile = (os.environ.get("RADAR_PROFILE") or "").strip().lower()
+    if (
+        path is None
+        and not (os.environ.get("RADAR_CONFIG") or os.environ.get("RADAR_CONFIG_PATH") or "").strip()
+        and profile == "light"
+    ):
+        light_path = ROOT / "config" / "light.yaml"
+        overlay = _read_yaml_mapping(light_path)
+        data = _deep_merge(data, overlay)
+        data["_radar_profile"] = "light"
     data = apply_env_overrides(data)
     validate_config(data)
     return data

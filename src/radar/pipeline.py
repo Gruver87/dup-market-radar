@@ -411,6 +411,15 @@ def run_scan(
             for k, v in (part.get("stage_ms") or {}).items():
                 sm[k] = int(sm.get(k) or 0) + int(v or 0)
             acc["kline_budget"] = part.get("kline_budget") or budget_status(http)
+            # Process MTF cache honesty (0.2.87) — sum across ensure rounds.
+            for ck in (
+                "mtf_cache_hydrate_spot",
+                "mtf_cache_hydrate_fut",
+                "mtf_cache_remember_spot",
+                "mtf_cache_remember_fut",
+            ):
+                if ck in part:
+                    acc[ck] = int(acc.get(ck) or 0) + int(part.get(ck) or 0)
 
         def _top_buckets(
             n: int | None = None,

@@ -1,6 +1,6 @@
 # Architecture
 
-**Pin:** 0.2.86 | Index: [`README.md`](README.md)
+**Pin:** 0.2.87 | Index: [`README.md`](README.md)
 
 ## Layers
 
@@ -64,7 +64,7 @@ Venue workers run under `ingest.parallel_workers` (default 6):
 | DexScreener | boosted + batched `/tokens/{a,b,...}`; keyword search soft-skip (0.2.75 / 0.2.78) |
 | CoinGecko | stables |
 
-Dex / CoinGecko GETs use `ingest.secondary_http_timeout_ms` (default **2500**, one-shot / 0.2.81) plus total `secondary_venue_wall_ms` (default **3500**, 0.2.86) so secondary hosts cannot stretch ingest past CEX. CEX keeps `http_timeout_ms`. KuCoin allTickers on non-force prefers stale-OK within `kucoin_stale_ok_ms` (default **90000**, 0.2.86).
+Dex / CoinGecko GETs use `ingest.secondary_http_timeout_ms` (default **2500**, one-shot / 0.2.81) plus total `secondary_venue_wall_ms` (default **3500**, 0.2.86) so secondary hosts cannot stretch ingest past CEX. CEX keeps `http_timeout_ms`. KuCoin allTickers on non-force prefers stale-OK within `kucoin_stale_ok_ms` (default **90000**, 0.2.86). Optional `RADAR_PROFILE=light` overlays KuCoin-only venues + slower memes/stables (0.2.87).
 
 HTTP client: TLS verify on; allowlist hosts; `httpx.Limits(max_connections=32, max_keepalive_connections=16)` (0.2.82); last-good stale-OK / error fallback (0.2.86).
 
@@ -75,6 +75,8 @@ HTTP client: TLS verify on; allowlist hosts; `httpx.Limits(max_connections=32, m
 3. Spot and futures waterfalls run **in parallel** (shared kline budget). Per-symbol fan-out: `KLINE_PARALLEL_WORKERS=12` (0.2.80). Venue order KuCoin -> Binance -> Bybit -> MEXC; soft-denylist Binance 400s (0.2.76).
 4. Early-exit when spot, futures, listings, and CEX-meme **top_n** fill >= **0.85** -> `mtf_ensure_ok=true`.
 5. Score sectors. **Patch-first** from universe onto scored boards. If spot/futures board 15m fill already >= **0.85** (same bar as `mtf_ensure_ok`), skip residual display network (`display_skipped_coverage`, 0.2.83). Otherwise residual miss ensure (spot_alts+futures, cap 8/side) under soft wall ? base `display_ensure_wall_ms` or longer `display_ensure_wall_low_ms` when board fill < 0.5 (0.2.85 / 0.2.86) ? then patch again; wall time added to `ensure_ms`. Primary `short_window_ensure` acc is restored after display (no clobber of fill ratios).
+6. Process-lifetime **MTF reuse cache** (0.2.87) hydrates stamped short-windows onto fresh ingest rows before the waterfall when age < mtf_reuse_ttl_ms, then remembers after attach.
+
 
 **Not** full-universe candles. DEX memes use Dex windows (h24/h1/m5); CEX keyword memes share the spot candle ensure path. Budget: `ingest.max_kline_gets` (default 112).
 

@@ -1,0 +1,153 @@
+{
+  "product": "DUP Market Radar",
+  "pack_kind": "smoke_live_warm",
+  "generated_at_utc": "20261022T194435Z",
+  "pin": "0.2.87",
+  "native": {
+    "available": true,
+    "backend": "radar_native",
+    "version": "0.2.87",
+    "error": null
+  },
+  "ok": true,
+  "mtf_ensure_ok": true,
+  "score_backend": "radar_native",
+  "summary": {
+    "elapsed_ms": 5107,
+    "ingest_ms": 1814,
+    "ensure_ms": 3220,
+    "score_ms": 65,
+    "venue_ms": {
+      "coingecko": 133,
+      "dexscreener": 346,
+      "mexc": 392,
+      "bybit": 521,
+      "kucoin": 1011,
+      "binance": 1785
+    },
+    "http_stats": {
+      "gets": 65,
+      "retries": 0,
+      "cache_hits": 0,
+      "stale_ok_hits": 2,
+      "stale_error_fallback": 0,
+      "rate_limited": 0,
+      "response_too_large": 0,
+      "cache_evictions": 156,
+      "scheme_refused": 0,
+      "kline_gets": 19
+    },
+    "short_window_ensure": {
+      "mtf_cache_hydrate_spot": 46,
+      "mtf_cache_hydrate_fut": 35,
+      "mtf_cache_remember_spot": 46,
+      "mtf_cache_remember_fut": 35,
+      "display_ensure_ms": 2261,
+      "display_ensure_wall_reason": "low_board",
+      "spot_targets": 4,
+      "fut_targets": 0,
+      "stage_ms": {
+        "spot_kucoin_ms": 701,
+        "spot_binance_ms": 1429,
+        "spot_bybit_ms": 944,
+        "fut_kucoin_ms": 0
+      }
+    }
+  },
+  "cycles": [
+    {
+      "label": "cold",
+      "elapsed_ms": 6256,
+      "ensure_ms": 4284,
+      "kline_gets": 110,
+      "remember_spot": 76
+    },
+    {
+      "label": "warm",
+      "elapsed_ms": 5107,
+      "ensure_ms": 3220,
+      "hydrate_spot": 46,
+      "hydrate_fut": 35,
+      "kline_gets": 19,
+      "stale_ok": 2
+    }
+  ],
+  "short_window_ensure": {
+    "ensure_rank_n": 30,
+    "spot": {
+      "n_15m": 0,
+      "n_1h": 0,
+      "n_4h": 0,
+      "n_vol_vs": 0,
+      "n_binance": 0,
+      "n_bybit": 0
+    },
+    "futures": {
+      "n_15m": 0,
+      "n_1h": 0,
+      "n_4h": 0,
+      "n_binance": 0,
+      "n_bybit": 0,
+      "n_mexc": 0
+    },
+    "spot_targets": 4,
+    "fut_targets": 0,
+    "rounds": 1,
+    "waterfall_skipped": [
+      "binance_fut",
+      "bybit_fut",
+      "mexc_fut"
+    ],
+    "stage_ms": {
+      "spot_kucoin_ms": 701,
+      "spot_binance_ms": 1429,
+      "spot_bybit_ms": 944,
+      "fut_kucoin_ms": 0
+    },
+    "kline_budget": {
+      "kline_gets": 19,
+      "kline_budget_left": 93
+    },
+    "mtf_cache_hydrate_spot": 46,
+    "mtf_cache_hydrate_fut": 35,
+    "mtf_cache_remember_spot": 46,
+    "mtf_cache_remember_fut": 35,
+    "spot_fill_ratio": 1.0,
+    "fut_fill_ratio": 1.0,
+    "list_spot_fill_ratio": 1.0,
+    "list_fut_fill_ratio": 1.0,
+    "meme_cex_fill_ratio": 1.0,
+    "meme_cex_targets": 4,
+    "ensure_ms": 3220,
+    "display_pre_patched": 6,
+    "display_ensure_ms": 2261,
+    "display_spot_targets": 7,
+    "display_fut_targets": 0,
+    "display_board_spot": 0.3,
+    "display_board_fut": 1.0,
+    "display_ensure_wall_ms": 4000,
+    "display_ensure_wall_reason": "low_board",
+    "display_patched": 15
+  },
+  "venue_ms": {
+    "coingecko": 133,
+    "dexscreener": 346,
+    "mexc": 392,
+    "bybit": 521,
+    "kucoin": 1011,
+    "binance": 1785
+  },
+  "http_stats": {
+    "gets": 65,
+    "retries": 0,
+    "cache_hits": 0,
+    "stale_ok_hits": 2,
+    "stale_error_fallback": 0,
+    "rate_limited": 0,
+    "response_too_large": 0,
+    "cache_evictions": 156,
+    "scheme_refused": 0,
+    "kline_gets": 19
+  },
+  "disclaimer": "Evidence only \u2014 not financial advice; author accepts no liability."
+}

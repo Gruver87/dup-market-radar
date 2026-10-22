@@ -63,7 +63,7 @@ def read_capped_json(
         raise RuntimeError(f"{label}: invalid JSON") from exc
 
 
-# Soft-wall hosts — memes/stables must not stretch ingest past CEX (0.2.86).
+# Soft-wall hosts — memes/stables must not stretch ingest past CEX (0.2.87).
 _SECONDARY_HOSTS = frozenset(
     {
         "api.dexscreener.com",
@@ -105,7 +105,7 @@ class AllowlistHttp:
             int(secondary_timeout_ms) if secondary_timeout_ms is not None else None
         )
         self._cache: Dict[str, tuple[int, Any]] = {}
-        # Last-good bodies survive TTL prune — stale-OK / error fallback (0.2.86).
+        # Last-good bodies survive TTL prune — stale-OK / error fallback (0.2.87).
         self._last_good: Dict[str, tuple[int, Any]] = {}
         self._lock = threading.Lock()
         read_s = self._timeout_ms / 1000.0
@@ -117,7 +117,7 @@ class AllowlistHttp:
             limits=limits,
             verify=True,
             follow_redirects=False,
-            headers={"User-Agent": "DUP-Market-Radar/0.2.86"},
+            headers={"User-Agent": "DUP-Market-Radar/0.2.87"},
         )
         self.errors: list[str] = []
         self.stats: Dict[str, int] = {
@@ -195,7 +195,7 @@ class AllowlistHttp:
         stale_ok_ms: int | None = None,
         stale_on_error_ms: int | None = None,
     ) -> Any:
-        """HTTPS GET JSON with allowlist + optional stale-OK (0.2.86).
+        """HTTPS GET JSON with allowlist + optional stale-OK (0.2.87).
 
         ``stale_ok_ms``: if fresh TTL miss but last-good younger than this,
         return it without network (warm poll path).

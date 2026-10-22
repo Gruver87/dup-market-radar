@@ -1,0 +1,31 @@
+# Light-ingest overlay (0.2.87) — KuCoin-primary dashboard refresh.
+# Activate: RADAR_PROFILE=light  (merged onto config/default.yaml)
+# Or:       RADAR_CONFIG=<path to a full yaml>
+#
+# Not a separate product profile for money claims — still lab/prod via
+# deployment_mode. Full multi-venue scan remains default.yaml.
+
+venues:
+  - kucoin
+
+ingest:
+  max_kline_gets: 72
+  secondary_http_timeout_ms: 1500
+  secondary_venue_wall_ms: 1500
+  kucoin_stale_ok_ms: 120000
+  display_ensure_wall_ms: 1200
+  display_ensure_wall_low_ms: 3000
+
+sectors:
+  memes:
+    poll_sec: 300
+  stables:
+    poll_sec: 300
+  whales:
+    poll_sec: 60
+  spot_alts:
+    poll_sec: 45
+  futures:
+    poll_sec: 45
+  listings:
+    poll_sec: 120

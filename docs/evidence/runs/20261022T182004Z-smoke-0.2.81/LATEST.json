@@ -1,0 +1,183 @@
+{
+  "product": "DUP Market Radar",
+  "pack_kind": "smoke_live",
+  "generated_at_utc": "20261022T181943Z",
+  "disclaimer": "Evidence only — not financial advice; author accepts no liability.",
+  "summary": {
+    "ok": true,
+    "mode": "live",
+    "schema_version": 2,
+    "score_backend": "radar_native",
+    "universe_size": 4609,
+    "elapsed_ms": 10712,
+    "ingest_ms": 4054,
+    "ensure_ms": 6591,
+    "score_ms": 61,
+    "venue_ms": {
+      "mexc": 263,
+      "coingecko": 736,
+      "bybit": 775,
+      "dexscreener": 834,
+      "binance": 1663,
+      "kucoin": 4021
+    },
+    "errors": [],
+    "counts": {
+      "futures": 10,
+      "futures_long": 3,
+      "futures_short": 7,
+      "listings": 6,
+      "memes": 10,
+      "spot_alts": 10,
+      "stables": 7,
+      "whales": 10
+    },
+    "poll": {
+      "cex": {
+        "poll_sec": 45,
+        "age_ms": 0,
+        "due": false,
+        "sectors": [
+          "spot_alts",
+          "futures",
+          "listings"
+        ]
+      },
+      "memes": {
+        "poll_sec": 45,
+        "age_ms": 0,
+        "due": false,
+        "sectors": [
+          "memes"
+        ]
+      },
+      "stables": {
+        "poll_sec": 60,
+        "age_ms": 0,
+        "due": false,
+        "sectors": [
+          "stables"
+        ]
+      },
+      "whales_note": "bundled_with_cex"
+    },
+    "due_groups": [
+      "cex",
+      "memes",
+      "stables"
+    ],
+    "poll_skipped": [],
+    "circuit_skipped": [],
+    "http_stats": {
+      "gets": 149,
+      "retries": 1,
+      "cache_hits": 4,
+      "rate_limited": 0,
+      "response_too_large": 0,
+      "cache_evictions": 0,
+      "scheme_refused": 0,
+      "kline_gets": 104
+    },
+    "kline_gets": 104,
+    "dedupe": {
+      "spot": {
+        "before": 4750,
+        "after": 2921,
+        "dropped": 1829
+      },
+      "futures": {
+        "before": 3634,
+        "after": 1670,
+        "dropped": 1964
+      },
+      "venue_priority": {
+        "kucoin": 0,
+        "binance": 1,
+        "bybit": 2,
+        "mexc": 3
+      }
+    },
+    "spot_mtf": {
+      "change_bps_15m": 9,
+      "change_bps_1h": 9,
+      "change_bps_4h": 9,
+      "vol_vs_median_bps": 9
+    },
+    "fut_mtf": {
+      "change_bps_15m": 10,
+      "change_bps_1h": 10,
+      "change_bps_4h": 10
+    },
+    "meme_mtf": {
+      "change_bps": 10,
+      "change_bps_1h": 10,
+      "change_bps_5m": 8
+    },
+    "listings_mtf": {
+      "change_bps": 6,
+      "change_bps_15m": 6,
+      "change_bps_1h": 6,
+      "age_hours": 6
+    },
+    "listings_flags": {
+      "cross_venue_live": 0,
+      "no_live_volume": 0,
+      "n": 6
+    },
+    "short_window_ensure": {
+      "ensure_rank_n": 30,
+      "spot": {
+        "n_15m": 38,
+        "n_1h": 38,
+        "n_4h": 38,
+        "n_vol_vs": 38,
+        "n_binance": 16,
+        "n_bybit": 0
+      },
+      "futures": {
+        "n_15m": 35,
+        "n_1h": 35,
+        "n_4h": 35,
+        "n_binance": 5,
+        "n_bybit": 2,
+        "n_mexc": 4
+      },
+      "spot_targets": 6,
+      "fut_targets": 4,
+      "rounds": 2,
+      "waterfall_skipped": [
+        "bybit_spot",
+        "mexc_fut"
+      ],
+      "stage_ms": {
+        "spot_kucoin_ms": 4667,
+        "spot_binance_ms": 975,
+        "fut_kucoin_ms": 2805,
+        "fut_binance_ms": 379,
+        "fut_bybit_ms": 287,
+        "spot_bybit_ms": 410,
+        "fut_mexc_ms": 1384
+      },
+      "kline_budget": {
+        "kline_gets": 104,
+        "kline_budget_left": 8
+      },
+      "spot_fill_ratio": 0.9,
+      "fut_fill_ratio": 1.0,
+      "list_spot_fill_ratio": 1.0,
+      "list_fut_fill_ratio": 1.0,
+      "meme_cex_fill_ratio": 1.0,
+      "meme_cex_targets": 3,
+      "ensure_ms": 6591,
+      "display_pre_patched": 8,
+      "display_ensure_ms": 988,
+      "display_spot_targets": 6,
+      "display_fut_targets": 0,
+      "display_patched": 13
+    },
+    "elapsed_budget_ms": 25000,
+    "elapsed_ok": true
+  },
+  "mtf_ensure_ok": true,
+  "ok": true
+}

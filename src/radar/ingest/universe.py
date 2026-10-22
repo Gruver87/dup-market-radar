@@ -36,6 +36,11 @@ def build_universe(
     """
     venues = cfg.get("venues") or ["kucoin", "binance", "bybit", "mexc"]
     ingest_cfg = cfg.get("ingest") or {}
+    # Soft wall for Dex/CoinGecko GETs (0.2.81) — must not stretch ingest past CEX.
+    sec_to = ingest_cfg.get("secondary_http_timeout_ms")
+    http.secondary_timeout_ms = (
+        int(sec_to) if sec_to is not None else 2500
+    )
     breaker = get_breaker(cfg)
     skipped_circuit: List[str] = []
     state = poll_state()

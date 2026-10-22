@@ -63,6 +63,15 @@ def read_capped_json(
         raise RuntimeError(f"{label}: invalid JSON") from exc
 
 
+# Soft-wall hosts — memes/stables must not stretch ingest past CEX (0.2.81).
+_SECONDARY_HOSTS = frozenset(
+    {
+        "api.dexscreener.com",
+        "api.coingecko.com",
+    }
+)
+
+
 class AllowlistHttp:
     def __init__(
         self,
@@ -76,6 +85,7 @@ class AllowlistHttp:
         max_response_bytes: int = DEFAULT_MAX_RESPONSE_BYTES,
         max_cache_entries: int = DEFAULT_MAX_CACHE_ENTRIES,
         max_error_log: int = DEFAULT_MAX_ERROR_LOG,
+        secondary_timeout_ms: int | None = None,
     ) -> None:
         if timeout_sec is not None:
             timeout_ms = int(timeout_sec * 1000)
@@ -90,6 +100,10 @@ class AllowlistHttp:
         self._max_response_bytes = max(1024, int(max_response_bytes))
         self._max_cache = max(8, int(max_cache_entries))
         self._max_errors = max(8, int(max_error_log))
+        # Optional tighter read timeout for Dex/CoinGecko (None = use default).
+        self.secondary_timeout_ms: int | None = (
+            int(secondary_timeout_ms) if secondary_timeout_ms is not None else None
+        )
         self._cache: Dict[str, tuple[int, Any]] = {}
         self._lock = threading.Lock()
         read_s = self._timeout_ms / 1000.0
@@ -98,7 +112,7 @@ class AllowlistHttp:
             timeout=httpx.Timeout(read_s, connect=connect_s),
             verify=True,
             follow_redirects=False,
-            headers={"User-Agent": "DUP-Market-Radar/0.2.80"},
+            headers={"User-Agent": "DUP-Market-Radar/0.2.81"},
         )
         self.errors: list[str] = []
         self.stats: Dict[str, int] = {
@@ -176,7 +190,21 @@ class AllowlistHttp:
                     self.stats["cache_hits"] += 1
                     return body
 
-        attempts = self._retries + 1
+        sec_ms = self.secondary_timeout_ms
+        use_sec = (
+            sec_ms is not None
+            and int(sec_ms) > 0
+            and host in _SECONDARY_HOSTS
+        )
+        req_timeout: httpx.Timeout | None = None
+        if use_sec:
+            read_s = max(0.5, float(int(sec_ms)) / 1000.0)
+            connect_s = min(2.0, max(0.5, read_s / 2.0))
+            req_timeout = httpx.Timeout(read_s, connect=connect_s)
+            # Soft wall: one shot — retries would defeat the ingest bound.
+            attempts = 1
+        else:
+            attempts = self._retries + 1
         last_exc: Optional[BaseException] = None
         for attempt in range(attempts):
             try:
@@ -184,7 +212,12 @@ class AllowlistHttp:
                 # protects stats/cache (was serializing all GETs → ~40s ensure).
                 with self._lock:
                     self.stats["gets"] += 1
-                resp = self._client.get(url, params=params)
+                if req_timeout is not None:
+                    resp = self._client.get(
+                        url, params=params, timeout=req_timeout
+                    )
+                else:
+                    resp = self._client.get(url, params=params)
                 status = resp.status_code
                 if status == 429:
                     with self._lock:

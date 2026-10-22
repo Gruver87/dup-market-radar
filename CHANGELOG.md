@@ -1,5 +1,11 @@
 ﻿# Changelog - DUP Market Radar
 
+## 0.2.81
+
+- Ingest: `secondary_http_timeout_ms` (default 2500) soft-walls DexScreener / CoinGecko GETs; CEX keeps `http_timeout_ms`; no retry on soft wall
+- Package / FastAPI / User-Agent / `__version__` / native pin `0.2.81`
+- Soak / 48h: **not** claimed this pin
+
 ## 0.2.80
 
 - Display ensure: patch-from-universe first, then miss-detect (avoids redundant kline when score omitted MTF copy)

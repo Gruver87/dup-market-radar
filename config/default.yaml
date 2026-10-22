@@ -28,6 +28,7 @@ ingest:
   max_kline_gets: 112                   # hard ceiling on MTF ensure waterfall GETs / scan
   mtf_reuse_ttl_ms: 450000              # skip re-fetch when stamped MTF younger than ~7.5m
   scan_executor_workers: 2              # dedicated pool for scan (API/ops stay responsive)
+  secondary_http_timeout_ms: 2500       # Dex/CoinGecko soft wall (CEX keeps http_timeout_ms)
 
 snapshot_refresh_ms: 45000
 

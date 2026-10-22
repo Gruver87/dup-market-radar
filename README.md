@@ -1,6 +1,6 @@
 # DUP Market Radar
 
-**Version:** 0.2.80 � **Org:** [DUP Labs](https://github.com/Gruver87) � **Author:** Uladzimir Dabranski
+**Version:** 0.2.81 � **Org:** [DUP Labs](https://github.com/Gruver87) � **Author:** Uladzimir Dabranski
 
 Hybrid **Python + Rust** market watchlist for crypto spot, USDT-M futures (watch-only), memes, stables, listings, and large prints � with optional **KuCoin spot** manual orders and **opt-in auto-trade** (spot_alts / CEX memes / listings; **never futures**; DEX memes watchlist-only).
 

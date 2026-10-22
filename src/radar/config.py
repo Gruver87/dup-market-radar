@@ -462,6 +462,11 @@ def validate_config(cfg: Dict[str, Any]) -> None:
         sew = ingest.get("scan_executor_workers")
         if sew is not None and (not isinstance(sew, int) or sew < 1 or sew > 8):
             errors.append("ingest.scan_executor_workers must be int 1..8")
+        sec_to = ingest.get("secondary_http_timeout_ms")
+        if sec_to is not None and (
+            not isinstance(sec_to, int) or sec_to < 500 or sec_to > 12_000
+        ):
+            errors.append("ingest.secondary_http_timeout_ms must be int 500..12000")
 
     bubbles = cfg.get("bubbles")
     if bubbles is not None:

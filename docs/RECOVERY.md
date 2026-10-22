@@ -1,6 +1,6 @@
 # Self-recovery
 
-**Pin:** 0.2.80 · Index: [`README.md`](README.md)
+**Pin:** 0.2.81 · Index: [`README.md`](README.md)
 
 When the network drops, a venue flaps, or a worker thread dies, Radar must **come back by itself** without silent green or auto-enabling trade.
 

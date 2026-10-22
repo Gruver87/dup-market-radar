@@ -63,7 +63,7 @@ def read_capped_json(
         raise RuntimeError(f"{label}: invalid JSON") from exc
 
 
-# Soft-wall hosts — memes/stables must not stretch ingest past CEX (0.2.81).
+# Soft-wall hosts — memes/stables must not stretch ingest past CEX (0.2.82).
 _SECONDARY_HOSTS = frozenset(
     {
         "api.dexscreener.com",
@@ -108,11 +108,14 @@ class AllowlistHttp:
         self._lock = threading.Lock()
         read_s = self._timeout_ms / 1000.0
         connect_s = min(5.0, max(1.0, read_s / 2.0))
+        # Wider pool for parallel venue + kline fan-out (0.2.82).
+        limits = httpx.Limits(max_connections=32, max_keepalive_connections=16)
         self._client = httpx.Client(
             timeout=httpx.Timeout(read_s, connect=connect_s),
+            limits=limits,
             verify=True,
             follow_redirects=False,
-            headers={"User-Agent": "DUP-Market-Radar/0.2.81"},
+            headers={"User-Agent": "DUP-Market-Radar/0.2.82"},
         )
         self.errors: list[str] = []
         self.stats: Dict[str, int] = {

@@ -1,5 +1,12 @@
 ﻿# Changelog - DUP Market Radar
 
+## 0.2.82
+
+- KuCoin bootstrap: allTickers ∥ contracts first; `/v2/symbols` after (less same-host contention on the ingest wall)
+- HTTP: `httpx.Limits(max_connections=32, max_keepalive_connections=16)` for venue + kline fan-out
+- Package / FastAPI / User-Agent / `__version__` / native pin `0.2.82`
+- Soak / 48h: **not** claimed this pin
+
 ## 0.2.81
 
 - Ingest: `secondary_http_timeout_ms` (default 2500) soft-walls DexScreener / CoinGecko GETs; CEX keeps `http_timeout_ms`; no retry on soft wall

@@ -40,12 +40,15 @@ class _FakeHttp:
 
 
 def test_bootstrap_kucoin_three_endpoints():
+    """Tickers∥contracts then symbols — still three GETs, symbols last."""
     http = _FakeHttp()
     spot, contracts, symbols = _bootstrap_kucoin(http)
     assert (spot.get("data") or {}).get("ticker")
     assert isinstance(contracts.get("data"), list)
     assert isinstance(symbols.get("data"), list)
     assert len(http.urls) == 3
+    assert "allTickers" in http.urls[0] or "allTickers" in http.urls[1]
+    assert "symbols" in http.urls[-1]
 
 
 def test_sample_whales_parallel_soft_ok():

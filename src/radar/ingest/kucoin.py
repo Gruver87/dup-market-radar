@@ -15,7 +15,12 @@ logger = logging.getLogger("radar.ingest.kucoin")
 def _bootstrap_kucoin(
     http: AllowlistHttp,
 ) -> Tuple[Any, Any, Any]:
-    """Parallel allTickers + contracts/active + spot symbols meta."""
+    """Bootstrap KuCoin books.
+
+    Critical path (0.2.82): allTickers ∥ contracts only — spot ``/v2/symbols``
+    runs after, so listings meta does not contend with the heavy allTickers GET
+    on the same host (live venue_ms.kucoin was often the ingest wall).
+    """
 
     def _tickers() -> Any:
         return http.get_json("https://api.kucoin.com/api/v1/market/allTickers")
@@ -26,11 +31,10 @@ def _bootstrap_kucoin(
     def _symbols() -> Any:
         return http.get_json("https://api.kucoin.com/api/v2/symbols")
 
-    with ThreadPoolExecutor(max_workers=3) as pool:
+    with ThreadPoolExecutor(max_workers=2) as pool:
         f_t = pool.submit(_tickers)
         f_c = pool.submit(_contracts)
-        f_s = pool.submit(_symbols)
-        # Tickers are hard-required; contracts/symbols soft-fail.
+        # Tickers are hard-required; contracts soft-fail.
         spot_raw = f_t.result()
         try:
             contracts = f_c.result()
@@ -39,14 +43,14 @@ def _bootstrap_kucoin(
                 "kucoin futures tickers soft-fail: %s", redact_exc(exc, max_len=256)
             )
             contracts = None
-        try:
-            symbols = f_s.result()
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "kucoin spot listings soft-fail: %s", redact_exc(exc, max_len=256)
-            )
-            symbols = None
-        return spot_raw, contracts, symbols
+    try:
+        symbols = _symbols()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "kucoin spot listings soft-fail: %s", redact_exc(exc, max_len=256)
+        )
+        symbols = None
+    return spot_raw, contracts, symbols
 
 
 def whale_symbols_kucoin(raw: Optional[List[Any]] = None) -> List[str]:

@@ -1,6 +1,6 @@
 # DUP Market Radar — documentation index
 
-**Product:** DUP Market Radar · **Org:** DUP Labs · **Pin:** `0.2.81`  
+**Product:** DUP Market Radar · **Org:** DUP Labs · **Pin:** `0.2.82`  
 **Repo:** https://github.com/Gruver87/dup-market-radar
 
 Read order for operators:

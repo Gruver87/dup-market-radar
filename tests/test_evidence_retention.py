@@ -14,7 +14,8 @@ def test_retain_keeps_newest(tmp_path, monkeypatch):
         p = tmp_path / f"smoke_live_2026010{i}T000000Z.json"
         p.write_text("{}", encoding="utf-8")
         # distinct mtimes
-        import os, time
+        import os
+        import time
         os.utime(p, (time.time() - (5 - i), time.time() - (5 - i)))
     (tmp_path / "LATEST.json").write_text("{}", encoding="utf-8")
     out = retain(keep=2)

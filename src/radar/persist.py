@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from radar.secrets_redact import redact_exc, redact_text
+from radar.secrets_redact import redact_exc
 
 logger = logging.getLogger("radar.persist")
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from radar.http_client import AllowlistHttp
 from radar.ingest.parse import fraction_to_pct_str, keep_num

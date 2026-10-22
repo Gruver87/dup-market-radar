@@ -25,13 +25,17 @@ jobs:
           python -m pip install -U pip
           pip install -r requirements.txt
           pip install pytest maturin
-      - name: Build radar_native
+      - name: Build + install radar_native
+        # maturin develop requires a venv; CI uses system pip → build wheel + install.
         run: |
           cd native/radar_native
-          maturin develop --release
+          maturin build --release -o dist
+          pip install dist/radar_native-*.whl
       - name: Parity tests (native prefer)
         env:
           PYTHONPATH: src
           RADAR_NATIVE_PREFER: "1"
           RADAR_NATIVE_FAIL_CLOSED: "1"
-        run: python -m pytest tests/test_score_parity.py tests/test_non_crypto_fut.py -q --tb=short
+        run: |
+          python -c "import radar_native; print('radar_native', radar_native.native_version())"
+          python -m pytest tests/test_score_parity.py tests/test_non_crypto_fut.py -q --tb=short

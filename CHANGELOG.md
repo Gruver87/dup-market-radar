@@ -2,6 +2,7 @@
 
 ## 0.2.87
 
+- Docs: `ARCHITECTURE_BLUEPRINT.md` — column constructor template (full repo module map)
 - CI: `ci-native.yml` uses `maturin build` + pip install (develop needs venv); ruff unused-import / E401 clean for `ci.yml`
 - Docs honesty: README/OPS/ARCHITECTURE/PROFILES/DISCLAIMER — `ci-native.yml` exists (maturin + parity on PR/main); stop claiming “Maturin native CI not in this pin”
 - Ensure: process-lifetime MTF reuse cache — hydrate stamped short-windows onto fresh ingest rows before waterfall (`mtf_cache_hydrate_*`)

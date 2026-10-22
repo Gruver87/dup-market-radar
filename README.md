@@ -82,6 +82,7 @@ Full index: [`docs/README.md`](docs/README.md).
 |-----|----------|
 | [`docs/DISCLAIMER.md`](docs/DISCLAIMER.md) | **No liability** — read before enabling trade |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layers, MTF ensure, hybrid native, ingest phases |
+| [`docs/ARCHITECTURE_BLUEPRINT.md`](docs/ARCHITECTURE_BLUEPRINT.md) | Column constructor / module assembly drawing |
 | [`docs/DASHBOARD.md`](docs/DASHBOARD.md) | Multi-page UI, Markets table, hash nav |
 | [`docs/RECOVERY.md`](docs/RECOVERY.md) | Self-heal after outages / dead workers |
 | [`docs/PROFILES.md`](docs/PROFILES.md) | Named profiles lab / native / live-money |

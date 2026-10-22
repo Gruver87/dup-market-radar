@@ -15,6 +15,7 @@ Read order for operators:
 8. [`TRADE.md`](TRADE.md) — manual / auto / Telegram gates  
 9. [`SECURITY.md`](SECURITY.md) — SecretManagerPort, CORS, exposure  
 10. [`ARCHITECTURE.md`](ARCHITECTURE.md) — pipeline / native / snapshot  
+10b. [`ARCHITECTURE_BLUEPRINT.md`](ARCHITECTURE_BLUEPRINT.md) — column constructor map (modules)  
 11. [`EVIDENCE.md`](EVIDENCE.md) — how to produce packs  
 12. [`BRAND.md`](BRAND.md) — naming & URLs  
 

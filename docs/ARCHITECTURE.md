@@ -2,6 +2,8 @@
 
 **Pin:** 0.2.87 | Index: [`README.md`](README.md)
 
+**Blueprint (columns / constructor template):** [`ARCHITECTURE_BLUEPRINT.md`](ARCHITECTURE_BLUEPRINT.md) ? module assembly drawing after full repo scan.
+
 ## Layers
 
 ```text

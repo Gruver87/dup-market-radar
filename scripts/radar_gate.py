@@ -48,6 +48,7 @@ def main() -> int:
     )
     need(ROOT / "src" / "radar" / "recovery.py", "RecoverySupervisor", "recovery")
     need(ROOT / "docs" / "EVIDENCE_MATRIX.md", "approx_48h_claim_ok", "evidence_matrix")
+    need(ROOT / "docs" / "ARCHITECTURE_BLUEPRINT.md", "Column assembly", "architecture_blueprint")
     need(ROOT / "docs" / "PROFILES.md", "python-lab", "profiles")
     need(ROOT / "docs" / "PROFILES.md", "ci-native", "profiles_ci_native")
     need(ROOT / "docs" / "DISCLAIMER.md", "Not financial advice", "disclaimer")

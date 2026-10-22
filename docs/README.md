@@ -1,6 +1,6 @@
 # DUP Market Radar — documentation index
 
-**Product:** DUP Market Radar · **Org:** DUP Labs · **Pin:** `0.2.85`  
+**Product:** DUP Market Radar · **Org:** DUP Labs · **Pin:** `0.2.86`  
 **Repo:** https://github.com/Gruver87/dup-market-radar
 
 Read order for operators:
@@ -35,13 +35,13 @@ Root:
 
 Companion L1 repos (separate): [`dup-protocol`](https://github.com/Gruver87/dup-protocol), [`dup-protocol-experimental`](https://github.com/Gruver87/dup-protocol-experimental).
 
-## Current pin snapshot (0.2.85)
+## Current pin snapshot (0.2.86)
 
 | Area | State |
 |------|--------|
 | Score | `radar_native` prefer + fail-closed in `config/default.yaml`; Docker/CI = python-lab |
-| Ingest | Parallel CEX bootstraps; Dex batch + soft-wall; CoinGecko soft-wall; KuCoin symbols deferred |
-| MTF | Ensure gate = `ensure_cap`; display patch-first; kline workers 12; budget `max_kline_gets` |
+| Ingest | Parallel CEX bootstraps; Dex/CG per-GET + total venue wall; KuCoin warm stale-OK |
+| MTF | Ensure gate = `ensure_cap`; display patch-first; low-board wall 4000 / base 1500 |
 | Evidence | Live smoke packs under `docs/evidence/runs/`; **no 48h soak claim** |
 | Trade | Auto default OFF; never futures; fail-closed on `ok=false` / ensure fail |
 

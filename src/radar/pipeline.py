@@ -136,6 +136,27 @@ def _ensure_bucket_ok(ratio: float | None, *, threshold: float = 0.85) -> bool:
     return float(ratio) >= threshold
 
 
+def _display_ensure_wall_ms(
+    ingest: Dict[str, Any],
+    spot_board: float | None,
+    fut_board: float | None,
+) -> tuple[int, str]:
+    """Pick residual display soft-wall from board coverage (0.2.86).
+
+    Low board (< ``display_ensure_board_low``, default 0.5) → longer wall so
+    cold/first scans can fill honesty; otherwise base ``display_ensure_wall_ms``.
+    """
+    base = int(ingest.get("display_ensure_wall_ms") or 1500)
+    low_wall = int(ingest.get("display_ensure_wall_low_ms") or 4000)
+    low_bar = float(ingest.get("display_ensure_board_low") or 0.5)
+    boards = [float(b) for b in (spot_board, fut_board) if b is not None]
+    if not boards:
+        return max(base, low_wall), "unknown_board"
+    if min(boards) < low_bar:
+        return max(base, low_wall), "low_board"
+    return base, "base"
+
+
 def _fmt_fill(ratio: float | None) -> str:
     return "n/a" if ratio is None else f"{float(ratio):.2f}"
 
@@ -634,8 +655,11 @@ def run_scan(
             miss_spot, miss_fut = _display_missing_mtf_symbols(sectors)
             if miss_spot or miss_fut:
                 t_disp = int(time.time() * 1000)
-                # Soft wall (0.2.85): residual display must not dominate scan.
-                wall_ms = int(ingest.get("display_ensure_wall_ms") or 1500)
+                # Soft wall (0.2.85/0.2.86): residual display must not dominate;
+                # low board coverage gets a longer wall for honesty.
+                wall_ms, wall_reason = _display_ensure_wall_ms(
+                    ingest, spot_board, fut_board
+                )
                 wall_s = max(0.25, float(wall_ms) / 1000.0)
                 try:
                     # Capture primary ensure acc — ensure_universe_short_windows
@@ -682,6 +706,8 @@ def run_scan(
                     primary_acc["display_board_fut"] = (
                         None if fut_board is None else round(float(fut_board), 4)
                     )
+                    primary_acc["display_ensure_wall_ms"] = int(wall_ms)
+                    primary_acc["display_ensure_wall_reason"] = wall_reason
                     if timed_out:
                         primary_acc["display_ensure_timeout_ms"] = int(wall_ms)
                     primary_acc["display_patched"] = int(pre_patched) + int(

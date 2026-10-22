@@ -28,8 +28,12 @@ ingest:
   max_kline_gets: 112                   # hard ceiling on MTF ensure waterfall GETs / scan
   mtf_reuse_ttl_ms: 450000              # skip re-fetch when stamped MTF younger than ~7.5m
   scan_executor_workers: 2              # dedicated pool for scan (API/ops stay responsive)
-  secondary_http_timeout_ms: 2500       # Dex/CoinGecko soft wall (CEX keeps http_timeout_ms)
-  display_ensure_wall_ms: 1500          # residual display MTF soft timeout (0.2.85)
+  secondary_http_timeout_ms: 2500       # Dex/CoinGecko per-GET soft wall (CEX keeps http_timeout_ms)
+  secondary_venue_wall_ms: 3500         # Dex+CG total ingest wall (0.2.86)
+  kucoin_stale_ok_ms: 90000             # warm allTickers stale-OK window (0.2.86)
+  display_ensure_wall_ms: 1500          # residual display MTF soft timeout (board OK)
+  display_ensure_wall_low_ms: 4000      # longer display wall when board fill < low bar
+  display_ensure_board_low: 0.5         # board fill bar for low-wall selection (0.2.86)
 
 snapshot_refresh_ms: 45000
 

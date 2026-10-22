@@ -14,14 +14,33 @@ logger = logging.getLogger("radar.ingest.kucoin")
 
 def _bootstrap_kucoin_books(
     http: AllowlistHttp,
+    *,
+    force: bool = False,
+    stale_ok_ms: int = 90_000,
+    stale_on_error_ms: int = 180_000,
 ) -> Tuple[Any, Any]:
-    """Critical path only: allTickers ∥ contracts (no symbols, no whales)."""
+    """Critical path only: allTickers ∥ contracts (no symbols, no whales).
+
+    Non-force scans prefer stale-OK allTickers within ``stale_ok_ms`` (0.2.86)
+    so warm polls do not re-download the heavy book every cycle.
+    """
 
     def _tickers() -> Any:
-        return http.get_json("https://api.kucoin.com/api/v1/market/allTickers")
+        # Force = always network; otherwise stale-OK within window + error fallback.
+        return http.get_json(
+            "https://api.kucoin.com/api/v1/market/allTickers",
+            use_cache=True,
+            stale_ok_ms=None if force else int(stale_ok_ms),
+            stale_on_error_ms=int(stale_on_error_ms),
+        )
 
     def _contracts() -> Any:
-        return http.get_json("https://api-futures.kucoin.com/api/v1/contracts/active")
+        return http.get_json(
+            "https://api-futures.kucoin.com/api/v1/contracts/active",
+            use_cache=True,
+            stale_ok_ms=None if force else min(60_000, int(stale_ok_ms)),
+            stale_on_error_ms=int(stale_on_error_ms),
+        )
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         f_t = pool.submit(_tickers)
@@ -39,6 +58,9 @@ def _bootstrap_kucoin_books(
 
 def _bootstrap_kucoin(
     http: AllowlistHttp,
+    *,
+    force: bool = False,
+    stale_ok_ms: int = 90_000,
 ) -> Tuple[Any, Any, Any]:
     """Bootstrap KuCoin books + symbols meta.
 
@@ -49,7 +71,9 @@ def _bootstrap_kucoin(
     def _symbols() -> Any:
         return http.get_json("https://api.kucoin.com/api/v2/symbols")
 
-    spot_raw, contracts = _bootstrap_kucoin_books(http)
+    spot_raw, contracts = _bootstrap_kucoin_books(
+        http, force=force, stale_ok_ms=stale_ok_ms
+    )
     try:
         symbols = _symbols()
     except Exception as exc:  # noqa: BLE001
@@ -80,7 +104,11 @@ def whale_symbols_kucoin(raw: Optional[List[Any]] = None) -> List[str]:
 
 
 def fetch_kucoin(
-    http: AllowlistHttp, *, whale_symbols: Optional[List[str]] = None
+    http: AllowlistHttp,
+    *,
+    whale_symbols: Optional[List[str]] = None,
+    force: bool = False,
+    stale_ok_ms: int = 90_000,
 ) -> Dict[str, Any]:
     """KuCoin tickers + listings + whales.
 
@@ -92,7 +120,9 @@ def fetch_kucoin(
     # 0.2.84: phase1 = allTickers∥contracts; phase2 = symbols∥whales.
     # Whale histories must not share the wire with the heavy allTickers GET
     # (contended overlap spiked venue_ms.kucoin). Overlap them with /v2/symbols.
-    spot_raw, contracts = _bootstrap_kucoin_books(http)
+    spot_raw, contracts = _bootstrap_kucoin_books(
+        http, force=force, stale_ok_ms=stale_ok_ms
+    )
 
     def _symbols() -> Any:
         try:

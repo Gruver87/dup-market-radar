@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import logging
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Callable, Dict, List
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from typing import Any, Callable, Dict, List, Set
 
 from radar.config import venue_priority
 from radar.http_client import AllowlistHttp
@@ -61,9 +61,12 @@ def build_universe(
 
     whales_cfg = (cfg.get("sectors") or {}).get("whales") or {}
     whale_watch = list(whales_cfg.get("symbols_watch") or [])
+    stale_ok_ms = int(ingest_cfg.get("kucoin_stale_ok_ms") or 90_000)
 
     fetchers: Dict[str, Callable[[AllowlistHttp], Dict[str, Any]]] = {
-        "kucoin": lambda h, w=whale_watch: fetch_kucoin(h, whale_symbols=w),
+        "kucoin": lambda h, w=whale_watch, fr=force, sk=stale_ok_ms: fetch_kucoin(
+            h, whale_symbols=w, force=fr, stale_ok_ms=sk
+        ),
         "binance": fetch_binance,
         "bybit": fetch_bybit,
         "mexc": fetch_mexc,
@@ -115,7 +118,8 @@ def build_universe(
             breaker.record_fail(name, redact_exc(exc, max_len=120))
             raise
 
-    work: List[Callable[[], tuple[str, Any, int]]] = []
+    cex_work: List[Callable[[], tuple[str, Any, int]]] = []
+    sec_work: List[Callable[[], tuple[str, Any, int]]] = []
     fetch_cex = "cex" in due
     fetch_memes = "memes" in due
     fetch_stables = "stables" in due
@@ -127,7 +131,7 @@ def build_universe(
                     skipped_circuit.append(name)
                     errors.append(f"circuit_open_skip:{name}")
                     continue
-                work.append(lambda n=name: run_venue(n))
+                cex_work.append(lambda n=name: run_venue(n))
     else:
         skipped_poll.append("cex")
         spot = list(cached.get("spot") or [])
@@ -137,7 +141,7 @@ def build_universe(
 
     if fetch_memes:
         if breaker.allow("dexscreener"):
-            work.append(run_memes)
+            sec_work.append(run_memes)
         else:
             skipped_circuit.append("dexscreener")
             errors.append("circuit_open_skip:dexscreener")
@@ -146,7 +150,7 @@ def build_universe(
 
     if fetch_stables:
         if breaker.allow("coingecko"):
-            work.append(run_stables)
+            sec_work.append(run_stables)
         else:
             skipped_circuit.append("coingecko")
             errors.append("circuit_open_skip:coingecko")
@@ -154,38 +158,95 @@ def build_universe(
         skipped_poll.append("stables")
 
     max_workers = int(ingest_cfg.get("parallel_workers") or 6)
+    # Total wall for Dex+CG combined (0.2.86) — per-GET soft wall alone can stack.
+    sec_wall_ms = int(ingest_cfg.get("secondary_venue_wall_ms") or 3500)
     cex_fresh = False
     memes_fresh = False
     stables_fresh = False
-    if work:
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futs = [pool.submit(fn) for fn in work]
-            for fut in as_completed(futs):
-                try:
-                    name, pack, elapsed = fut.result()
-                except Exception as exc:  # noqa: BLE001
-                    raw = str(exc)
-                    safe = redact_exc(exc, max_len=256)
-                    if raw.startswith("circuit_open"):
-                        msg = raw[:64]
-                    else:
-                        msg = f"ingest worker failed: {safe}"
-                    errors.append(msg)
-                    logger.warning(msg)
-                    continue
-                venue_ms[str(name)] = int(elapsed)
-                if name == "dexscreener":
-                    memes = enrich_list(pack if isinstance(pack, list) else [])
-                    memes_fresh = True
-                elif name == "coingecko":
-                    stables = enrich_list(pack if isinstance(pack, list) else [])
-                    stables_fresh = True
-                elif isinstance(pack, dict):
-                    spot.extend(enrich_list(pack.get("spot") or []))
-                    futures.extend(enrich_list(pack.get("futures") or []))
-                    listings.extend(enrich_list(pack.get("listings") or []))
-                    whales.extend(enrich_list(pack.get("whales") or []))
-                    cex_fresh = True
+    secondary_wall_hit = False
+
+    def _absorb(name: str, pack: Any, elapsed: int) -> None:
+        nonlocal cex_fresh, memes_fresh, stables_fresh, spot, futures, listings, whales
+        nonlocal memes, stables
+        venue_ms[str(name)] = int(elapsed)
+        if name == "dexscreener":
+            memes = enrich_list(pack if isinstance(pack, list) else [])
+            memes_fresh = True
+        elif name == "coingecko":
+            stables = enrich_list(pack if isinstance(pack, list) else [])
+            stables_fresh = True
+        elif isinstance(pack, dict):
+            spot.extend(enrich_list(pack.get("spot") or []))
+            futures.extend(enrich_list(pack.get("futures") or []))
+            listings.extend(enrich_list(pack.get("listings") or []))
+            whales.extend(enrich_list(pack.get("whales") or []))
+            cex_fresh = True
+
+    def _fail(exc: BaseException) -> None:
+        raw = str(exc)
+        safe = redact_exc(exc, max_len=256)
+        if raw.startswith("circuit_open"):
+            msg = raw[:64]
+        else:
+            msg = f"ingest worker failed: {safe}"
+        errors.append(msg)
+        logger.warning(msg)
+
+    if cex_work or sec_work:
+        pool = ThreadPoolExecutor(max_workers=max_workers)
+        t_wall0 = time.time()
+        try:
+            cex_futs: Set[Any] = {pool.submit(fn) for fn in cex_work}
+            sec_futs: Set[Any] = {pool.submit(fn) for fn in sec_work}
+            pending: Set[Any] = set(cex_futs) | set(sec_futs)
+            while pending:
+                only_sec = not (pending & cex_futs)
+                timeout: float | None = None
+                if only_sec and sec_futs:
+                    remain = (sec_wall_ms / 1000.0) - (time.time() - t_wall0)
+                    if remain <= 0:
+                        secondary_wall_hit = True
+                        break
+                    timeout = remain
+                done, pending = wait(
+                    pending, timeout=timeout, return_when=FIRST_COMPLETED
+                )
+                if not done:
+                    # Secondary total wall — stop waiting; cache fills gaps below.
+                    if only_sec:
+                        secondary_wall_hit = True
+                    break
+                for fut in done:
+                    cex_futs.discard(fut)
+                    sec_futs.discard(fut)
+                    try:
+                        name, pack, elapsed = fut.result()
+                    except Exception as exc:  # noqa: BLE001
+                        _fail(exc)
+                        continue
+                    _absorb(str(name), pack, int(elapsed))
+            leftover_sec = pending & sec_futs
+            if leftover_sec:
+                secondary_wall_hit = True
+                for fut in leftover_sec:
+                    fut.cancel()
+                errors.append(
+                    f"secondary_venue_wall:{sec_wall_ms}ms"
+                    f":pending={len(leftover_sec)}"
+                )
+                logger.warning(
+                    "secondary venue wall hit wall_ms=%s pending=%s",
+                    sec_wall_ms,
+                    len(leftover_sec),
+                )
+        finally:
+            # Do not block ingest on abandoned Dex/CG GETs (per-host soft wall
+            # still bounds those threads).
+            pool.shutdown(wait=False, cancel_futures=True)
+
+    if secondary_wall_hit:
+        venue_ms["secondary_wall_ms"] = int(sec_wall_ms)
+        venue_ms["secondary_wall_hit"] = 1
 
     pri = venue_priority(cfg)
     if fetch_cex and cex_fresh:

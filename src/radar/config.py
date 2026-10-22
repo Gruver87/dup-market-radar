@@ -467,11 +467,34 @@ def validate_config(cfg: Dict[str, Any]) -> None:
             not isinstance(sec_to, int) or sec_to < 500 or sec_to > 12_000
         ):
             errors.append("ingest.secondary_http_timeout_ms must be int 500..12000")
+        svw = ingest.get("secondary_venue_wall_ms")
+        if svw is not None and (
+            not isinstance(svw, int) or svw < 500 or svw > 20_000
+        ):
+            errors.append("ingest.secondary_venue_wall_ms must be int 500..20000")
+        kso = ingest.get("kucoin_stale_ok_ms")
+        if kso is not None and (
+            not isinstance(kso, int) or kso < 5_000 or kso > 600_000
+        ):
+            errors.append("ingest.kucoin_stale_ok_ms must be int 5000..600000")
         dew = ingest.get("display_ensure_wall_ms")
         if dew is not None and (
             not isinstance(dew, int) or dew < 250 or dew > 15_000
         ):
             errors.append("ingest.display_ensure_wall_ms must be int 250..15000")
+        dewl = ingest.get("display_ensure_wall_low_ms")
+        if dewl is not None and (
+            not isinstance(dewl, int) or dewl < 500 or dewl > 20_000
+        ):
+            errors.append("ingest.display_ensure_wall_low_ms must be int 500..20000")
+        debl = ingest.get("display_ensure_board_low")
+        if debl is not None:
+            try:
+                v = float(debl)
+            except (TypeError, ValueError):
+                v = -1.0
+            if v < 0.0 or v > 1.0:
+                errors.append("ingest.display_ensure_board_low must be float 0..1")
 
     bubbles = cfg.get("bubbles")
     if bubbles is not None:

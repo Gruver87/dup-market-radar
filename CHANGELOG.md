@@ -1,4 +1,12 @@
-# Changelog - DUP Market Radar
+﻿# Changelog - DUP Market Radar
+
+## 0.2.86
+
+- HTTP: stale-OK / last-good for warm polls (`stale_ok_ms`, `stale_on_error_ms`); KuCoin allTickers prefers stale within `kucoin_stale_ok_ms` (default 90s) on non-force
+- Display ensure: low board fill (< `display_ensure_board_low` 0.5) uses longer wall `display_ensure_wall_low_ms` (default 4000); otherwise base 1500
+- Ingest: `secondary_venue_wall_ms` (default 3500) total wall for Dex+CG so stacked per-GET soft walls cannot stretch CEX return
+- Package / FastAPI / User-Agent / `__version__` / native pin `0.2.86`
+- Soak / 48h: **not** claimed this pin
 
 ## 0.2.85
 

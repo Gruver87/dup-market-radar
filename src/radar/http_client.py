@@ -63,7 +63,7 @@ def read_capped_json(
         raise RuntimeError(f"{label}: invalid JSON") from exc
 
 
-# Soft-wall hosts — memes/stables must not stretch ingest past CEX (0.2.85).
+# Soft-wall hosts — memes/stables must not stretch ingest past CEX (0.2.86).
 _SECONDARY_HOSTS = frozenset(
     {
         "api.dexscreener.com",
@@ -105,23 +105,27 @@ class AllowlistHttp:
             int(secondary_timeout_ms) if secondary_timeout_ms is not None else None
         )
         self._cache: Dict[str, tuple[int, Any]] = {}
+        # Last-good bodies survive TTL prune — stale-OK / error fallback (0.2.86).
+        self._last_good: Dict[str, tuple[int, Any]] = {}
         self._lock = threading.Lock()
         read_s = self._timeout_ms / 1000.0
         connect_s = min(5.0, max(1.0, read_s / 2.0))
-        # Wider pool for parallel venue + kline fan-out (0.2.85).
+        # Wider pool for parallel venue + kline fan-out (0.2.82+).
         limits = httpx.Limits(max_connections=32, max_keepalive_connections=16)
         self._client = httpx.Client(
             timeout=httpx.Timeout(read_s, connect=connect_s),
             limits=limits,
             verify=True,
             follow_redirects=False,
-            headers={"User-Agent": "DUP-Market-Radar/0.2.85"},
+            headers={"User-Agent": "DUP-Market-Radar/0.2.86"},
         )
         self.errors: list[str] = []
         self.stats: Dict[str, int] = {
             "gets": 0,
             "retries": 0,
             "cache_hits": 0,
+            "stale_ok_hits": 0,
+            "stale_error_fallback": 0,
             "rate_limited": 0,
             "response_too_large": 0,
             "cache_evictions": 0,
@@ -154,6 +158,24 @@ class AllowlistHttp:
             self._cache.pop(oldest_key, None)
             self.stats["cache_evictions"] += 1
 
+    def _remember_unlocked(self, cache_key: str, now_ms: int, body: Any) -> None:
+        """Retain last-good beyond TTL prune (bounded)."""
+        self._last_good[cache_key] = (now_ms, body)
+        while len(self._last_good) > self._max_cache:
+            oldest_key = min(self._last_good.items(), key=lambda kv: kv[1][0])[0]
+            self._last_good.pop(oldest_key, None)
+
+    def _stale_body_unlocked(
+        self, cache_key: str, now_ms: int, max_age_ms: int
+    ) -> Any | None:
+        hit = self._last_good.get(cache_key)
+        if hit is None:
+            return None
+        ts_ms, body = hit
+        if now_ms - int(ts_ms) < max(0, int(max_age_ms)):
+            return body
+        return None
+
     def _decode_json(self, resp: httpx.Response, host: str) -> Any:
         try:
             return read_capped_json(
@@ -170,7 +192,16 @@ class AllowlistHttp:
         *,
         params: Optional[Dict[str, Any]] = None,
         use_cache: bool = True,
+        stale_ok_ms: int | None = None,
+        stale_on_error_ms: int | None = None,
     ) -> Any:
+        """HTTPS GET JSON with allowlist + optional stale-OK (0.2.86).
+
+        ``stale_ok_ms``: if fresh TTL miss but last-good younger than this,
+        return it without network (warm poll path).
+        ``stale_on_error_ms``: on network/5xx exhaustion, soft-return last-good
+        within this age instead of raising (heavy books like KuCoin allTickers).
+        """
         parsed = urlparse(url)
         if (parsed.scheme or "").lower() != "https":
             self.stats["scheme_refused"] += 1
@@ -192,6 +223,30 @@ class AllowlistHttp:
                 if now_ms - ts_ms < self._ttl_ms:
                     self.stats["cache_hits"] += 1
                     return body
+            if use_cache and stale_ok_ms is not None and int(stale_ok_ms) > 0:
+                stale = self._stale_body_unlocked(
+                    cache_key, now_ms, int(stale_ok_ms)
+                )
+                if stale is not None:
+                    self.stats["stale_ok_hits"] += 1
+                    return stale
+
+        def _error_fallback_or_raise(exc: BaseException) -> Any:
+            if stale_on_error_ms is not None and int(stale_on_error_ms) > 0:
+                now2 = int(time.time() * 1000)
+                with self._lock:
+                    fb = self._stale_body_unlocked(
+                        cache_key, now2, int(stale_on_error_ms)
+                    )
+                    if fb is not None:
+                        self.stats["stale_error_fallback"] += 1
+                        logger.warning(
+                            "stale-on-error fallback host=%s age_cap_ms=%s",
+                            host,
+                            int(stale_on_error_ms),
+                        )
+                        return fb
+            raise exc
 
         sec_ms = self.secondary_timeout_ms
         use_sec = (
@@ -252,6 +307,7 @@ class AllowlistHttp:
                 now_put = int(time.time() * 1000)
                 with self._lock:
                     self._cache[cache_key] = (now_put, body)
+                    self._remember_unlocked(cache_key, now_put, body)
                     self._prune_cache_unlocked(now_put)
                 return body
             except PermissionError:
@@ -265,7 +321,7 @@ class AllowlistHttp:
                     with self._lock:
                         self._push_error(msg)
                     logger.warning("GET failed %s", msg)
-                    raise
+                    return _error_fallback_or_raise(exc)
                 if attempt < attempts - 1:
                     with self._lock:
                         self.stats["retries"] += 1
@@ -283,7 +339,7 @@ class AllowlistHttp:
                 with self._lock:
                     self._push_error(msg)
                 logger.warning("GET failed %s", msg)
-                raise
+                return _error_fallback_or_raise(exc)
             except Exception as exc:  # noqa: BLE001
                 last_exc = exc
                 if attempt < attempts - 1:
@@ -303,9 +359,9 @@ class AllowlistHttp:
                 with self._lock:
                     self._push_error(msg)
                 logger.warning("GET failed %s", msg)
-                raise
+                return _error_fallback_or_raise(exc)
 
         msg = f"{host}: exhausted retries ({redact_exc(last_exc, max_len=200) if last_exc else '?'})"
         with self._lock:
             self._push_error(msg)
-        raise RuntimeError(msg)
+        return _error_fallback_or_raise(RuntimeError(msg))

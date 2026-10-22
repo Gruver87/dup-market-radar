@@ -7,7 +7,7 @@ class _FakeHttp:
     def __init__(self) -> None:
         self.urls: list[str] = []
 
-    def get_json(self, url, *, params=None, use_cache=True):
+    def get_json(self, url, *, params=None, use_cache=True, **_kw):
         self.urls.append(url)
         if "allTickers" in url:
             return {"data": {"ticker": [{"symbol": "BTC-USDT", "last": "1"}]}}

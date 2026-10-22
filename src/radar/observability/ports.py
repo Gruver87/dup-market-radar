@@ -22,6 +22,8 @@ class MetricsSnapshot:
     score_ms: Optional[int] = None
     kline_gets: Optional[int] = None
     ensure_rounds: Optional[int] = None
+    venue_ms: Mapping[str, Any] = field(default_factory=dict)
+    ensure_stage_ms: Mapping[str, Any] = field(default_factory=dict)
     native_available: bool = False
     cache: Mapping[str, Any] = field(default_factory=dict)
     circuit: Mapping[str, Any] = field(default_factory=dict)
@@ -57,6 +59,8 @@ def snapshot_from_payload(payload: Dict[str, Any], *, deployment_mode: str = "la
         score_ms=payload.get("score_ms"),
         kline_gets=payload.get("kline_gets"),
         ensure_rounds=payload.get("ensure_rounds"),
+        venue_ms=dict(payload.get("venue_ms") or {}),
+        ensure_stage_ms=dict(payload.get("ensure_stage_ms") or {}),
         native_available=bool(payload.get("native_available")),
         cache=dict(payload.get("cache") or {}),
         circuit=dict(payload.get("circuit") or {}),

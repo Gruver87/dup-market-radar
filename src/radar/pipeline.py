@@ -244,10 +244,10 @@ def run_scan(
             from radar.score.memes import score_memes
             from radar.score.spot_alts import score_spot_alts
 
-            def _cex_meme_syms_scored(n: int) -> set[str]:
+            def _cex_meme_syms_from_rows(rows: list, n: int) -> set[str]:
                 """CEX keyword memes only — DEX has no KuCoin candle path."""
                 out: set[str] = set()
-                for r in rank_top(score_memes(universe, cfg), n):
+                for r in rows[: max(0, int(n) * 3)]:
                     if not isinstance(r, dict):
                         continue
                     m = r.get("metrics") if isinstance(r.get("metrics"), dict) else {}
@@ -257,6 +257,8 @@ def run_scan(
                         sym = str(r.get("symbol") or "")
                         if sym:
                             out.add(sym)
+                        if len(out) >= n:
+                            break
                 return out
 
             def _merge_ensure(acc: Dict[str, Any], part: Dict[str, Any], rnd: int) -> None:
@@ -273,9 +275,55 @@ def run_scan(
                     if v not in skipped:
                         skipped.append(v)
                 acc["waterfall_skipped"] = skipped[:32]
+                # Accumulate stage timers across rounds.
+                sm = acc.setdefault("stage_ms", {})
+                for k, v in (part.get("stage_ms") or {}).items():
+                    sm[k] = int(sm.get(k) or 0) + int(v or 0)
                 acc["kline_budget"] = part.get("kline_budget") or budget_status(http)
 
             def _top_buckets() -> tuple[set[str], set[str], set[str], set[str], set[str]]:
+                """Prefer native scorer for fill-check rank parity with final score."""
+                try:
+                    from radar.native_bridge import native_available, score_universe_native
+
+                    if native_available() and bool(
+                        (cfg.get("native") or {}).get("prefer", True)
+                    ):
+                        sectors_n, _ = score_universe_native(universe, cfg, top_n)
+                        spot_top = {
+                            str(r.get("symbol") or "")
+                            for r in (sectors_n.get("spot_alts") or [])
+                            if isinstance(r, dict) and r.get("symbol")
+                        }
+                        fut_top = {
+                            str(r.get("symbol") or "")
+                            for r in (sectors_n.get("futures") or [])
+                            if isinstance(r, dict) and r.get("symbol")
+                        }
+                        list_top = [
+                            r
+                            for r in (sectors_n.get("listings") or [])
+                            if isinstance(r, dict) and r.get("symbol")
+                        ]
+                        list_spot = {
+                            str(r.get("symbol") or "")
+                            for r in list_top
+                            if str(r.get("market") or "spot").lower() != "futures"
+                        }
+                        list_fut = {
+                            str(r.get("symbol") or "")
+                            for r in list_top
+                            if str(r.get("market") or "spot").lower() == "futures"
+                        }
+                        meme_top = _cex_meme_syms_from_rows(
+                            list(sectors_n.get("memes") or []), top_n
+                        )
+                        return spot_top, fut_top, list_spot, list_fut, meme_top
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        "native top_buckets soft-fail — Python: %s",
+                        redact_exc(exc, max_len=128),
+                    )
                 spot_top = {
                     str(r.get("symbol") or "")
                     for r in rank_top(score_spot_alts(universe, cfg), top_n)
@@ -301,7 +349,9 @@ def run_scan(
                     for r in list_top
                     if str(r.get("market") or "spot").lower() == "futures"
                 }
-                meme_top = _cex_meme_syms_scored(top_n)
+                meme_top = _cex_meme_syms_from_rows(
+                    rank_top(score_memes(universe, cfg), top_n), top_n
+                )
                 return spot_top, fut_top, list_spot, list_fut, meme_top
 
             def _fills_ok(
@@ -465,6 +515,7 @@ def run_scan(
             "native": native_status(),
             "universe_size": universe.get("universe_size"),
             "http_stats": http_stats,
+            "venue_ms": universe.get("venue_ms") or {},
             "circuit": universe.get("circuit") or {},
             "circuit_skipped": universe.get("circuit_skipped") or [],
             "poll": universe.get("poll") or {},

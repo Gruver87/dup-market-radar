@@ -54,6 +54,9 @@ def build_metrics_payload(
         "score_ms": (snap or {}).get("score_ms"),
         "kline_gets": ((snap or {}).get("http_stats") or {}).get("kline_gets"),
         "ensure_rounds": ((snap or {}).get("short_window_ensure") or {}).get("rounds"),
+        "venue_ms": (snap or {}).get("venue_ms") or {},
+        "ensure_stage_ms": ((snap or {}).get("short_window_ensure") or {}).get("stage_ms")
+        or {},
         "auto_trade": {
             "enabled": bool((auto or {}).get("enabled")),
             "open_positions": (auto or {}).get("open_positions"),
@@ -98,6 +101,8 @@ class PrometheusMetricsExporter:
             "score_ms": snapshot.score_ms,
             "kline_gets": snapshot.kline_gets,
             "ensure_rounds": snapshot.ensure_rounds,
+            "venue_ms": dict(snapshot.venue_ms),
+            "ensure_stage_ms": dict(snapshot.ensure_stage_ms),
             "native_available": snapshot.native_available,
             "cache": dict(snapshot.cache),
             "circuit": dict(snapshot.circuit),
@@ -192,6 +197,22 @@ def _render_prometheus(payload: Dict[str, Any]) -> str:
     gauge("radar_score_ms", payload.get("score_ms"))
     gauge("radar_kline_gets", payload.get("kline_gets"))
     gauge("radar_ensure_rounds", payload.get("ensure_rounds"))
+    venue_ms = payload.get("venue_ms") or {}
+    if isinstance(venue_ms, dict):
+        for vname, ms in list(venue_ms.items())[:16]:
+            gauge(
+                "radar_venue_ms",
+                ms,
+                f'venue="{_prom_label_value(vname)}"',
+            )
+    stage_ms = payload.get("ensure_stage_ms") or {}
+    if isinstance(stage_ms, dict):
+        for sname, ms in list(stage_ms.items())[:16]:
+            gauge(
+                "radar_ensure_stage_ms",
+                ms,
+                f'stage="{_prom_label_value(sname)}"',
+            )
     gauge("radar_native_available", 1 if payload.get("native_available") else 0)
 
     auto = payload.get("auto_trade") or {}

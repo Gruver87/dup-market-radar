@@ -1,5 +1,14 @@
 # Changelog — DUP Market Radar
 
+## 0.2.70
+
+- Ingest speed: Binance OI fan-out parallel (8 workers); whale dual-market cut (spot-only Binance; Bybit whales off — KuCoin primary)
+- KuCoin: remove ingest-time MTF attach (ensure+budget owns candles); reuse `contracts/active` in listings (no duplicate GET)
+- Observability: `venue_ms`, ensure `stage_ms` on snapshot + Prom (`radar_venue_ms`, `radar_ensure_stage_ms`)
+- Fill-check `_top_buckets` prefers `radar_native` (rank parity with final score; Python soft fallback)
+- Package / FastAPI / User-Agent / `__version__` / native pin `0.2.70`
+- Soak / 48h: **not** claimed this pin
+
 ## 0.2.69
 
 - Speed / efficiency wave (P0→P1): phase timers `ingest_ms` / `ensure_ms` + Prometheus gauges (`score_ms`, `kline_gets`, `ensure_rounds`)

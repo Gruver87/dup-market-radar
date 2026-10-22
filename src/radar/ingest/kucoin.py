@@ -12,49 +12,34 @@ logger = logging.getLogger("radar.ingest.kucoin")
 
 
 def fetch_kucoin(http: AllowlistHttp) -> Dict[str, Any]:
+    """KuCoin tickers + listings + whales.
+
+    MTF short-windows are **not** attached here — owned by
+    ``ensure_universe_short_windows`` (budget + reuse TTL). Ingest-time
+    attach previously burned ~40 unbudgeted kline GETs per cex refresh.
+    """
     spot_raw = http.get_json("https://api.kucoin.com/api/v1/market/allTickers")
     tickers = (spot_raw.get("data") or {}).get("ticker") or []
     spot_rows = [_norm_spot(r) for r in tickers if isinstance(r, dict)]
 
     fut_rows: List[Dict[str, Any]] = []
+    contracts_data: List[Any] = []
     try:
         contracts = http.get_json("https://api-futures.kucoin.com/api/v1/contracts/active")
         data = contracts.get("data") or []
         if isinstance(data, list):
-            fut_rows = [_norm_fut(r) for r in data if isinstance(r, dict) and r.get("status") == "Open"]
+            contracts_data = data
+            fut_rows = [
+                _norm_fut(r)
+                for r in data
+                if isinstance(r, dict) and r.get("status") == "Open"
+            ]
     except Exception as exc:  # noqa: BLE001
         logger.warning("kucoin futures tickers soft-fail: %s", redact_exc(exc, max_len=256))
         fut_rows = []
 
-    listings = _listings(http)
+    listings = _listings(http, contracts_data=contracts_data)
     whales = _sample_whales(http, ["BTC-USDT", "ETH-USDT", "SOL-USDT"])
-    try:
-        from radar.ingest.short_window import (
-            attach_kucoin_futures_short_windows,
-            attach_kucoin_short_windows,
-        )
-
-        sw = attach_kucoin_short_windows(http, spot_rows)
-        if sw.get("n_15m") or sw.get("n_1h") or sw.get("n_4h") or sw.get("n_vol_vs"):
-            logger.info(
-                "kucoin spot short windows 15m=%s 1h=%s 4h=%s vol_vs=%s",
-                sw.get("n_15m"),
-                sw.get("n_1h"),
-                sw.get("n_4h"),
-                sw.get("n_vol_vs"),
-            )
-        fw = attach_kucoin_futures_short_windows(http, fut_rows)
-        if fw.get("n_15m") or fw.get("n_1h") or fw.get("n_4h"):
-            logger.info(
-                "kucoin futures short windows 15m=%s 1h=%s 4h=%s",
-                fw.get("n_15m"),
-                fw.get("n_1h"),
-                fw.get("n_4h"),
-            )
-    except Exception as exc:  # noqa: BLE001
-        logger.warning(
-            "kucoin short window soft-fail: %s", redact_exc(exc, max_len=256)
-        )
 
     return {
         "venue": "kucoin",
@@ -129,7 +114,14 @@ def _norm_fut(r: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _listings(http: AllowlistHttp) -> List[Dict[str, Any]]:
+def _listings(
+    http: AllowlistHttp, *, contracts_data: List[Any] | None = None
+) -> List[Dict[str, Any]]:
+    """Spot symbols + futures firstOpenDate.
+
+    Pass ``contracts_data`` from the already-fetched ``contracts/active`` payload
+    to avoid a duplicate GET (0.2.70).
+    """
     out: List[Dict[str, Any]] = []
     try:
         info = http.get_json("https://api.kucoin.com/api/v2/symbols")
@@ -160,30 +152,41 @@ def _listings(http: AllowlistHttp) -> List[Dict[str, Any]]:
                 "listed_at_ms": ts_i,
             }
         )
-    # Futures firstOpenDate as listing candidates
-    try:
-        contracts = http.get_json("https://api-futures.kucoin.com/api/v1/contracts/active")
-        for r in contracts.get("data") or []:
-            if not isinstance(r, dict) or r.get("status") != "Open":
-                continue
-            ts = r.get("firstOpenDate")
-            if ts is None:
-                continue
-            raw = r.get("symbol")
-            out.append(
-                {
-                    "venue": "kucoin",
-                    "market": "futures",
-                    "symbol": normalize_symbol(raw, futures=True),
-                    "symbol_raw": raw,
-                    "base": r.get("baseCurrency"),
-                    "quote": r.get("quoteCurrency"),
-                    "listed_at_ms": int(ts),
-                }
+    # Futures firstOpenDate — reuse ingest contracts payload when available.
+    fut_src = contracts_data
+    if fut_src is None:
+        try:
+            contracts = http.get_json(
+                "https://api-futures.kucoin.com/api/v1/contracts/active"
             )
-    except Exception as exc:  # noqa: BLE001
-        logger.warning(
-            "kucoin futures listings soft-fail: %s", redact_exc(exc, max_len=256)
+            raw_list = contracts.get("data") or []
+            fut_src = raw_list if isinstance(raw_list, list) else []
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "kucoin futures listings soft-fail: %s", redact_exc(exc, max_len=256)
+            )
+            fut_src = []
+    for r in fut_src or []:
+        if not isinstance(r, dict) or r.get("status") != "Open":
+            continue
+        ts = r.get("firstOpenDate")
+        if ts is None:
+            continue
+        try:
+            ts_i = int(ts)
+        except (TypeError, ValueError):
+            continue
+        raw = r.get("symbol")
+        out.append(
+            {
+                "venue": "kucoin",
+                "market": "futures",
+                "symbol": normalize_symbol(raw, futures=True),
+                "symbol_raw": raw,
+                "base": r.get("baseCurrency"),
+                "quote": r.get("quoteCurrency"),
+                "listed_at_ms": ts_i,
+            }
         )
     return out
 

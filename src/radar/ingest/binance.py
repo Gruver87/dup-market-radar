@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Dict, List, Optional, Tuple
 
 from radar.http_client import AllowlistHttp
 from radar.ingest.parse import keep_num, quote_volume_sort_key
 from radar.secrets_redact import redact_exc
 
 logger = logging.getLogger("radar.ingest.binance")
+
+_OI_SAMPLE_N = 24
+_OI_PARALLEL_WORKERS = 8
 
 
 def trading_symbols_from_exchange_info(info: Dict[str, Any]) -> set[str]:
@@ -42,25 +46,15 @@ def fetch_binance(http: AllowlistHttp) -> Dict[str, Any]:
     fut_rows = [_norm_fut(r) for r in futures if isinstance(r, dict)]
     funding = {_p["symbol"]: _p for _p in premium if isinstance(_p, dict) and "symbol" in _p}
 
-    # Soft-cap OI fan-out (was 80 sequential GETs) — top by quote volume only.
-    _OI_SAMPLE_N = 24
+    # Soft-cap OI fan-out — top by quote volume; parallel GETs (was serial ~3–6s).
     fut_sorted = sorted(fut_rows, key=quote_volume_sort_key, reverse=True)[:_OI_SAMPLE_N]
+    oi_by_sym = _fetch_oi_parallel(http, [str(r.get("symbol") or "") for r in fut_sorted])
     for row in fut_sorted:
-        sym = row["symbol"]
-        try:
-            oi = http.get_json(
-                "https://fapi.binance.com/fapi/v1/openInterest",
-                params={"symbol": sym},
-                use_cache=True,
-            )
-            row["open_interest"] = keep_num(oi.get("openInterest"))
-            oi_rows.append({"symbol": sym, "open_interest": row["open_interest"]})
-        except Exception as exc:  # noqa: BLE001
-            row["open_interest"] = None
-            logger.warning(
-                "binance OI soft-fail %s: %s", sym, redact_exc(exc, max_len=128)
-            )
-
+        sym = str(row.get("symbol") or "")
+        oi_s = oi_by_sym.get(sym)
+        row["open_interest"] = oi_s
+        if oi_s is not None:
+            oi_rows.append({"symbol": sym, "open_interest": oi_s})
         prem = funding.get(sym, {})
         row["funding_rate"] = keep_num(prem.get("lastFundingRate"))
         row["mark_price"] = keep_num(prem.get("markPrice"))
@@ -158,42 +152,78 @@ def _extract_listings(info: Dict[str, Any]) -> List[Dict[str, Any]]:
     return out
 
 
+def _fetch_oi_parallel(
+    http: AllowlistHttp, symbols: List[str]
+) -> Dict[str, Optional[str]]:
+    """Fetch openInterest for symbols; soft-fail per symbol. Preserves input coverage."""
+    syms = [s for s in symbols if s]
+    out: Dict[str, Optional[str]] = {s: None for s in syms}
+    if not syms:
+        return out
+
+    def _one(sym: str) -> Tuple[str, Optional[str]]:
+        try:
+            oi = http.get_json(
+                "https://fapi.binance.com/fapi/v1/openInterest",
+                params={"symbol": sym},
+                use_cache=True,
+            )
+            return sym, keep_num(oi.get("openInterest")) if isinstance(oi, dict) else None
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "binance OI soft-fail %s: %s", sym, redact_exc(exc, max_len=128)
+            )
+            return sym, None
+
+    workers = max(1, min(_OI_PARALLEL_WORKERS, len(syms)))
+    if workers == 1:
+        for s in syms:
+            k, v = _one(s)
+            out[k] = v
+        return out
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futs = [pool.submit(_one, s) for s in syms]
+        for fut in as_completed(futs):
+            k, v = fut.result()
+            out[k] = v
+    return out
+
+
 def _sample_whales(http: AllowlistHttp, symbols: List[str]) -> List[Dict[str, Any]]:
+    """Spot aggTrades only — futures path dropped (0.2.70: cut dual-market fan-out).
+
+    Primary whale book remains KuCoin; Binance is a thin supplemental size proxy.
+    """
     prints: List[Dict[str, Any]] = []
-    endpoints = (
-        ("https://api.binance.com/api/v3/aggTrades", "spot"),
-        ("https://fapi.binance.com/fapi/v1/aggTrades", "futures"),
-    )
+    url = "https://api.binance.com/api/v3/aggTrades"
     for sym in symbols:
-        for url, market in endpoints:
-            try:
-                trades = http.get_json(
-                    url,
-                    params={"symbol": sym, "limit": 200},
-                    use_cache=True,
-                )
-            except Exception as exc:  # noqa: BLE001
-                logger.warning(
-                    "binance whale soft-fail %s %s: %s",
-                    market,
-                    sym,
-                    redact_exc(exc, max_len=256),
-                )
+        try:
+            trades = http.get_json(
+                url,
+                params={"symbol": sym, "limit": 200},
+                use_cache=True,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "binance whale soft-fail spot %s: %s",
+                sym,
+                redact_exc(exc, max_len=256),
+            )
+            continue
+        for t in trades or []:
+            price = keep_num(t.get("p"))
+            qty = keep_num(t.get("q"))
+            if price is None or qty is None:
                 continue
-            for t in trades or []:
-                price = keep_num(t.get("p"))
-                qty = keep_num(t.get("q"))
-                if price is None or qty is None:
-                    continue
-                prints.append(
-                    {
-                        "venue": "binance",
-                        "symbol": sym,
-                        "price": price,
-                        "qty": qty,
-                        "side": "sell" if t.get("m") else "buy",
-                        "ts_ms": t.get("T"),
-                        "market": market,
-                    }
-                )
+            prints.append(
+                {
+                    "venue": "binance",
+                    "symbol": sym,
+                    "price": price,
+                    "qty": qty,
+                    "side": "sell" if t.get("m") else "buy",
+                    "ts_ms": t.get("T"),
+                    "market": "spot",
+                }
+            )
     return prints

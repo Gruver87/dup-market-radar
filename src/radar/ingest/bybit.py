@@ -32,14 +32,13 @@ def fetch_bybit(http: AllowlistHttp) -> Dict[str, Any]:
     )
     listings = _listings((instruments.get("result") or {}).get("list") or [])
 
-    whales = _sample_whales(http, ["BTCUSDT", "ETHUSDT", "SOLUSDT"])
-
+    # Whales: KuCoin-primary only (0.2.70) — skip Bybit recent-trade fan-out.
     return {
         "venue": "bybit",
         "spot": spot_rows,
         "futures": fut_rows,
         "listings": listings,
-        "whales": whales,
+        "whales": [],
     }
 
 

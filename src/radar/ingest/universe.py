@@ -63,45 +63,50 @@ def build_universe(
     memes_cfg = (cfg.get("sectors") or {}).get("memes") or {}
     stables_cfg = (cfg.get("sectors") or {}).get("stables") or {}
 
-    def run_venue(name: str) -> tuple[str, Any]:
+    venue_ms: Dict[str, int] = {}
+
+    def run_venue(name: str) -> tuple[str, Any, int]:
         if not breaker.allow(name):
             skipped_circuit.append(name)
             raise RuntimeError(f"circuit_open:{name}")
+        t0 = int(time.time() * 1000)
         try:
             pack = fetchers[name](http)
             breaker.record_ok(name)
-            return name, pack
+            return name, pack, int(time.time() * 1000) - t0
         except Exception as exc:
             breaker.record_fail(name, redact_exc(exc, max_len=120))
             raise
 
-    def run_memes() -> tuple[str, Any]:
+    def run_memes() -> tuple[str, Any, int]:
         name = "dexscreener"
         if not breaker.allow(name):
             skipped_circuit.append(name)
             raise RuntimeError(f"circuit_open:{name}")
+        t0 = int(time.time() * 1000)
         try:
             pack = fetch_meme_pairs(http, list(memes_cfg.get("chains") or []))
             breaker.record_ok(name)
-            return name, pack
+            return name, pack, int(time.time() * 1000) - t0
         except Exception as exc:
             breaker.record_fail(name, redact_exc(exc, max_len=120))
             raise
 
-    def run_stables() -> tuple[str, Any]:
+    def run_stables() -> tuple[str, Any, int]:
         name = "coingecko"
         if not breaker.allow(name):
             skipped_circuit.append(name)
             raise RuntimeError(f"circuit_open:{name}")
+        t0 = int(time.time() * 1000)
         try:
             pack = fetch_stable_prices(http, list(stables_cfg.get("symbols") or []))
             breaker.record_ok(name)
-            return name, pack
+            return name, pack, int(time.time() * 1000) - t0
         except Exception as exc:
             breaker.record_fail(name, redact_exc(exc, max_len=120))
             raise
 
-    work: List[Callable[[], tuple[str, Any]]] = []
+    work: List[Callable[[], tuple[str, Any, int]]] = []
     fetch_cex = "cex" in due
     fetch_memes = "memes" in due
     fetch_stables = "stables" in due
@@ -148,7 +153,7 @@ def build_universe(
             futs = [pool.submit(fn) for fn in work]
             for fut in as_completed(futs):
                 try:
-                    name, pack = fut.result()
+                    name, pack, elapsed = fut.result()
                 except Exception as exc:  # noqa: BLE001
                     raw = str(exc)
                     safe = redact_exc(exc, max_len=256)
@@ -159,6 +164,7 @@ def build_universe(
                     errors.append(msg)
                     logger.warning(msg)
                     continue
+                venue_ms[str(name)] = int(elapsed)
                 if name == "dexscreener":
                     memes = enrich_list(pack if isinstance(pack, list) else [])
                     memes_fresh = True
@@ -229,6 +235,7 @@ def build_universe(
         "ingest_parallel": True,
         "http_shared": True,
         "http_stats": http_stats,
+        "venue_ms": venue_ms,
         "circuit": breaker.status(),
         "circuit_skipped": skipped_circuit[:32],
         "poll_skipped": skipped_poll[:8],

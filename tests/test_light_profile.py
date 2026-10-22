@@ -21,13 +21,18 @@ def test_light_profile_overlay(monkeypatch):
     monkeypatch.setenv("RADAR_PROFILE", "light")
     monkeypatch.delenv("RADAR_CONFIG", raising=False)
     monkeypatch.delenv("RADAR_CONFIG_PATH", raising=False)
+    # Isolate from CI python-lab env (RADAR_NATIVE_*=0) — overlay must not
+    # depend on host prefer flags; assert default.yaml native after merge.
+    monkeypatch.delenv("RADAR_NATIVE_PREFER", raising=False)
+    monkeypatch.delenv("RADAR_NATIVE_FAIL_CLOSED", raising=False)
     cfg = load_config()
     assert cfg.get("_radar_profile") == "light"
     assert cfg["venues"] == ["kucoin"]
     assert int((cfg.get("ingest") or {}).get("max_kline_gets") or 0) == 72
     assert int((cfg.get("sectors") or {}).get("memes", {}).get("poll_sec") or 0) == 300
-    # Full default keys still present after merge.
+    # Full default keys still present after merge (when env not forcing prefer off).
     assert (cfg.get("native") or {}).get("prefer") is True
+    assert (cfg.get("native") or {}).get("fail_closed") is True
     validate_config(cfg)
 
 

@@ -8,6 +8,7 @@ from radar.config import load_config
 from radar.http_client import DEFAULT_MAX_RESPONSE_BYTES
 from radar.http_pool import acquire_http, stats_delta
 from radar.ingest.kline_budget import budget_status, init_kline_budget
+from radar.ingest.kline_skip import init_kline_skip
 from radar.ingest.parse import abs_change_bps_sort_key, quote_volume_sort_key
 from radar.ingest.sector_poll import group_poll_sec, sector_poll_sec
 from radar.ingest.short_window import (
@@ -202,6 +203,99 @@ def _cheap_cex_meme_syms(universe: Dict[str, Any], cfg: Dict[str, Any], *, n: in
     return {str(r.get("symbol") or "") for r in hits[:n] if r.get("symbol")}
 
 
+_MTF_PATCH_KEYS = (
+    "change_bps_15m",
+    "change_bps_1h",
+    "change_bps_4h",
+    "vol_vs_median_bps",
+    "change_bps_5m",
+)
+
+
+def _cand_missing_15m(cand: Dict[str, Any]) -> bool:
+    m = cand.get("metrics") if isinstance(cand.get("metrics"), dict) else {}
+    return m.get("change_bps_15m") is None and cand.get("change_bps_15m") is None
+
+
+def _display_missing_mtf_symbols(
+    sectors: Dict[str, Any],
+) -> tuple[set[str], set[str]]:
+    """Symbols on primary scored boards still lacking 15m MTF.
+
+    Only ``spot_alts`` + ``futures`` (+ CEX memes) — listings/whales skipped so
+    display fill cannot dominate scan wall-clock.
+    """
+    spot: set[str] = set()
+    fut: set[str] = set()
+    for cand in sectors.get("spot_alts") or []:
+        if not isinstance(cand, dict) or not _cand_missing_15m(cand):
+            continue
+        sym = str(cand.get("symbol") or "")
+        if sym:
+            spot.add(sym)
+    for cand in sectors.get("memes") or []:
+        if not isinstance(cand, dict) or not _cand_missing_15m(cand):
+            continue
+        venue = str(cand.get("venue") or "").lower()
+        src = str((cand.get("metrics") or {}).get("source") or "").lower()
+        if src == "dex" or venue == "dexscreener":
+            continue
+        sym = str(cand.get("symbol") or "")
+        if sym:
+            spot.add(sym)
+    for cand in sectors.get("futures") or []:
+        if not isinstance(cand, dict) or not _cand_missing_15m(cand):
+            continue
+        sym = str(cand.get("symbol") or "")
+        if sym:
+            fut.add(sym)
+    return spot, fut
+
+
+def _patch_sectors_mtf_from_universe(
+    sectors: Dict[str, Any], universe: Dict[str, Any]
+) -> int:
+    """Copy attached MTF fields from live books onto scored candidates."""
+    spot_by = {
+        str(r.get("symbol") or ""): r
+        for r in (universe.get("spot") or [])
+        if isinstance(r, dict) and r.get("symbol")
+    }
+    fut_by = {
+        str(r.get("symbol") or ""): r
+        for r in (universe.get("futures") or [])
+        if isinstance(r, dict) and r.get("symbol")
+    }
+    patched = 0
+    for rows in sectors.values():
+        if not isinstance(rows, list):
+            continue
+        for cand in rows:
+            if not isinstance(cand, dict):
+                continue
+            sym = str(cand.get("symbol") or "")
+            if not sym:
+                continue
+            market = str(cand.get("market") or "spot").lower()
+            src = fut_by.get(sym) if market == "futures" else spot_by.get(sym)
+            if src is None:
+                src = spot_by.get(sym) or fut_by.get(sym)
+            if src is None:
+                continue
+            metrics = cand.get("metrics")
+            if not isinstance(metrics, dict):
+                metrics = {}
+                cand["metrics"] = metrics
+            changed = False
+            for k in _MTF_PATCH_KEYS:
+                if metrics.get(k) is None and src.get(k) is not None:
+                    metrics[k] = src[k]
+                    changed = True
+            if changed:
+                patched += 1
+    return patched
+
+
 def run_scan(
     cfg: Dict[str, Any] | None = None, *, force: bool = False
 ) -> Dict[str, Any]:
@@ -238,6 +332,7 @@ def run_scan(
     max_kline_n = int(max_kline) if max_kline is not None else 96
     reuse_ttl = int(ingest.get("mtf_reuse_ttl_ms") or 0)
     init_kline_budget(http, max_kline_n)
+    init_kline_skip(http)
     # Round 1 cheap prelim → ensure; round 2 only if scored top-N still missing.
     try:
         from radar.rank.topn import rank_top
@@ -489,6 +584,40 @@ def run_scan(
     t_score = int(time.time() * 1000)
     try:
         sectors, backend = score_sectors(universe, cfg, top_n)
+        # Display honesty: scored tops may diverge from frozen gate — fill MTF
+        # for missing display rows from remaining kline budget, then patch metrics.
+        kb_left = budget_status(http).get("kline_budget_left")
+        if kb_left is None or int(kb_left) > 0:
+            miss_spot, miss_fut = _display_missing_mtf_symbols(sectors)
+            if miss_spot or miss_fut:
+                t_disp = int(time.time() * 1000)
+                try:
+                    disp = ensure_universe_short_windows(
+                        http,
+                        universe,
+                        spot_symbols=miss_spot or set(),
+                        fut_symbols=miss_fut or set(),
+                        reuse_ttl_ms=reuse_ttl,
+                    )
+                    acc = universe.get("short_window_ensure")
+                    if isinstance(acc, dict):
+                        acc["display_ensure_ms"] = int(time.time() * 1000) - t_disp
+                        acc["display_spot_targets"] = len(miss_spot)
+                        acc["display_fut_targets"] = len(miss_fut)
+                        acc["display_patched"] = _patch_sectors_mtf_from_universe(
+                            sectors, universe
+                        )
+                        acc["kline_budget"] = budget_status(http)
+                        sm = acc.setdefault("stage_ms", {})
+                        for k, v in (disp.get("stage_ms") or {}).items():
+                            sm[k] = int(sm.get(k) or 0) + int(v or 0)
+                    else:
+                        _patch_sectors_mtf_from_universe(sectors, universe)
+                except Exception as disp_exc:  # noqa: BLE001
+                    logger.warning(
+                        "display MTF ensure soft-fail: %s",
+                        redact_exc(disp_exc, max_len=128),
+                    )
         score_ms = int(time.time() * 1000) - t_score
         # Bound public error list — never dump unbounded venue noise
         errors = [

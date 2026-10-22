@@ -1,8 +1,15 @@
 # Changelog ? DUP Market Radar
 
+## 0.2.76
+
+- Display MTF: post-score ensure for spot_alts/futures/CEX-memes still missing 15m, then patch metrics
+- Kline soft-denylist: Binance spot/fut symbols that 400 are skipped for the rest of the scan
+- Package / FastAPI / User-Agent / `__version__` / native pin `0.2.76`
+- Soak / 48h: **not** claimed this pin
+
 ## 0.2.75
 
-- DexScreener: batch token expand via comma-separated `/latest/dex/tokens/{a,b,...}` (?30) ? was N parallel GETs
+- DexScreener: batch token expand via comma-separated `/latest/dex/tokens/{a,b,...}` (up to 30) ? was N parallel GETs
 - Package / FastAPI / User-Agent / `__version__` / native pin `0.2.75`
 - Soak / 48h: **not** claimed this pin
 
@@ -150,7 +157,7 @@
 ## 0.2.57
 
 - Speed: HTTP GETs no longer hold client lock during network I/O; parallel kline fan-out (8 workers)
-- Ensure: smaller prelim (2×top_n) + adaptive 2nd round only if final top-N fill <85%
+- Ensure: smaller prelim (2?top_n) + adaptive 2nd round only if final top-N fill <85%
 - Smoke reports `elapsed_ok` vs 25s budget (evidence; does not fail lab)
 - Dashboard: MTF column (15m/1h/4h, listing age, cross-venue live)
 - Telegram alerts: surface MTF / listing flags in reasons
@@ -222,7 +229,7 @@
 
 ## 0.2.47
 
-- Analysis: same 15min GET lookback ~5h ? `change_bps_4h` (16×15m); no extra fan-out
+- Analysis: same 15min GET lookback ~5h ? `change_bps_4h` (16?15m); no extra fan-out
 - spot_alts: 24h/4h/1h/15m blend; `mtf_diverge_4h`; setup still short-window biased
 - Rust `score_spot_alts` parity for 4h
 - Package / FastAPI / User-Agent / `__version__` `0.2.47`

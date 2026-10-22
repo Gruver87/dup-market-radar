@@ -1,6 +1,6 @@
 # Evidence matrix — DUP Market Radar
 
-**Pin:** 0.2.75 · Companion product — **not** L1 mesh evidence.
+**Pin:** 0.2.76 · Companion product — **not** L1 mesh evidence.
 
 Claims require on-disk packs. Missing pack ⇒ **⏳** / do not invent PASS.
 
@@ -22,6 +22,7 @@ Claims require on-disk packs. Missing pack ⇒ **⏳** / do not invent PASS.
 | Venue bootstrap parallel (0.2.73) | Binance 4-way + KuCoin 3-way bootstrap; `venue_ms` drop | live smoke vs prior pack |
 | Whales aggregate-first (0.2.74) | bucket sum ≥ `min_notional`; KuCoin `symbols_watch` | live smoke `counts.whales` > 0 |
 | Dex batch token expand (0.2.75) | `/tokens/{a,b,...}` one GET for boosted cap | live `venue_ms.dexscreener` drop |
+| Display MTF patch (0.2.76) | post-score ensure + patch metrics; kline 400 denylist | live spot_mtf coverage |
 | Ensure GET budget | `ingest.max_kline_gets` + `http_stats.kline_gets` | incomplete fill still fail-closed |
 
 ## Packaging

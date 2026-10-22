@@ -16,6 +16,11 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
 
 from radar.http_client import AllowlistHttp
 from radar.ingest.kline_budget import budget_consume, budget_status
+from radar.ingest.kline_skip import (
+    is_client_refuse_exc,
+    kline_skip_add,
+    kline_skip_has,
+)
 from radar.ingest.parse import abs_change_bps_sort_key, quote_volume_sort_key
 from radar.money import mul_div, price_i, quote_i
 from radar.secrets_redact import redact_exc
@@ -604,6 +609,8 @@ def attach_binance_spot_short_windows(
         sym = str(row.get("symbol") or "")
         if not sym:
             return row, None
+        if kline_skip_has(http, "binance_spot", sym):
+            return row, None
         if not budget_consume(http):
             return row, None
         try:
@@ -619,6 +626,8 @@ def attach_binance_spot_short_windows(
                 use_cache=True,
             )
         except Exception as exc:  # noqa: BLE001
+            if is_client_refuse_exc(exc):
+                kline_skip_add(http, "binance_spot", sym)
             logger.warning(
                 "binance 15m kline soft-fail %s: %s",
                 sym[:32],
@@ -712,6 +721,8 @@ def attach_binance_futures_short_windows(
         sym = str(row.get("symbol") or "")
         if not sym:
             return row, None
+        if kline_skip_has(http, "binance_fut", sym):
+            return row, None
         if not budget_consume(http):
             return row, None
         try:
@@ -727,6 +738,8 @@ def attach_binance_futures_short_windows(
                 use_cache=True,
             )
         except Exception as exc:  # noqa: BLE001
+            if is_client_refuse_exc(exc):
+                kline_skip_add(http, "binance_fut", sym)
             logger.warning(
                 "binance fut 15m kline soft-fail %s: %s",
                 sym[:32],

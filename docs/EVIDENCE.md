@@ -19,8 +19,10 @@ A live pack was produced on 2026-10-21 (smoke_live_*Z.json, ok=true, elapsed_ok,
 ## Pre-soak gate (mandatory before 48h)
 
 ```powershell
-.\scripts\pre_soak_gate.ps1
+.\scripts\verify.ps1 -Profile PreSoak
 # or skip rebuild if wheel already in .venv:
+.\scripts\verify.ps1 -Profile PreSoak -SkipBuild
+# wrapper:
 .\scripts\pre_soak_gate.ps1 -SkipBuild
 ```
 

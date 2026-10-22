@@ -5,6 +5,7 @@
 - Pre-soak gate: `scripts/pre_soak_gate.ps1` (native + pytest + live smoke evidence + short soak)
 - Soak lab: prefer/fail_closed native when `radar_native` importable; soft only when missing
 - Native crate / pyproject version aligned to app pin `0.2.65`
+- Unified verify: `scripts/verify.ps1` profiles Quick / Lab / PreSoak / Soak48h / Native / List
 
 ## 0.2.64
 

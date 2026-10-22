@@ -52,12 +52,17 @@ docker compose up --build
 - Secrets via env / `.env` — never baked into the image.  
 - Lab-python native overrides — see compose header comments.
 
-## Pre-soak then 48h
+## Verify (единый вход)
 
 ```powershell
-.\scripts\pre_soak_gate.ps1          # native + pytest + live smoke + short soak
-.\scripts\radar_soak_48h.ps1         # only after gate PASS
+.\scripts\verify.ps1 -Profile List
+.\scripts\verify.ps1 -Profile Quick      # pytest + smoke offline
+.\scripts\verify.ps1 -Profile Lab        # + live evidence (default)
+.\scripts\verify.ps1 -Profile PreSoak    # + native + short soak
+.\scripts\verify.ps1 -Profile Soak48h    # PreSoak then 48h
 ```
+
+Wrappers (то же самое): `pre_soak_gate.ps1`, `radar_soak_48h.ps1`.
 
 ## No soak claim
 

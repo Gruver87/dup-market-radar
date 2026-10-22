@@ -1,5 +1,7 @@
 # Evidence packs
 
+Index: [`README.md`](README.md) · ops gates: [`OPS.md`](OPS.md).
+
 Live smoke evidence is **optional** and operator-produced:
 
 ```powershell

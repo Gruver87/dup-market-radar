@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 import json as _json
@@ -627,7 +627,7 @@ def _openapi_enabled() -> bool:
 _OPENAPI_ON = _openapi_enabled()
 app = FastAPI(
     title="DUP Market Radar",
-    version="0.2.65",
+    version="0.2.66",
     lifespan=_lifespan,
     docs_url="/docs" if _OPENAPI_ON else None,
     redoc_url="/redoc" if _OPENAPI_ON else None,

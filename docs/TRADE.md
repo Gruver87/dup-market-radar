@@ -5,9 +5,11 @@
 ## Manual KuCoin spot
 
 1. Keys in `.env`.
-2. Dashboard **Купить** / **Продать** → preview → confirm.
+2. Dashboard **Watchlist** page (`#watchlist`) — **Купить** / **Продать** → preview → confirm.
 3. Caps: `max_order_quote_usdt_micros`, symbol meta (min funds / size), sell clamp to available balance.
 4. Futures / DEX rows: UI `canTradeRow` hides buttons; product policy is **spot only**.
+
+UI layout: [`DASHBOARD.md`](DASHBOARD.md).
 
 ## Auto-trade
 

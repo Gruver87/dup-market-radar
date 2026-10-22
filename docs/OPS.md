@@ -7,7 +7,7 @@
 .\scripts\run_radar.ps1
 ```
 
-Default UI: `http://127.0.0.1:8787/`.
+Default UI: `http://127.0.0.1:8787/` — pages `#watchlist` / `#markets` / `#ops` / `#help` (see [`DASHBOARD.md`](DASHBOARD.md)).
 
 ## Profiles
 
@@ -26,7 +26,7 @@ CI job name: `test (python-lab-only)`.
 - `/api/health` — scan / native / circuit honesty  
 - `/api/metrics` — JSON; Prometheus text at `/api/metrics/prometheus`
 
-Dashboard status line surfaces `СБОЙ ДАННЫХ`, `mtf=OK|FAIL`, and ensure fill ratios when present.
+Dashboard Watchlist status line surfaces `СБОЙ ДАННЫХ`, `mtf=OK|FAIL`, and ensure fill ratios when present.
 
 ## Data dir
 
@@ -52,7 +52,7 @@ docker compose up --build
 - Secrets via env / `.env` — never baked into the image.  
 - Lab-python native overrides — see compose header comments.
 
-## Verify (единый вход)
+## Verify (unified entry)
 
 ```powershell
 .\scripts\verify.ps1 -Profile List
@@ -62,7 +62,12 @@ docker compose up --build
 .\scripts\verify.ps1 -Profile Soak48h    # PreSoak then 48h
 ```
 
-Wrappers (то же самое): `pre_soak_gate.ps1`, `radar_soak_48h.ps1`.
+Wrappers (same gates): `pre_soak_gate.ps1`, `radar_soak_48h.ps1`.
+
+| Profile | Starts 48h? | Claim soak? |
+|---------|-------------|-------------|
+| Quick / Lab / PreSoak | No | No |
+| Soak48h | Yes (after PreSoak) | Only if pack `approx_48h_claim_ok=true` and `hard_fails=0` |
 
 ## No soak claim
 
@@ -75,6 +80,14 @@ docker compose -f docker-compose.native.yml up --build
 ```
 
 Uses `Dockerfile.native` (maturin wheel, `RADAR_NATIVE_PREFER=1`). Lab compose remains python-only.
+
+## Ops HTTP helpers
+
+| Path | Notes |
+|------|-------|
+| `GET /api/ops/worldtime` | Fixed offsets; Minsk = UTC+3 |
+| `GET /api/ops/fx` | ECB (Frankfurter) + NBRB for BYN/RUB |
+| `GET /api/ops/bubbles` | Top-100 ~6m payload for Markets table |
 
 ## Evidence
 

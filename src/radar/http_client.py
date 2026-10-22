@@ -1,4 +1,4 @@
-"""Allowlisted HTTPS client — TLS verify on, int ms timeouts, soft retry on 429/5xx."""
+﻿"""Allowlisted HTTPS client — TLS verify on, int ms timeouts, soft retry on 429/5xx."""
 
 from __future__ import annotations
 
@@ -98,7 +98,7 @@ class AllowlistHttp:
             timeout=httpx.Timeout(read_s, connect=connect_s),
             verify=True,
             follow_redirects=False,
-            headers={"User-Agent": "DUP-Market-Radar/0.2.65"},
+            headers={"User-Agent": "DUP-Market-Radar/0.2.66"},
         )
         self.errors: list[str] = []
         self.stats: Dict[str, int] = {

@@ -1,5 +1,13 @@
 # Changelog — DUP Market Radar
 
+## 0.2.66
+
+- Dashboard: crypto bubbles replaced with ranked column table (Markets ~6m)
+- Dashboard: multi-page nav like DUP Console (`#watchlist` / `#markets` / `#ops` / `#help`) — no single-page scroll trap
+- Dashboard: sector tabs no longer call `scrollIntoView` (stopped jump-to-bottom on click)
+- Docs: `docs/README.md` index, `docs/DASHBOARD.md`, refreshed README / ARCHITECTURE / OPS (encoding + verify/soak honesty)
+- Package / FastAPI / User-Agent / `__version__` / native pin `0.2.66`
+
 ## 0.2.65
 
 - Ops: Minsk (UTC+3) on world clock; BYN (+ RUB) FX via NBRB official (ECB frankfurter has neither)

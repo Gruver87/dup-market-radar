@@ -1,4 +1,4 @@
-"""KuCoin spot symbol meta — minSize / minFunds gates (integer money)."""
+﻿"""KuCoin spot symbol meta — minSize / minFunds gates (integer money)."""
 
 from __future__ import annotations
 
@@ -157,7 +157,7 @@ class SymbolMetaCache:
             ) as client:
                 resp = client.get(
                     url,
-                    headers={"User-Agent": "DUP-Market-Radar/0.2.65-meta"},
+                    headers={"User-Agent": "DUP-Market-Radar/0.2.66-meta"},
                 )
                 resp.raise_for_status()
                 payload = read_capped_json(

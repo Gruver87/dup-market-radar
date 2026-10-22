@@ -4,19 +4,24 @@
 
 ```text
 Dashboard / Telegram / WebSocket (/ws) / Webhook
-        ù
+        ?
    FastAPI (radar.api.app)
-        ù
-   Pipeline (ingest > MTF ensure > score > snapshot)
-        ù
-   -----+----ù
- Python     Rust radar_native (PyO3)  ù score hot path when built
+        ?
+   Pipeline (ingest ? MTF ensure ? score ? snapshot)
+        ?
+   -----+-----
+ Python     Rust radar_native (PyO3)  ó score hot path when built
  ingest     score_universe_json
  trade      parity with Python scorers (tests)
  paper      dry-run P&L ledger (USDT micros)
+ ops        worldtime / FX / markets (~6m) payload
 ```
 
-Transport (HTTP/TG) must not reach raw Rocks-style state: this product is **not** the L1. Persistence is JSON under `data/` (positions, watches, oid ledger) with integrity checks where applicable.
+Transport (HTTP/TG) must not reach raw L1-style state: this product is **not** the L1. Persistence is JSON under `data/` (positions, watches, oid ledger) with integrity checks where applicable.
+
+## Dashboard views
+
+Hash-routed sections (`#watchlist` / `#markets` / `#ops` / `#help`). Sector filters apply only to Watchlist. Markets page consumes `/api/ops/bubbles` as a ranked table. See [`DASHBOARD.md`](DASHBOARD.md).
 
 ## Snapshot contract (schema_version 2)
 
@@ -31,7 +36,7 @@ Notable fields:
 | `sectors` | Top-N rows per sector |
 | `errors` | Bounded, redacted strings |
 
-Empty / hard-fail path: `empty_snapshot(...)` > `ok=false`, `mtf_ensure_ok=false`.
+Empty / hard-fail path: `empty_snapshot(...)` ? `ok=false`, `mtf_ensure_ok=false`.
 
 ## MTF ensure
 
@@ -46,17 +51,18 @@ Empty / hard-fail path: `empty_snapshot(...)` > `ok=false`, `mtf_ensure_ok=false
 
 - Crate: `native/radar_native` (Cargo / maturin).
 - Config default: `native.prefer` + `fail_closed` true in `config/default.yaml`.
-- **Docker / GitHub CI:** `RADAR_NATIVE_*=0` > documented **python-lab** profile. Do not claim ùprod nativeù from compose alone.
+- **Docker / GitHub CI:** `RADAR_NATIVE_*=0` ? documented **python-lab** profile. Do not claim ìprod nativeî from compose alone.
 
 ## Money
 
 See `src/radar/money.py`. All monetary and score paths use integers (price 1e8, quote micros 1e6, bps, score centi).
 
-- Futures tops skip commodity/FX/index bases (is_non_crypto_futures_symbol).
+Futures tops skip commodity/FX/index bases (`is_non_crypto_futures_symbol`).
 
 ## Related docs
 
-- [`OPS.md`](OPS.md) ù run profiles  
-- [`TRADE.md`](TRADE.md) ù auto gates  
-- [`SECURITY.md`](SECURITY.md) ù exposure  
-- [`DISCLAIMER.md`](DISCLAIMER.md) ù liability
+- [`OPS.md`](OPS.md) ó run profiles  
+- [`DASHBOARD.md`](DASHBOARD.md) ó UI  
+- [`TRADE.md`](TRADE.md) ó auto gates  
+- [`SECURITY.md`](SECURITY.md) ó exposure  
+- [`DISCLAIMER.md`](DISCLAIMER.md) ó liability  

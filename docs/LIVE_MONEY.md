@@ -10,8 +10,8 @@ Default config is **lab-safe**: `auto_trade.dry_run: true`, auto **OFF**.
 2. Keys in `.env` (Spot Trade + IP whitelist); never commit `.env`
 3. Set `RADAR_API_KEY` and keep `RADAR_REQUIRE_API_KEY=1`
 4. Prefer native compose or local prefer+fail_closed — not lab-python Docker for live capital
-5. Confirm snapshot `ok=true` and `mtf_ensure_ok=true` on dashboard
-6. Run `python scripts/radar_smoke_lab.py --live --evidence` and keep the pack
+5. Confirm snapshot `ok=true` and `mtf_ensure_ok=true` on dashboard **Watchlist** (`#watchlist`)
+6. Prefer `.\scripts\verify.ps1 -Profile PreSoak` (or at least `--live --evidence`) and keep the pack
 7. In `config/default.yaml` (or overlay): set `auto_trade.dry_run: false`
 8. Enable auto only after a dry_run cycle with expected actions in the log
 9. Keep position size caps low (`quote_usdt_micros_per_buy`)

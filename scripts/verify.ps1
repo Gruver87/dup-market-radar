@@ -3,7 +3,7 @@
 # Profiles:
 #   Quick    - gate + pytest + smoke offline (no network, no native rebuild)
 #   Lab      - Quick + live smoke --evidence (needs network)
-#   Full     - gate + ruff + pytest + offline + warm + live (NO soak) — operator “check all”
+#   Full     - gate + ruff + pytest + offline + warm + live (NO soak) - operator "check all"
 #   PreSoak  - native build + Lab + short soak (before 48h)
 #   Soak48h  - PreSoak (unless -SkipPreSoak) + 48h wall-clock soak
 #   Native   - build_native.ps1 only
@@ -97,7 +97,7 @@ function Invoke-SmokeOffline {
 function Invoke-SmokeLive {
     Step "smoke live --evidence"
     if (($env:RADAR_VERIFY_SKIP_LIVE -or "") -in @("1", "true", "True", "yes", "YES")) {
-        Write-Host "RADAR_VERIFY_SKIP_LIVE set — skip live smoke"
+        Write-Host "RADAR_VERIFY_SKIP_LIVE set - skip live smoke"
         return
     }
     $py = Get-RadarPython
@@ -111,7 +111,7 @@ function Invoke-Ruff {
     $py = Get-RadarPython
     & $py -c "import ruff" 2>$null
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "ruff missing — pip install ruff"
+        Write-Host "ruff missing - pip install ruff"
         & $py -m pip install -q ruff
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     }
@@ -120,9 +120,9 @@ function Invoke-Ruff {
 }
 
 function Invoke-WarmSmoke {
-    Step "warm smoke (stale-OK + MTF cache; ~1–2 min)"
+    Step "warm smoke (stale-OK + MTF cache; ~1-2 min)"
     if (($env:RADAR_VERIFY_SKIP_WARM -or "") -in @("1", "true", "True", "yes", "YES")) {
-        Write-Host "RADAR_VERIFY_SKIP_WARM set — skip warm smoke"
+        Write-Host "RADAR_VERIFY_SKIP_WARM set - skip warm smoke"
         return
     }
     $py = Get-RadarPython
@@ -214,7 +214,7 @@ switch ($Profile) {
         exit 0
     }
     "Full" {
-        # Operator “check everything” before soak — no short/48h soak here.
+        # Operator "check everything" before soak - no short/48h soak here.
         Invoke-NativeBuild -Skip:$SkipBuild
         Invoke-RadarGate
         Invoke-Ruff

@@ -1,10 +1,10 @@
-# DUP Market Radar — full local check (NO soak / NO 48h).
+# DUP Market Radar - full local check (NO soak / NO 48h).
 #
-# Runs: radar_gate → ruff → pytest → smoke offline → warm smoke → live smoke --evidence
+# Runs: radar_gate -> ruff -> pytest -> smoke offline -> warm smoke -> live smoke --evidence
 #
 # Usage (from repo root):
 #   .\scripts\test_all.ps1
-#   .\scripts\test_all.ps1 -SkipWarm          # skip ~1–2 min warm TTL waits
+#   .\scripts\test_all.ps1 -SkipWarm          # skip ~1-2 min warm TTL waits
 #   .\scripts\test_all.ps1 -SkipLive          # offline only (+ gate/pytest)
 #   .\scripts\test_all.ps1 -SkipBuild         # do not rebuild native (import check only)
 #
@@ -29,13 +29,13 @@ if (-not (Test-Path $verify)) {
     Write-Error "missing scripts\verify.ps1"
 }
 
-$extra = @()
-if ($SkipBuild) { $extra += "-SkipBuild" }
-
-# Full profile lives in verify.ps1; pass through skip flags via env for warm/live.
 if ($SkipWarm) { $env:RADAR_VERIFY_SKIP_WARM = "1" } else { Remove-Item Env:RADAR_VERIFY_SKIP_WARM -ErrorAction SilentlyContinue }
 if ($SkipLive) { $env:RADAR_VERIFY_SKIP_LIVE = "1" } else { Remove-Item Env:RADAR_VERIFY_SKIP_LIVE -ErrorAction SilentlyContinue }
 
-Write-Host "DUP Market Radar test_all → verify -Profile Full"
-& $verify -Profile Full @extra
+Write-Host "DUP Market Radar test_all -> verify -Profile Full"
+if ($SkipBuild) {
+    & $verify -Profile Full -SkipBuild
+} else {
+    & $verify -Profile Full
+}
 exit $LASTEXITCODE

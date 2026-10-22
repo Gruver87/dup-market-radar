@@ -1,6 +1,6 @@
 # Architecture
 
-**Pin:** 0.2.84 | Index: [`README.md`](README.md)
+**Pin:** 0.2.85 | Index: [`README.md`](README.md)
 
 ## Layers
 
@@ -74,7 +74,7 @@ HTTP client: TLS verify on; allowlist hosts; `httpx.Limits(max_connections=32, m
 2. Fill-gate = display-sized **top_n** (24h prelim score). Ensure set = wider **`ensure_rank_n = ensure_cap`** (0.2.79) plus cheap vol+|chg| expand; gate freeze ? no mid-ensure re-rank (0.2.72).
 3. Spot and futures waterfalls run **in parallel** (shared kline budget). Per-symbol fan-out: `KLINE_PARALLEL_WORKERS=12` (0.2.80). Venue order KuCoin -> Binance -> Bybit -> MEXC; soft-denylist Binance 400s (0.2.76).
 4. Early-exit when spot, futures, listings, and CEX-meme **top_n** fill >= **0.85** -> `mtf_ensure_ok=true`.
-5. Score sectors. **Patch-first** from universe onto scored boards. If spot/futures board 15m fill already >= **0.85** (same bar as `mtf_ensure_ok`), skip residual display network (`display_skipped_coverage`, 0.2.84). Otherwise residual miss ensure (spot_alts+futures, cap 8/side) then patch again ? wall time added to `ensure_ms` (0.2.77 / 0.2.78 / 0.2.80). Primary `short_window_ensure` acc is restored after display (no clobber of fill ratios).
+5. Score sectors. **Patch-first** from universe onto scored boards. If spot/futures board 15m fill already >= **0.85** (same bar as `mtf_ensure_ok`), skip residual display network (`display_skipped_coverage`, 0.2.85). Otherwise residual miss ensure (spot_alts+futures, cap 8/side) then patch again ? wall time added to `ensure_ms` (0.2.77 / 0.2.78 / 0.2.80). Primary `short_window_ensure` acc is restored after display (no clobber of fill ratios).
 
 **Not** full-universe candles. DEX memes use Dex windows (h24/h1/m5); CEX keyword memes share the spot candle ensure path. Budget: `ingest.max_kline_gets` (default 112).
 

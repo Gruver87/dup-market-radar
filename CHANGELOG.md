@@ -1,5 +1,11 @@
 # Changelog - DUP Market Radar
 
+## 0.2.85
+
+- Display ensure: soft wall `display_ensure_wall_ms` (default 1500) — timeout residual display kline round; still patch whatever landed
+- Package / FastAPI / User-Agent / `__version__` / native pin `0.2.85`
+- Soak / 48h: **not** claimed this pin
+
 ## 0.2.84
 
 - KuCoin: phase1 allTickers||contracts; phase2 `/v2/symbols`||whale histories (histories never overlap allTickers)

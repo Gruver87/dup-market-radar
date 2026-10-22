@@ -29,6 +29,7 @@ ingest:
   mtf_reuse_ttl_ms: 450000              # skip re-fetch when stamped MTF younger than ~7.5m
   scan_executor_workers: 2              # dedicated pool for scan (API/ops stay responsive)
   secondary_http_timeout_ms: 2500       # Dex/CoinGecko soft wall (CEX keeps http_timeout_ms)
+  display_ensure_wall_ms: 1500          # residual display MTF soft timeout (0.2.85)
 
 snapshot_refresh_ms: 45000
 

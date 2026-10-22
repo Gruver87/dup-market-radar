@@ -467,6 +467,11 @@ def validate_config(cfg: Dict[str, Any]) -> None:
             not isinstance(sec_to, int) or sec_to < 500 or sec_to > 12_000
         ):
             errors.append("ingest.secondary_http_timeout_ms must be int 500..12000")
+        dew = ingest.get("display_ensure_wall_ms")
+        if dew is not None and (
+            not isinstance(dew, int) or dew < 250 or dew > 15_000
+        ):
+            errors.append("ingest.display_ensure_wall_ms must be int 250..15000")
 
     bubbles = cfg.get("bubbles")
     if bubbles is not None:

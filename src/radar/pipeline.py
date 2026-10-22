@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeout
 from typing import Any, Dict
 
 from radar.config import load_config
@@ -632,6 +634,9 @@ def run_scan(
             miss_spot, miss_fut = _display_missing_mtf_symbols(sectors)
             if miss_spot or miss_fut:
                 t_disp = int(time.time() * 1000)
+                # Soft wall (0.2.85): residual display must not dominate scan.
+                wall_ms = int(ingest.get("display_ensure_wall_ms") or 1500)
+                wall_s = max(0.25, float(wall_ms) / 1000.0)
                 try:
                     # Capture primary ensure acc — ensure_universe_short_windows
                     # assigns universe["short_window_ensure"]=out and would wipe
@@ -641,13 +646,29 @@ def run_scan(
                         primary_acc = {}
                     else:
                         primary_acc = dict(primary_acc)
-                    disp = ensure_universe_short_windows(
+                    ex = ThreadPoolExecutor(
+                        max_workers=1, thread_name_prefix="radar-disp"
+                    )
+                    fut = ex.submit(
+                        ensure_universe_short_windows,
                         http,
                         universe,
                         spot_symbols=miss_spot or set(),
                         fut_symbols=miss_fut or set(),
                         reuse_ttl_ms=reuse_ttl,
                     )
+                    timed_out = False
+                    try:
+                        disp = fut.result(timeout=wall_s)
+                    except FuturesTimeout:
+                        timed_out = True
+                        disp = {}
+                        logger.warning(
+                            "display MTF ensure soft-timeout wall_ms=%s",
+                            wall_ms,
+                        )
+                    finally:
+                        ex.shutdown(wait=False, cancel_futures=True)
                     disp_ms = int(time.time() * 1000) - t_disp
                     ensure_ms = int(ensure_ms) + disp_ms
                     universe["short_window_ensure"] = primary_acc
@@ -661,6 +682,8 @@ def run_scan(
                     primary_acc["display_board_fut"] = (
                         None if fut_board is None else round(float(fut_board), 4)
                     )
+                    if timed_out:
+                        primary_acc["display_ensure_timeout_ms"] = int(wall_ms)
                     primary_acc["display_patched"] = int(pre_patched) + int(
                         _patch_sectors_mtf_from_universe(sectors, universe)
                     )

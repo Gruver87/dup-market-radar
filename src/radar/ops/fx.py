@@ -87,7 +87,7 @@ def _fetch_rates(base: str) -> Dict[str, int]:
             resp = client.get(
                 url,
                 params={"from": base},
-                headers={"User-Agent": "DUP-Market-Radar/0.2.84-fx"},
+                headers={"User-Agent": "DUP-Market-Radar/0.2.85-fx"},
             )
             resp.raise_for_status()
             data = read_capped_json(resp, FX_MAX_RESPONSE_BYTES, label="fx")
@@ -170,7 +170,7 @@ def _fetch_nbrb_byn_book() -> Dict[str, int]:
             resp = client.get(
                 url,
                 params={"periodicity": "0"},
-                headers={"User-Agent": "DUP-Market-Radar/0.2.84-fx-nbrb"},
+                headers={"User-Agent": "DUP-Market-Radar/0.2.85-fx-nbrb"},
             )
             resp.raise_for_status()
             data = read_capped_json(resp, FX_MAX_RESPONSE_BYTES, label="nbrb")

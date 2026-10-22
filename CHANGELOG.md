@@ -1,18 +1,24 @@
-# Changelog — DUP Market Radar
+# Changelog ? DUP Market Radar
+
+## 0.2.75
+
+- DexScreener: batch token expand via comma-separated `/latest/dex/tokens/{a,b,...}` (?30) ? was N parallel GETs
+- Package / FastAPI / User-Agent / `__version__` / native pin `0.2.75`
+- Soak / 48h: **not** claimed this pin
 
 ## 0.2.74
 
 - Whales: aggregate prints then apply `min_notional` (Python + `radar_native` parity)
-- Was per-print ≥100k → empty under KuCoin histories; calibrate `min_notional_usdt=10000`, `min_print_usdt=100`
+- Was per-print ?100k ? empty under KuCoin histories; calibrate `min_notional_usdt=10000`, `min_print_usdt=100`
 - Expand `symbols_watch` to 8 pairs; wire into KuCoin whale histories fan-out
 - Package / FastAPI / User-Agent / `__version__` / native pin `0.2.74`
 - Soak / 48h: **not** claimed this pin
 
 ## 0.2.73
 
-- Binance ingest: parallel bootstrap (spot 24hr ∥ futures 24hr ∥ premium ∥ exchangeInfo)
-- KuCoin ingest: parallel bootstrap (allTickers ∥ contracts ∥ symbols) + whales overlapped; whale histories fan-out parallel
-- Evidence packager: treat `hard_fails=0` correctly (was falsy `or 1` → false fail)
+- Binance ingest: parallel bootstrap (spot 24hr ? futures 24hr ? premium ? exchangeInfo)
+- KuCoin ingest: parallel bootstrap (allTickers ? contracts ? symbols) + whales overlapped; whale histories fan-out parallel
+- Evidence packager: treat `hard_fails=0` correctly (was falsy `or 1` ? false fail)
 - Package / FastAPI / User-Agent / `__version__` / native pin `0.2.73`
 - Soak / 48h: **not** claimed this pin
 
@@ -20,7 +26,7 @@
 
 - Smoke evidence: export `ingest_ms` / `ensure_ms` / `score_ms` / `venue_ms` / `kline_gets` in live packs
 - Oid ledger write-behind: `claim` still sync-persists (fail-closed before POST); `mark_accepted` / `release` debounce (`client_oid_write_behind_ms`, default 100); `flush()` / `close()` on API shutdown
-- HTTP: no retry on 4xx (except 429) — stop kline 400 retry storms; `max_kline_gets` default 112
+- HTTP: no retry on 4xx (except 429) ? stop kline 400 retry storms; `max_kline_gets` default 112
 - Ensure: fill-gate symbols first + freeze gate sets (no re-rank mid-ensure); stage cap 24
 - Native wheel rebuilt `0.2.72`
 - Package / FastAPI / User-Agent / `__version__` / native pin `0.2.72`
@@ -28,16 +34,16 @@
 
 ## 0.2.71
 
-- DexScreener: parallel token expand + keyword search; soft-skip search when boosted rows ≥24
+- DexScreener: parallel token expand + keyword search; soft-skip search when boosted rows ?24
 - Whales: KuCoin-only (Binance aggTrades fan-out removed)
-- Process-lifetime `AllowlistHttp` pool (`http_pool.py`) — TLS/cache reuse; close on API shutdown
-- Ensure: spot∥futures waterfalls in parallel; atomic thread-safe `budget_consume`
+- Process-lifetime `AllowlistHttp` pool (`http_pool.py`) ? TLS/cache reuse; close on API shutdown
+- Ensure: spot?futures waterfalls in parallel; atomic thread-safe `budget_consume`
 - Package / FastAPI / User-Agent / `__version__` / native pin `0.2.71`
 - Soak / 48h: **not** claimed this pin
 
 ## 0.2.70
 
-- Ingest speed: Binance OI fan-out parallel (8 workers); whale dual-market cut (spot-only Binance; Bybit whales off — KuCoin primary)
+- Ingest speed: Binance OI fan-out parallel (8 workers); whale dual-market cut (spot-only Binance; Bybit whales off ? KuCoin primary)
 - KuCoin: remove ingest-time MTF attach (ensure+budget owns candles); reuse `contracts/active` in listings (no duplicate GET)
 - Observability: `venue_ms`, ensure `stage_ms` on snapshot + Prom (`radar_venue_ms`, `radar_ensure_stage_ms`)
 - Fill-check `_top_buckets` prefers `radar_native` (rank parity with final score; Python soft fallback)
@@ -46,13 +52,13 @@
 
 ## 0.2.69
 
-- Speed / efficiency wave (P0→P1): phase timers `ingest_ms` / `ensure_ms` + Prometheus gauges (`score_ms`, `kline_gets`, `ensure_rounds`)
-- Cheap prelim targets (vol+|chg| / listings / CEX meme keywords) — full sector score only for top-N honesty + optional 2nd ensure
-- Ensure waterfall short-circuit at ≥0.85 fill; hard `ingest.max_kline_gets` budget; `mtf_reuse_ttl_ms` stamp skip
+- Speed / efficiency wave (P0?P1): phase timers `ingest_ms` / `ensure_ms` + Prometheus gauges (`score_ms`, `kline_gets`, `ensure_rounds`)
+- Cheap prelim targets (vol+|chg| / listings / CEX meme keywords) ? full sector score only for top-N honesty + optional 2nd ensure
+- Ensure waterfall short-circuit at ?0.85 fill; hard `ingest.max_kline_gets` budget; `mtf_reuse_ttl_ms` stamp skip
 - Shared AllowlistHttp across venue workers + ensure (TLS/cache reuse); memes `poll_sec` 45 aligned with refresh
 - Startup warm: symbol meta refresh; dedicated `scan_executor_workers` pool for scans
 - Package / FastAPI / User-Agent / `__version__` / native pin `0.2.69`
-- Soak / 48h: **not** claimed this pin — unit + lab only
+- Soak / 48h: **not** claimed this pin ? unit + lab only
 
 ## 0.2.68
 
@@ -65,7 +71,7 @@
 ## 0.2.66
 
 - Dashboard: crypto bubbles replaced with ranked column table (Markets ~6m)
-- Dashboard: multi-page nav like DUP Console (`#watchlist` / `#markets` / `#ops` / `#help`) — no single-page scroll trap
+- Dashboard: multi-page nav like DUP Console (`#watchlist` / `#markets` / `#ops` / `#help`) ? no single-page scroll trap
 - Dashboard: sector tabs no longer call `scrollIntoView` (stopped jump-to-bottom on click)
 - Docs: `docs/README.md` index, `docs/DASHBOARD.md`, refreshed README / ARCHITECTURE / OPS (encoding + verify/soak honesty)
 - Package / FastAPI / User-Agent / `__version__` / native pin `0.2.66`
@@ -91,21 +97,21 @@
 
 ## 0.2.63
 
-- Auto: `memes_soft_risk_flags` (default `below_vol_floor`) — sector soft-flag map
+- Auto: `memes_soft_risk_flags` (default `below_vol_floor`) ? sector soft-flag map
 - Scripts: `radar_soak_lab.py` (multi-cycle live gate + `hard_fails`) and `evidence_retention.py`
 - Smoke `--evidence` runs retention; docs EVIDENCE / LIVE_MONEY / TRADE updated
 
 ## 0.2.62
 
-- Memes: CEX keyword path (KuCoin-first) into memes sector — auto-eligible; DEX still skipped
+- Memes: CEX keyword path (KuCoin-first) into memes sector ? auto-eligible; DEX still skipped
 - Config: include_cex_spot / min_cex_quote_volume_usdt; memes back in llowed_sectors
 - CI: ci-native.yml on every PR + main
 - Docs: LIVE_MONEY.md checklist before dry_run: false
 
 ## 0.2.61
 
-- Ensure: empty target set is N/A (not fake 1.0); all-empty → mtf_ensure_empty_targets / mtf_ensure_ok=false
-- Trade: futures policy gate exception → HTTP 503 refuse (never soft-continue to place)
+- Ensure: empty target set is N/A (not fake 1.0); all-empty ? mtf_ensure_empty_targets / mtf_ensure_ok=false
+- Trade: futures policy gate exception ? HTTP 503 refuse (never soft-continue to place)
 - Bubbles: stale/circuit cache returns ok=false (no silent green)
 - Auto: drop dead memes from default allowlist; dry_run: true lab-safe default
 - Telegram: start failure surfaced in health + /api/telegram/status; mark-miss counter
@@ -116,19 +122,19 @@
 - Auto: `listings_soft_risk_flags` (default `cross_venue_live`) soft-allows listing buys under `require_no_risk_flags`
 - Telegram: outside-top stop-loss via KuCoin mark (`outside_top_mark_alerts`)
 - API: `snapshot_require_api_key` / `snapshot_require_api_key_non_loopback`; server refuses futures/`USDTM` on `/api/trade/order`
-- Smoke: `--live --evidence` → `data/evidence/` pack; `docs/EVIDENCE.md`
+- Smoke: `--live --evidence` ? `data/evidence/` pack; `docs/EVIDENCE.md`
 - Docker: `Dockerfile.native` + `docker-compose.native.yml`; HEALTHCHECK uses `/api/ready`
 - Dashboard: poll due groups + circuit_open in status line
 
 ## 0.2.59
 
-- Futures: drop commodity/FX/index USDT-M bases (XAU, USOIL, …); config `sectors.futures.exclude_bases`
+- Futures: drop commodity/FX/index USDT-M bases (XAU, USOIL, ?); config `sectors.futures.exclude_bases`
 - Native crate version aligned to app pin `0.2.59` (was `0.2.0`)
 - Docs: public GitHub pin + disclaimer pack (from 0.2.58 release)
 
 ## 0.2.58
 
-- Auto: on degraded/empty snap with open positions → **stop-only** via KuCoin mark (buys refused; no silent hold without stop path)
+- Auto: on degraded/empty snap with open positions ? **stop-only** via KuCoin mark (buys refused; no silent hold without stop path)
 - Trader: `get_spot_mark_price_i` (public level1)
 - Dashboard status: `mtf_ensure_ok` + ensure fill ratios
 - CI: explicit `python-lab-only` job name / profile step
@@ -136,7 +142,7 @@
 - Metrics: `alerts_skipped_degraded` in JSON + Prometheus
 - Fail-closed: auto cycle refuses when `ok=false`, `mtf_ensure_ok=false`, native-prefer + python backend, or empty sectors with open positions
 - Telegram alerts skip degraded snapshots (`ok=false`); counter `alerts_skipped_degraded`
-- Pipeline: ensure exception → `mtf_ensure_ok=false` and snapshot `ok=false` (visible degrade); `empty_snapshot` sets `mtf_ensure_ok=false`
+- Pipeline: ensure exception ? `mtf_ensure_ok=false` and snapshot `ok=false` (visible degrade); `empty_snapshot` sets `mtf_ensure_ok=false`
 - Dashboard: `canTradeRow` refuses futures / futures sectors (manual Buy/Sell hidden)
 - Docker compose: honest `lab-python` profile comments (no maturin wheel / not native fail-closed)
 - Help/i18n: `/buy` `/sell` documented; package / FastAPI / User-Agent / `__version__` `0.2.58`
@@ -144,7 +150,7 @@
 ## 0.2.57
 
 - Speed: HTTP GETs no longer hold client lock during network I/O; parallel kline fan-out (8 workers)
-- Ensure: smaller prelim (2×top_n) + adaptive 2nd round only if final top-N fill <85%
+- Ensure: smaller prelim (2�top_n) + adaptive 2nd round only if final top-N fill <85%
 - Smoke reports `elapsed_ok` vs 25s budget (evidence; does not fail lab)
 - Dashboard: MTF column (15m/1h/4h, listing age, cross-venue live)
 - Telegram alerts: surface MTF / listing flags in reasons
@@ -159,15 +165,15 @@
 
 ## 0.2.55
 
-- Futures ensure: MEXC contract kline fallback (parallel arrays → OHLC) for MEXC-only tops
-- Fix: do not stamp KuCoin `…USDTM` symbol_raw onto non-KuCoin futures rows
+- Futures ensure: MEXC contract kline fallback (parallel arrays ? OHLC) for MEXC-only tops
+- Fix: do not stamp KuCoin `?USDTM` symbol_raw onto non-KuCoin futures rows
 - Package / FastAPI / User-Agent / `__version__` `0.2.55`
 
 ## 0.2.54
 
 - Short-window ensure: Bybit spot klines after Binance (Bybit-only alts e.g. BSBUSDT)
 - Skip Binance kline GETs for venue=bybit/mexc (400 spam on stocks/commodities)
-- Futures ensure: Binance fapi + Bybit linear kline fallbacks when KuCoin miss → raise fut_mtf
+- Futures ensure: Binance fapi + Bybit linear kline fallbacks when KuCoin miss ? raise fut_mtf
 - Shared OHLC MTF apply + quote-turnover vol_vs helper
 - Package / FastAPI / User-Agent / `__version__` `0.2.54`
 
@@ -175,15 +181,15 @@
 
 - Short-window sample: mix top volume + top |24h change| + BTC/ETH/SOL anchors
 - Post-score-target `ensure_universe_short_windows` (prelim top); KuCoin then Binance klines fallback
-- Ingest: raise `max_response_bytes` 8→20 MiB — Binance allTickers ~18 MiB (live soft-fail)
-- Fix: Binance spot keep `exchangeInfo` status=TRADING only — BREAK ghosts had empty windowed klines → spot_mtf=0
+- Ingest: raise `max_response_bytes` 8?20 MiB ? Binance allTickers ~18 MiB (live soft-fail)
+- Fix: Binance spot keep `exchangeInfo` status=TRADING only ? BREAK ghosts had empty windowed klines ? spot_mtf=0
 - Package / FastAPI / User-Agent / `__version__` `0.2.53`
 
 ## 0.2.52
 
 - Fix: KuCoin futures kline `from`/`to` must be milliseconds (live 400s); spot candles stay seconds
-- Fix: normalize candle open time ms→sec so futures closed 1h/4h spans resolve
-- whales: join spot short-window bias → `spot_mtf_align` / `spot_mtf_diverge` (no extra GET)
+- Fix: normalize candle open time ms?sec so futures closed 1h/4h spans resolve
+- whales: join spot short-window bias ? `spot_mtf_align` / `spot_mtf_diverge` (no extra GET)
 - Live smoke lab reports `spot_mtf` / `fut_mtf` / `meme_mtf` coverage + poll
 - Package / FastAPI / User-Agent / `__version__` `0.2.52`
 
@@ -195,13 +201,13 @@
 
 ## 0.2.50
 
-- Analysis: KuCoin futures klines (sampled top-N) → `change_bps_{15m,1h,4h}`; shared MTF blend
+- Analysis: KuCoin futures klines (sampled top-N) ? `change_bps_{15m,1h,4h}`; shared MTF blend
 - futures: side/funding flip uses short-window bias; Rust parity
 - Package / FastAPI / User-Agent / `__version__` `0.2.50`
 
 ## 0.2.49
 
-- Analysis: same KuCoin 15m candle GET → `vol_vs_median_bps` (last 1h turnover vs prior 1h-window median)
+- Analysis: same KuCoin 15m candle GET ? `vol_vs_median_bps` (last 1h turnover vs prior 1h-window median)
 - spot_alts: blend absolute log-volume with own-history surge; flags `vol_surge_1h` / `vol_dry_1h`
 - Rust `score_spot_alts` parity for volume blend
 - Package / FastAPI / User-Agent / `__version__` `0.2.49`
@@ -216,21 +222,21 @@
 
 ## 0.2.47
 
-- Analysis: same 15min GET lookback ~5h → `change_bps_4h` (16×15m); no extra fan-out
+- Analysis: same 15min GET lookback ~5h ? `change_bps_4h` (16�15m); no extra fan-out
 - spot_alts: 24h/4h/1h/15m blend; `mtf_diverge_4h`; setup still short-window biased
 - Rust `score_spot_alts` parity for 4h
 - Package / FastAPI / User-Agent / `__version__` `0.2.47`
 
 ## 0.2.46
 
-- Analysis: one KuCoin 15min candle GET per top-N → `change_bps_15m` + derived 1h
+- Analysis: one KuCoin 15min candle GET per top-N ? `change_bps_15m` + derived 1h
 - spot_alts: 24h/1h/15m momentum blend; bias prefers 15m; `mtf_diverge_15m`
 - Rust `score_spot_alts` parity for 15m
 - Package / FastAPI / User-Agent / `__version__` `0.2.46`
 
 ## 0.2.45
 
-- Analysis: KuCoin sampled 1h candles (top-N vol) → `change_bps_1h`; spot_alts 24h/1h momentum blend + `mtf_diverge_1h` / range risk
+- Analysis: KuCoin sampled 1h candles (top-N vol) ? `change_bps_1h`; spot_alts 24h/1h momentum blend + `mtf_diverge_1h` / range risk
 - Rust `score_spot_alts` parity with 1h blend
 - Whales HTTP: use short TTL cache (KuCoin/Bybit/Binance)
 - Package / FastAPI / User-Agent / `__version__` `0.2.45`
@@ -238,7 +244,7 @@
 ## 0.2.44
 
 - Hardening closeout: persist errors via `redact_exc`; Binance OI soft-fail logged
-- Analysis start: honest `SECTOR_META` (no fake 15m/1h/4h); OI sample 80→24; DexScreener boost expands 40→12
+- Analysis start: honest `SECTOR_META` (no fake 15m/1h/4h); OI sample 80?24; DexScreener boost expands 40?12
 - Package / FastAPI / User-Agent / `__version__` `0.2.44`
 
 ## 0.2.43
@@ -274,7 +280,7 @@
 
 - Enrich: cap symbol/venue/setup string lengths at ingest boundary
 - TradeResult/FillInfo: soft-truncate messages (512); stats `inc` key allowlists
-- `empty_snapshot` reason ≤256; sector 404 no longer echoes sector_id
+- `empty_snapshot` reason ?256; sector 404 no longer echoes sector_id
 - Package / FastAPI / User-Agent / `__version__` `0.2.39`
 
 ## 0.2.38
@@ -304,7 +310,7 @@
 - Ingest universe: redact circuit fail reasons + worker error strings
 - Auto-engine / prefs / oid: truncate persist errors; no raw `str(exc)`
 - API lifespan/scan/pipeline: `redact_exc` (no token-risk exception dumps)
-- `escape_html` soft-cap 16 KiB; Telegram allow-list chats ≤64
+- `escape_html` soft-cap 16 KiB; Telegram allow-list chats ?64
 - Package / FastAPI / User-Agent / `__version__` `0.2.35`
 
 ## 0.2.34
@@ -319,13 +325,13 @@
 - KuCoin: no `logger.exception` on signed paths; `redact_exc` + truncate trade/fill errors
 - `redact_exc` soft-truncate (default 512)
 - Audit JSONL: soft-truncate single lines > 64 KiB
-- Symbol meta / FX: error + cache base caps; venues list ≤8
+- Symbol meta / FX: error + cache base caps; venues list ?8
 - Package / FastAPI / User-Agent / `__version__` `0.2.33`
 
 ## 0.2.32
 
 - Circuit: sanitize venue keys, truncate fail reasons (120), soft-cap tracked venues (64)
-- Config: allowlist_hosts ≤64; cors/trusted_hosts ≤32
+- Config: allowlist_hosts ?64; cors/trusted_hosts ?32
 - FX/bubbles: redact+truncate circuit/stale error strings
 - Package / FastAPI / User-Agent / `__version__` `0.2.32`
 
@@ -339,8 +345,8 @@
 
 ## 0.2.30
 
-- Checksum sidecar: size ≤512 + digest length gate before compare
-- Ingest `errors` ≤64 (+ truncate marker); `circuit_skipped` ≤32
+- Checksum sidecar: size ?512 + digest length gate before compare
+- Ingest `errors` ?64 (+ truncate marker); `circuit_skipped` ?32
 - Symbol meta soft cap 20k pairs; `X-Permitted-Cross-Domain-Policies: none`
 - Dashboard `/` `Cache-Control: no-store`
 - Package / FastAPI / User-Agent / `__version__` `0.2.30`
@@ -365,14 +371,14 @@
 ## 0.2.27
 
 - AllowlistHttp: **HTTPS-only** scheme refuse; response cache soft cap (256) + TTL prune; error ring (64)
-- Telegram WatchBook soft max (`telegram.max_watches`, default 2000) — refuse new when full
+- Telegram WatchBook soft max (`telegram.max_watches`, default 2000) ? refuse new when full
 - `run_radar.ps1`: `--limit-concurrency 128` + `--timeout-keep-alive 30`
 - Package / FastAPI / User-Agent / `__version__` `0.2.27`
 
 ## 0.2.26
 
 - Trade events: tail-read last 2 MiB (no full-file `read_text` on large JSONL)
-- `MaxUrlLengthMiddleware` — soft 414 when path+query > `max_request_url_bytes` (default 2048)
+- `MaxUrlLengthMiddleware` ? soft 414 when path+query > `max_request_url_bytes` (default 2048)
 - Access-log path sanitize (control chars / truncate); strip `Server` response header
 - X-Forwarded-For length bound (512) when `RADAR_TRUST_PROXY`
 - Telegram `getUpdates` `limit=50` (Telegram max 100)
@@ -381,8 +387,8 @@
 
 ## 0.2.25
 
-- Sanitize `X-Request-Id` (charset + length) — refuse log/header injection
-- Unhandled exceptions → redacted `500` + request id (no stack/secrets to client)
+- Sanitize `X-Request-Id` (charset + length) ? refuse log/header injection
+- Unhandled exceptions ? redacted `500` + request id (no stack/secrets to client)
 - `RequestValidationError` 422 strips `input` values from error payloads
 - Snapshot `If-None-Match` length cap (128)
 - `/api/trade/events` under trade rate limiter
@@ -400,7 +406,7 @@
 ## 0.2.23
 
 - `Cache-Control: no-store` for `/api/ops`, `/api/snapshot`, `/api/sector`
-- FX frankfurter soft circuit (3 fails → 60s; serve stale rates when possible)
+- FX frankfurter soft circuit (3 fails ? 60s; serve stale rates when possible)
 - Bubbles `?force=true` shares force-scan rate limiter
 - FX query length cap; metrics endpoints soft rate-limit (`metrics_rate_limit_per_min`)
 - Package / FastAPI / User-Agent / `__version__` `0.2.23`
@@ -408,7 +414,7 @@
 ## 0.2.22
 
 - Bubbles: HTTPS CoinGecko-CDN-only image URLs; drop javascript/off-host
-- Bubbles: CoinGecko soft circuit (3 fails → 60s open, serve stale)
+- Bubbles: CoinGecko soft circuit (3 fails ? 60s open, serve stale)
 - `/api/sector/*` under snapshot rate limit (same as `/api/snapshot`)
 - `/api/ops/worldtime` lang via `normalize_lang`
 - Package / FastAPI / User-Agent / `__version__` `0.2.22`
@@ -416,8 +422,8 @@
 ## 0.2.21
 
 - Crypto bubbles: top-100 by market cap + ~6m change (CoinGecko `200d`, labeled honestly)
-- `GET /api/ops/bubbles` — live poll with cache TTL (default 30s), soft-stale on upstream fail
-- Dashboard bubbles panel (size ∝ mcap, color ∝ 6m %, live refresh)
+- `GET /api/ops/bubbles` ? live poll with cache TTL (default 30s), soft-stale on upstream fail
+- Dashboard bubbles panel (size ? mcap, color ? 6m %, live refresh)
 - Integer fields: `price_i`, `market_cap_i`, `change_6m_bps`
 - Package / FastAPI / User-Agent / `__version__` `0.2.21`
 
@@ -448,14 +454,14 @@
 
 ## 0.2.17
 
-- Shared `read_capped_json` — signed KuCoin (1 MiB) + symbol-meta (8 MiB) response caps
-- Trade JSON POSTs: require `Content-Length` (411) — no chunked bypass of body cap
+- Shared `read_capped_json` ? signed KuCoin (1 MiB) + symbol-meta (8 MiB) response caps
+- Trade JSON POSTs: require `Content-Length` (411) ? no chunked bypass of body cap
 - `/api/trade/events` behind API-key gate (same as trade mutations)
 - Package / FastAPI / User-Agent / `__version__` `0.2.17`
 
 ## 0.2.16
 
-- `validate_currency` on KuCoin balance lookup — refuse path/query injection
+- `validate_currency` on KuCoin balance lookup ? refuse path/query injection
 - HTTP connect timeout: signed KuCoin / symbol-meta 5s; allowlist client `min(5, max(1, read/2))`
 - Public JSON: redact filesystem `path` / `ledger_path` / `data_dir` (snapshot, sector, health, trade/tg status)
 - Lifespan: refuse start when `RADAR_REQUIRE_API_KEY` set but `RADAR_API_KEY` missing (pytest soft-warn)
@@ -463,14 +469,14 @@
 
 ## 0.2.15
 
-- `validate_order_id` — refuse path/query injection on KuCoin fill reconcile GET
+- `validate_order_id` ? refuse path/query injection on KuCoin fill reconcile GET
 - Whale / token-expand ingest soft-fails logged (binance, bybit, kucoin, dexscreener)
 - HTTPException handler: scrub detail + always set `X-Request-Id`
 - Package / FastAPI / User-Agent `0.2.15`
 
 ## 0.2.14
 
-- Ingest HTTP: `max_response_bytes` (default 8 MiB) — refuse oversized venue JSON
+- Ingest HTTP: `max_response_bytes` (default 8 MiB) ? refuse oversized venue JSON
 - Trade POST bodies: require `Content-Type: application/json` (415 otherwise)
 - Prometheus: `radar_http_response_too_large_total`
 - Package / FastAPI / User-Agent `0.2.14`
@@ -499,7 +505,7 @@
 
 - KuCoin signed httpx: `follow_redirects=False` (no off-origin credential hop)
 - OID ledger: integer epoch-second timestamps (legacy float `at` still readable)
-- `api.max_request_body_bytes` Content-Length cap (default 64 KiB → 413)
+- `api.max_request_body_bytes` Content-Length cap (default 64 KiB ? 413)
 - Docker image ENV `RADAR_REQUIRE_API_KEY=1`
 - Package / FastAPI / User-Agent `0.2.10`
 
@@ -540,9 +546,9 @@
 - Buy funds floored to KuCoin `quoteIncrement` before minNotional gate
 - Post-buy TG auto-watch failures surfaced to chat + `watch_add_fail` metric (no silent `pass`)
 - Secret redaction: Telegram token / KuCoin keys / `RADAR_API_KEY` scrubbed from logs, audit JSONL, circuit reasons, and exception chains
-- Outbound scrub: snapshot `errors`, HTTPException details, Telegram replies, KuCoin trade messages — no secret echo to clients
+- Outbound scrub: snapshot `errors`, HTTPException details, Telegram replies, KuCoin trade messages ? no secret echo to clients
 - FastAPI app version aligned to `0.2.5`
-- OID ledger: corrupt/checksum mismatch → `persist_ok=false`, claim refuse (fail-closed)
+- OID ledger: corrupt/checksum mismatch ? `persist_ok=false`, claim refuse (fail-closed)
 - `/api/ready` + `/api/health`: flag `oid_ledger_persist_degraded` / `telegram_watches_persist_degraded`
 - API-key auth counters (`auth_ok` / `auth_fail`) in health + Prometheus
 - HTML escape: Telegram alerts/commands + dashboard `innerHTML` (XSS); https-only row links
@@ -557,12 +563,12 @@
 - Telegram bot: watches, fade/stop/futures-flip alerts, `/nearest` analysis zones
 - Spot `/buy` `/sell` from Telegram (confirm); auto-watch after live buy
 - Futures = watch/warn only (never auto-orders)
-- Auto-trade → Telegram notify + auto spot watch; `data/trade_events.jsonl` audit
+- Auto-trade ? Telegram notify + auto spot watch; `data/trade_events.jsonl` audit
 - Dashboard / snapshot / health: telegram status
 - Buy minNotional = max(minFunds, quoteMinSize); Telegram API soft circuit
 - Trade events carry `request_id` (X-Request-Id context)
 - Telegram watch TTL prune + sync auto bags on start; metrics gauges
-- `GET /api/trade/events` — last N audit lines
+- `GET /api/trade/events` ? last N audit lines
 - Unwatch spot on live sell; skip TG alerts if snapshot stale
 - Smoke lab: offline telegram nearest/alert gates
 
@@ -573,11 +579,11 @@
 - Positions JSON SHA-256 sidecar; integrity in auto status
 - `/api/live` + `/api/ready` (k8s-style); CI workflow
 - Positions rotating backups (`data/backups/`); snapshot `ETag` / 304
-- KuCoin fill reconcile → `base_size_i` from `dealSize` (net base fee); size_basis honesty
+- KuCoin fill reconcile ? `base_size_i` from `dealSize` (net base fee); size_basis honesty
 - Rotating `auto_trade_log.jsonl` audit (`audit_log_max_bytes` / `audit_log_keep`)
 - Manual `/api/trade/order` returns `fill` + `order_id` when `reconcile=true`
 - Dashboard: open positions bag (`size_basis` / `order_id`); ruff lint in CI
-- `clientOid` ledger — duplicate live submit soft-refused (persisted)
+- `clientOid` ledger ? duplicate live submit soft-refused (persisted)
 - Sell clamp to KuCoin trade-account `available`; trade counters in metrics
 - Auto cycle single-flight; lifespan joins auto thread on shutdown
 - Trade 429 includes `Retry-After`; dashboard stable `client_oid` per modal

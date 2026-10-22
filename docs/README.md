@@ -39,7 +39,7 @@ Companion L1 repos (separate): [`dup-protocol`](https://github.com/Gruver87/dup-
 
 | Area | State |
 |------|--------|
-| Score | `radar_native` prefer + fail_closed in `config/default.yaml`; Docker/`ci.yml` = python-lab; `ci-native.yml` = maturin parity |
+| Score | `radar_native` prefer + fail-closed in `config/default.yaml`; Docker/`ci.yml` = python-lab; `ci-native.yml` = maturin parity |
 | Ingest | Parallel CEX bootstraps; Dex/CG per-GET + total venue wall; KuCoin warm stale-OK |
 | MTF | Ensure gate = `ensure_cap`; display patch-first; low-board wall 4000 / base 1500 |
 | Evidence | Live smoke packs under `docs/evidence/runs/`; **no 48h soak claim** |

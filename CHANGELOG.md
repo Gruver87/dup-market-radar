@@ -1,4 +1,4 @@
-﻿# Changelog - DUP Market Radar
+# Changelog - DUP Market Radar
 
 ## 0.2.82
 
@@ -52,22 +52,22 @@
 
 ## 0.2.75
 
-- DexScreener: batch token expand via comma-separated `/latest/dex/tokens/{a,b,...}` (up to 30) ? was N parallel GETs
+- DexScreener: batch token expand via comma-separated `/latest/dex/tokens/{a,b,...}` (up to 30) — was N parallel GETs
 - Package / FastAPI / User-Agent / `__version__` / native pin `0.2.75`
 - Soak / 48h: **not** claimed this pin
 
 ## 0.2.74
 
 - Whales: aggregate prints then apply `min_notional` (Python + `radar_native` parity)
-- Was per-print ?100k ? empty under KuCoin histories; calibrate `min_notional_usdt=10000`, `min_print_usdt=100`
+- Was per-print >=100k → empty under KuCoin histories; calibrate `min_notional_usdt=10000`, `min_print_usdt=100`
 - Expand `symbols_watch` to 8 pairs; wire into KuCoin whale histories fan-out
 - Package / FastAPI / User-Agent / `__version__` / native pin `0.2.74`
 - Soak / 48h: **not** claimed this pin
 
 ## 0.2.73
 
-- Binance ingest: parallel bootstrap (spot 24hr ? futures 24hr ? premium ? exchangeInfo)
-- KuCoin ingest: parallel bootstrap (allTickers ? contracts ? symbols) + whales overlapped; whale histories fan-out parallel
+- Binance ingest: parallel bootstrap (spot 24hr || futures 24hr || premium || exchangeInfo)
+- KuCoin ingest: parallel bootstrap (allTickers || contracts || symbols) + whales overlapped; whale histories fan-out parallel
 - Evidence packager: treat `hard_fails=0` correctly (was falsy `or 1` ? false fail)
 - Package / FastAPI / User-Agent / `__version__` / native pin `0.2.73`
 - Soak / 48h: **not** claimed this pin
@@ -76,7 +76,7 @@
 
 - Smoke evidence: export `ingest_ms` / `ensure_ms` / `score_ms` / `venue_ms` / `kline_gets` in live packs
 - Oid ledger write-behind: `claim` still sync-persists (fail-closed before POST); `mark_accepted` / `release` debounce (`client_oid_write_behind_ms`, default 100); `flush()` / `close()` on API shutdown
-- HTTP: no retry on 4xx (except 429) ? stop kline 400 retry storms; `max_kline_gets` default 112
+- HTTP: no retry on 4xx (except 429) — stop kline 400 retry storms; `max_kline_gets` default 112
 - Ensure: fill-gate symbols first + freeze gate sets (no re-rank mid-ensure); stage cap 24
 - Native wheel rebuilt `0.2.72`
 - Package / FastAPI / User-Agent / `__version__` / native pin `0.2.72`

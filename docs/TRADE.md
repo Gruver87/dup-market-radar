@@ -1,4 +1,4 @@
-﻿# Trade & Telegram
+# Trade & Telegram
 
 **Read [`DISCLAIMER.md`](DISCLAIMER.md) before enabling anything that can place orders.**
 

@@ -34,3 +34,15 @@ Root:
 | Lab + operator evidence packs | Automatic 48h soak claim |
 
 Companion L1 repos (separate): [`dup-protocol`](https://github.com/Gruver87/dup-protocol), [`dup-protocol-experimental`](https://github.com/Gruver87/dup-protocol-experimental).
+
+## Current pin snapshot (0.2.82)
+
+| Area | State |
+|------|--------|
+| Score | `radar_native` prefer + fail-closed in `config/default.yaml`; Docker/CI = python-lab |
+| Ingest | Parallel CEX bootstraps; Dex batch + soft-wall; CoinGecko soft-wall; KuCoin symbols deferred |
+| MTF | Ensure gate = `ensure_cap`; display patch-first; kline workers 12; budget `max_kline_gets` |
+| Evidence | Live smoke packs under `docs/evidence/runs/`; **no 48h soak claim** |
+| Trade | Auto default OFF; never futures; fail-closed on `ok=false` / ensure fail |
+
+Pipeline detail: [`ARCHITECTURE.md`](ARCHITECTURE.md). Ops / perf: [`OPS.md`](OPS.md).

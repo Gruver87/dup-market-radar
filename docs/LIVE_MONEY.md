@@ -1,4 +1,4 @@
-﻿# Live money checklist (operator)
+# Live money checklist (operator)
 
 **Read [`DISCLAIMER.md`](DISCLAIMER.md) first. Author / DUP Labs accept no liability.**
 

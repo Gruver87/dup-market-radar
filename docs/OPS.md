@@ -1,4 +1,4 @@
-﻿# Operations
+# Operations
 
 ## Local process
 
@@ -98,4 +98,16 @@ Self-heal details: [`RECOVERY.md`](RECOVERY.md).
 python scripts/radar_smoke_lab.py --live --evidence
 ```
 
-See [`EVIDENCE.md`](EVIDENCE.md).
+See [`EVIDENCE.md`](EVIDENCE.md) and [`EVIDENCE_MATRIX.md`](EVIDENCE_MATRIX.md).
+
+## Performance notes (pin 0.2.82)
+
+Honesty only — **not** a soak gate. Live RTT dominates.
+
+| Phase | What to read | Typical levers |
+|-------|----------------|----------------|
+| Ingest | `ingest_ms`, `venue_ms.*` | Parallel venue bootstraps; Dex/CG `secondary_http_timeout_ms=2500`; KuCoin symbols after tickers∥contracts |
+| Ensure | `ensure_ms`, `short_window_ensure.stage_ms`, `display_ensure_ms` | `ensure_rank_n=ensure_cap`; books parallel; kline workers 12; display patch-first |
+| Score | `score_ms` | Native prefer; display time must **not** inflate `score_ms` |
+
+Best recent live smoke in this series: packaged `smoke-0.2.79` (~6.5s elapsed). Later pins trade coverage / honesty vs wall-clock; KuCoin `allTickers` remains the usual ingest ceiling. **48h soak not claimed.**

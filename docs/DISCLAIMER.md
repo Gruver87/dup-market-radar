@@ -1,4 +1,4 @@
-﻿# Disclaimer — no warranty, no liability
+# Disclaimer — no warranty, no liability
 
 **Last updated:** 2026-10-22  
 **Product:** DUP Market Radar  

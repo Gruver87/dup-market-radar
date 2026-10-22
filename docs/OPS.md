@@ -88,6 +88,9 @@ Uses `Dockerfile.native` (maturin wheel, `RADAR_NATIVE_PREFER=1`). Lab compose r
 | `GET /api/ops/worldtime` | Fixed offsets; Minsk = UTC+3 |
 | `GET /api/ops/fx` | ECB (Frankfurter) + NBRB for BYN/RUB |
 | `GET /api/ops/bubbles` | Top-100 ~6m payload for Markets table |
+| `GET /api/ops/recovery` | Self-recovery supervisor (watchdog + scan) |
+
+Self-heal details: [`RECOVERY.md`](RECOVERY.md).
 
 ## Evidence
 

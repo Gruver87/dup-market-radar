@@ -1,5 +1,13 @@
 # Changelog — DUP Market Radar
 
+## 0.2.68
+
+- Industrial base wave (necessary only): `SecretManagerPort` (env + file refuse in prod), `MetricsExporterPort`, `RADAR_LOG_JSON`
+- Evidence: `docs/EVIDENCE_MATRIX.md`, `scripts/package_radar_evidence.py` (hashed run dirs), `docs/PROFILES.md`, `scripts/radar_gate.py`
+- Self-recovery (from 0.2.67 WIP): `RecoverySupervisor`, `/api/ops/recovery`, WS reconnect, `docs/RECOVERY.md`
+- Health: `secrets` + `deployment_mode`; Prometheus recovery series
+- Package / FastAPI / User-Agent / `__version__` / native pin `0.2.68`
+
 ## 0.2.66
 
 - Dashboard: crypto bubbles replaced with ranked column table (Markets ~6m)

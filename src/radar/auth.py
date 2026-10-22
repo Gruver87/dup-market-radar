@@ -1,4 +1,4 @@
-"""Optional API key for trade mutations — from env only (never hardcoded)."""
+"""Optional API key for trade mutations — via SecretManagerPort (never hardcoded)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,11 @@ import hmac
 import os
 from typing import Optional
 
-from radar.secrets_redact import register_secret
+from radar.secret_mgmt import (
+    SECRET_RADAR_API_KEY,
+    SecretNotFoundError,
+    get_secret_manager,
+)
 from radar.trade.env_load import load_dotenv
 
 # Bound header compare cost — refuse oversized X-Radar-Api-Key before digest.
@@ -21,13 +25,13 @@ def _truthy(raw: Optional[str]) -> bool:
 def radar_api_key() -> Optional[str]:
     """Return configured API key or None if gate disabled / too short."""
     load_dotenv()
-    key = (os.environ.get("RADAR_API_KEY") or "").strip()
-    if not key:
+    try:
+        key = get_secret_manager().get_secret(SECRET_RADAR_API_KEY).strip()
+    except SecretNotFoundError:
         return None
     if len(key) < API_KEY_MIN_LEN or len(key) > API_KEY_MAX_LEN:
         # Treat misconfigured key as unset — api_key_gate_ok will fail when required.
         return None
-    register_secret(key)
     return key
 
 

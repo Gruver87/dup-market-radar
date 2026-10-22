@@ -67,6 +67,14 @@ function Invoke-NativeBuild {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
+function Invoke-RadarGate {
+    Step "radar_gate (static honesty needles)"
+    $py = Get-RadarPython
+    $env:PYTHONPATH = "src"
+    & $py scripts/radar_gate.py
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+
 function Invoke-Pytest {
     Step "pytest"
     $py = Get-RadarPython
@@ -149,6 +157,7 @@ switch ($Profile) {
         exit 0
     }
     "Quick" {
+        Invoke-RadarGate
         Invoke-Pytest
         Invoke-SmokeOffline
         Write-Host ""
@@ -156,6 +165,7 @@ switch ($Profile) {
         exit 0
     }
     "Lab" {
+        Invoke-RadarGate
         Invoke-Pytest
         Invoke-SmokeOffline
         Invoke-SmokeLive
@@ -166,6 +176,7 @@ switch ($Profile) {
     }
     "PreSoak" {
         Invoke-NativeBuild -Skip:$SkipBuild
+        Invoke-RadarGate
         Invoke-Pytest
         Invoke-SmokeOffline
         Invoke-SmokeLive
@@ -179,6 +190,7 @@ switch ($Profile) {
     "Soak48h" {
         if (-not $SkipPreSoak) {
             Invoke-NativeBuild -Skip:$SkipBuild
+            Invoke-RadarGate
             Invoke-Pytest
             Invoke-SmokeOffline
             Invoke-SmokeLive

@@ -5,6 +5,14 @@ cache_ttl_ms: 25000
 http_timeout_sec: 12
 cache_ttl_sec: 25
 
+# lab (default) | prod — prod refuses RADAR_SECRET_BACKEND=file
+deployment_mode: lab
+
+# Secrets — SecretManagerPort (env default; file lab-only)
+secrets:
+  backend: env                          # env | file (file refused when deployment_mode=prod)
+  # file_path: data/secrets.json        # only when backend=file
+
 # Hybrid hot path — Rust integer scorers (radar_native ≥0.2)
 native:
   prefer: true
@@ -20,7 +28,19 @@ ingest:
 
 snapshot_refresh_ms: 45000
 
-# Crypto bubbles — top N by mcap, ~6m change via CoinGecko 200d (no exact 180d)
+# Self-recovery — watchdog threads + background scan after network outages.
+# Does NOT enable auto-trade or bypass ok=false / circuit soft-refuse.
+recovery:
+  enabled: true
+  tick_sec: 15                         # supervisor cadence
+  background_scan: true                # keep snapshot warm without HTTP traffic
+  restart_auto_thread: true
+  restart_telegram: true
+  max_restarts_per_hour: 20            # soft refuse thrash
+  restart_backoff_ms: 2000
+  notify_on_network_recovered: true    # Telegram broadcast when scan OK after ≥2 fails
+
+# Markets table payload — top N by mcap, ~6m change via CoinGecko 200d (no exact 180d)
 bubbles:
   enabled: true
   top_n: 100

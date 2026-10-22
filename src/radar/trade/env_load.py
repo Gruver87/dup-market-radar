@@ -104,14 +104,31 @@ def _bounded_cred(name: str, raw: Optional[str]) -> str:
     return v
 
 
+def _secret_or_empty(logical_id: str) -> str:
+    from radar.secret_mgmt import SecretNotFoundError, get_secret_manager
+
+    try:
+        return get_secret_manager().get_secret(logical_id)
+    except SecretNotFoundError:
+        return ""
+
+
 def kucoin_creds() -> dict[str, str]:
     load_dotenv()
+    from radar.secret_mgmt import (
+        SECRET_KUCOIN_API_KEY,
+        SECRET_KUCOIN_API_PASSPHRASE,
+        SECRET_KUCOIN_API_SECRET,
+    )
+
     base, base_err = validate_kucoin_base_url(os.environ.get("KUCOIN_API_BASE"))
     creds = {
-        "api_key": _bounded_cred("api_key", os.environ.get("KUCOIN_API_KEY")),
-        "api_secret": _bounded_cred("api_secret", os.environ.get("KUCOIN_API_SECRET")),
+        "api_key": _bounded_cred("api_key", _secret_or_empty(SECRET_KUCOIN_API_KEY)),
+        "api_secret": _bounded_cred(
+            "api_secret", _secret_or_empty(SECRET_KUCOIN_API_SECRET)
+        ),
         "api_passphrase": _bounded_cred(
-            "api_passphrase", os.environ.get("KUCOIN_API_PASSPHRASE")
+            "api_passphrase", _secret_or_empty(SECRET_KUCOIN_API_PASSPHRASE)
         ),
         "base_url": base,
         "base_url_error": base_err or "",

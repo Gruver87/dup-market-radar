@@ -68,6 +68,37 @@ def load_config(path: Path | None = None) -> Dict[str, Any]:
 def validate_config(cfg: Dict[str, Any]) -> None:
     errors: List[str] = []
 
+    mode = cfg.get("deployment_mode")
+    if mode is not None:
+        if not isinstance(mode, str) or mode.strip().lower() not in {
+            "lab",
+            "prod",
+            "production",
+        }:
+            errors.append("deployment_mode must be lab|prod")
+
+    secrets = cfg.get("secrets")
+    if secrets is not None:
+        if not isinstance(secrets, dict):
+            errors.append("secrets must be a mapping")
+        else:
+            backend = secrets.get("backend")
+            if backend is not None and (
+                not isinstance(backend, str)
+                or backend.strip().lower() not in {"env", "file"}
+            ):
+                errors.append("secrets.backend must be env|file")
+            if "file_path" in secrets and secrets["file_path"] is not None:
+                if not isinstance(secrets["file_path"], str):
+                    errors.append("secrets.file_path must be str")
+            # Fail-closed: prod + file in same YAML
+            mode_l = str(mode or "lab").strip().lower()
+            backend_l = str(backend or "env").strip().lower()
+            if mode_l in {"prod", "production"} and backend_l == "file":
+                errors.append(
+                    "secrets.backend=file refused when deployment_mode=prod"
+                )
+
     top_n = cfg.get("top_n")
     if not isinstance(top_n, int) or top_n < 1 or top_n > 100:
         errors.append("top_n must be int 1..100")
@@ -409,6 +440,36 @@ def validate_config(cfg: Dict[str, Any]) -> None:
                 not isinstance(ttl, int) or ttl < 5_000 or ttl > 600_000
             ):
                 errors.append("bubbles.cache_ttl_ms must be int 5000..600000")
+
+    recovery = cfg.get("recovery")
+    if recovery is not None:
+        if not isinstance(recovery, dict):
+            errors.append("recovery must be a mapping")
+        else:
+            for bk in (
+                "enabled",
+                "background_scan",
+                "restart_auto_thread",
+                "restart_telegram",
+                "notify_on_network_recovered",
+            ):
+                if bk in recovery and not isinstance(recovery[bk], bool):
+                    errors.append(f"recovery.{bk} must be bool")
+            tick = recovery.get("tick_sec")
+            if tick is not None and (
+                not isinstance(tick, int) or tick < 5 or tick > 300
+            ):
+                errors.append("recovery.tick_sec must be int 5..300")
+            mrh = recovery.get("max_restarts_per_hour")
+            if mrh is not None and (
+                not isinstance(mrh, int) or mrh < 1 or mrh > 60
+            ):
+                errors.append("recovery.max_restarts_per_hour must be int 1..60")
+            rbm = recovery.get("restart_backoff_ms")
+            if rbm is not None and (
+                not isinstance(rbm, int) or rbm < 100 or rbm > 120_000
+            ):
+                errors.append("recovery.restart_backoff_ms must be int 100..120000")
 
     if errors:
         joined = "; ".join(errors[:64])

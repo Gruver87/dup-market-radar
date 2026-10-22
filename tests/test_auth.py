@@ -10,11 +10,15 @@ from radar.auth import (
     verify_api_key,
 )
 from radar.auth_stats import AUTH_STATS
+from radar.secret_mgmt import reset_secret_manager_for_tests
 
 
 def test_gate_off_when_unset(monkeypatch):
+    reset_secret_manager_for_tests()
     monkeypatch.delenv("RADAR_API_KEY", raising=False)
     monkeypatch.delenv("RADAR_REQUIRE_API_KEY", raising=False)
+    monkeypatch.delenv("RADAR_SECRET_BACKEND", raising=False)
+    monkeypatch.delenv("RADAR_DEPLOYMENT_MODE", raising=False)
     assert radar_api_key() is None
     assert api_key_required() is False
     assert require_api_key_env() is False
@@ -24,6 +28,7 @@ def test_gate_off_when_unset(monkeypatch):
 
 
 def test_require_api_key_without_key_refuses_trade(monkeypatch):
+    reset_secret_manager_for_tests()
     monkeypatch.delenv("RADAR_API_KEY", raising=False)
     monkeypatch.setenv("RADAR_REQUIRE_API_KEY", "1")
     assert api_key_gate_ok() is False
@@ -36,6 +41,7 @@ def test_require_api_key_without_key_refuses_trade(monkeypatch):
 
 
 def test_gate_on_compare_digest(monkeypatch):
+    reset_secret_manager_for_tests()
     monkeypatch.setenv("RADAR_API_KEY", "secret-lab-key")
     assert api_key_required() is True
     assert verify_api_key("secret-lab-key") is True
@@ -44,6 +50,7 @@ def test_gate_on_compare_digest(monkeypatch):
 
 
 def test_api_key_length_bounds(monkeypatch):
+    reset_secret_manager_for_tests()
     monkeypatch.setenv("RADAR_API_KEY", "short")
     assert radar_api_key() is None
     monkeypatch.setenv("RADAR_API_KEY", "good-lab-key-ok")

@@ -19,8 +19,15 @@ _TOKEN_MAX_LEN = 256
 
 def telegram_bot_token() -> Optional[str]:
     load_dotenv()
-    tok = (os.environ.get("TELEGRAM_BOT_TOKEN") or "").strip()
-    if not tok:
+    from radar.secret_mgmt import (
+        SECRET_TELEGRAM_BOT_TOKEN,
+        SecretNotFoundError,
+        get_secret_manager,
+    )
+
+    try:
+        tok = get_secret_manager().get_secret(SECRET_TELEGRAM_BOT_TOKEN).strip()
+    except SecretNotFoundError:
         return None
     if len(tok) < _TOKEN_MIN_LEN or len(tok) > _TOKEN_MAX_LEN:
         logger.error(

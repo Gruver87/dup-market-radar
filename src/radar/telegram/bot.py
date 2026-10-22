@@ -76,6 +76,7 @@ class TelegramBot:
             "running": bool(
                 self._poll_thread and self._poll_thread.is_alive()
             ),
+            "threads_alive": self.threads_alive(),
             "allowed_chats": len(self._allowed),
             "watches": self._book.status(),
             "prefs": self._prefs.status(),
@@ -124,6 +125,38 @@ class TelegramBot:
         self._poll_thread = None
         self._alert_thread = None
         logger.info("telegram bot stopped")
+
+    def threads_alive(self) -> bool:
+        """Both poll + alert workers must be alive when bot is running."""
+        poll = self._poll_thread
+        alert = self._alert_thread
+        return bool(
+            poll
+            and poll.is_alive()
+            and alert
+            and alert.is_alive()
+            and not self._stop.is_set()
+        )
+
+    def ensure_running(self) -> bool:
+        """Revive dead poll/alert threads after network/process soft-fail.
+
+        Does not enable Telegram if not configured. Soft-returns False when
+        secrets/config refuse start. Call stop→start when any worker is dead.
+        """
+        cfg = load_config().get("telegram") or {}
+        if cfg.get("enabled") is False:
+            return False
+        if not self.configured() and not telegram_enabled_env():
+            return False
+        if self.threads_alive():
+            return True
+        logger.warning("telegram workers dead or stopped — ensure_running restart")
+        try:
+            self.stop(join_timeout_sec=3.0)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("telegram stop before restart: %s", redact_exc(exc, max_len=128))
+        return bool(self.start())
 
     def broadcast(self, text: str) -> None:
         if not self._client:

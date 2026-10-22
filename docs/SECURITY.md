@@ -3,9 +3,11 @@
 ## Secrets
 
 - Copy `.env.example` → `.env`. **Never commit `.env`.**
+- **SecretManagerPort** (`radar.secret_mgmt`): logical ids → env (default) or file (lab only).
+- `deployment_mode=prod` (or `RADAR_DEPLOYMENT_MODE=prod`) **refuses** `secrets.backend=file`.
 - KuCoin: Spot Trade permission; prefer IP whitelist; passphrase required.
 - Optional `RADAR_API_KEY` — required for trade mutations when `RADAR_REQUIRE_API_KEY=1` (compose default).
-- Logs and audit JSONL pass through `radar.secrets_redact`.
+- Logs and audit JSONL pass through `radar.secrets_redact`. `RADAR_LOG_JSON=1` for structured JSON logs.
 
 ## Network
 

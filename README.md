@@ -1,6 +1,6 @@
 ﻿# DUP Market Radar
 
-**Version:** 0.2.66 · **Org:** [DUP Labs](https://github.com/Gruver87) · **Author:** Uladzimir Dabranski
+**Version:** 0.2.68 · **Org:** [DUP Labs](https://github.com/Gruver87) · **Author:** Uladzimir Dabranski
 
 Hybrid **Python + Rust** market watchlist for crypto spot, USDT-M futures (watch-only), memes, stables, listings, and large prints — with optional **KuCoin spot** manual orders and **opt-in auto-trade** (spot_alts / CEX memes / listings; **never futures**; DEX memes watchlist-only).
 
@@ -32,7 +32,10 @@ Companion to industrial L1 work ([`dup-protocol`](https://github.com/Gruver87/du
 - **Hybrid score:** Rust `radar_native` (PyO3) when built; Docker/CI default to **python-lab** profile (native prefer off) — see honesty below.
 - **Auto fail-closed:** refuses buys on `ok=false` / `mtf_ensure_ok=false` / native-prefer + python backend; with open positions runs **stop-only** via KuCoin mark.
 - **Dashboard pages** (like DUP Console): Watchlist · Markets ~6m table · Ops (clock/FX) · Help — hash routes `#watchlist` / `#markets` / `#ops` / `#help`.
-- **Live ticks:** WebSocket `/ws` nudges refresh; HTTP poll remains source of truth.
+- **Live ticks:** WebSocket `/ws` nudges refresh (reconnect with backoff); HTTP poll remains source of truth.
+- **Self-recovery:** background scan + worker watchdog after network/thread death — see [`docs/RECOVERY.md`](docs/RECOVERY.md) (does **not** auto-enable trade).
+- **SecretManagerPort** + prod refuse file secrets; **MetricsExporterPort**; optional `RADAR_LOG_JSON=1`.
+- **Evidence matrix** + hashed `package_radar_evidence.py`; static `radar_gate.py` needles.
 
 ---
 
@@ -79,6 +82,9 @@ Full index: [`docs/README.md`](docs/README.md).
 | [`docs/DISCLAIMER.md`](docs/DISCLAIMER.md) | **No liability** — read before enabling trade |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layers, MTF ensure, hybrid native |
 | [`docs/DASHBOARD.md`](docs/DASHBOARD.md) | Multi-page UI, Markets table, hash nav |
+| [`docs/RECOVERY.md`](docs/RECOVERY.md) | Self-heal after outages / dead workers |
+| [`docs/PROFILES.md`](docs/PROFILES.md) | Named profiles lab / native / live-money |
+| [`docs/EVIDENCE_MATRIX.md`](docs/EVIDENCE_MATRIX.md) | Claim → pack honesty matrix |
 | [`docs/OPS.md`](docs/OPS.md) | Run, Docker, verify profiles, metrics |
 | [`docs/SECURITY.md`](docs/SECURITY.md) | Keys, CORS, rate limits, exposure |
 | [`docs/TRADE.md`](docs/TRADE.md) | Manual / auto / Telegram trade gates |
@@ -109,6 +115,7 @@ Copy [`.env.example`](.env.example) → `.env`. **Never commit `.env`.**
 | `GET /api/ops/bubbles` | Top-100 ~6m markets payload (table UI) |
 | `GET /api/ops/worldtime` | Fixed-offset world clock (incl. Minsk) |
 | `GET /api/ops/fx` | FX convert (ECB + NBRB for BYN/RUB) |
+| `GET /api/ops/recovery` | Self-recovery supervisor status |
 | `POST /api/trade/*` | Manual / auto (API key when required) |
 | `GET /api/telegram/status` | Bot / watches / circuit |
 | `WS /ws` | Live nudge (snapshot / alert / trade) |

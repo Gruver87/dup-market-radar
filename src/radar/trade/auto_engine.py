@@ -101,7 +101,11 @@ class AutoTradeEngine:
                 "last_cycle": self._last_cycle,
                 "cycle_inflight": self._cycle_inflight,
                 "manual_still_available": True,
+                "loop_alive": bool(self._thread and self._thread.is_alive()),
             }
+
+    def loop_alive(self) -> bool:
+        return bool(self._thread and self._thread.is_alive())
 
     def set_enabled(self, enabled: bool) -> Dict[str, Any]:
         enabled = bool(enabled)

@@ -1301,26 +1301,39 @@
     }
 
     // Optional live ticks — HTTP poll remains source of truth; WS only nudges refresh.
+    // Self-reconnect with exponential backoff after network drop (does not replace poll).
     (function bindRadarWs() {
-      try {
-        const proto = location.protocol === "https:" ? "wss" : "ws";
-        const key = (localStorage.getItem("radar_api_key") || "").trim();
-        const q = key ? ("?api_key=" + encodeURIComponent(key)) : "";
-        const ws = new WebSocket(proto + "://" + location.host + "/ws" + q);
-        let lastNudge = 0;
-        ws.onmessage = (ev) => {
-          let msg;
-          try { msg = JSON.parse(ev.data); } catch (_) { return; }
-          if (!msg || !msg.type) return;
-          if (msg.type === "snapshot" || msg.type === "alert" || msg.type === "trade") {
-            const now = Date.now();
-            if (now - lastNudge < 5000) return;
-            lastNudge = now;
-            load(false);
-          }
-        };
-        ws.onerror = () => { try { ws.close(); } catch (_) {} };
-      } catch (_) { /* soft — poll continues */ }
+      let delayMs = 1000;
+      let lastNudge = 0;
+      let timer = null;
+      function connect() {
+        try {
+          const proto = location.protocol === "https:" ? "wss" : "ws";
+          const key = (localStorage.getItem("radar_api_key") || "").trim();
+          const q = key ? ("?api_key=" + encodeURIComponent(key)) : "";
+          const ws = new WebSocket(proto + "://" + location.host + "/ws" + q);
+          ws.onopen = () => { delayMs = 1000; };
+          ws.onmessage = (ev) => {
+            let msg;
+            try { msg = JSON.parse(ev.data); } catch (_) { return; }
+            if (!msg || !msg.type) return;
+            if (msg.type === "snapshot" || msg.type === "alert" || msg.type === "trade" || msg.type === "recovery") {
+              const now = Date.now();
+              if (now - lastNudge < 5000) return;
+              lastNudge = now;
+              load(false);
+              if (msg.type === "recovery") loadMarkets(false);
+            }
+          };
+          ws.onerror = () => { try { ws.close(); } catch (_) {} };
+          ws.onclose = () => {
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(connect, delayMs);
+            delayMs = Math.min(60_000, Math.floor(delayMs * 1.7));
+          };
+        } catch (_) { /* soft — poll continues */ }
+      }
+      connect();
     })();
   </script>
 </body>

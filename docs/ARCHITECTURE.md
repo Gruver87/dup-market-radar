@@ -10,7 +10,7 @@ Dashboard / Telegram / WebSocket (/ws) / Webhook
    Pipeline (ingest ? MTF ensure ? score ? snapshot)
         ?
    -----+-----
- Python     Rust radar_native (PyO3)  ó score hot path when built
+ Python     Rust radar_native (PyO3)  ù score hot path when built
  ingest     score_universe_json
  trade      parity with Python scorers (tests)
  paper      dry-run P&L ledger (USDT micros)
@@ -18,6 +18,16 @@ Dashboard / Telegram / WebSocket (/ws) / Webhook
 ```
 
 Transport (HTTP/TG) must not reach raw L1-style state: this product is **not** the L1. Persistence is JSON under `data/` (positions, watches, oid ledger) with integrity checks where applicable.
+
+## Self-recovery
+
+`RecoverySupervisor` (daemon) keeps background scans warm, restarts dead auto/Telegram workers under a hourly budget, and emits `network_recovered` after outages ù without enabling auto-trade or clearing fail-closed gates. See [`RECOVERY.md`](RECOVERY.md).
+
+## Ports (industrial base)
+
+- **`SecretManagerPort`** ó `radar.secret_mgmt` (env default; file refused when `deployment_mode=prod`).
+- **`MetricsExporterPort`** ó frozen scrape snapshot ? Prometheus text (`radar.observability` + `metrics.py`).
+- Profiles / evidence: [`PROFILES.md`](PROFILES.md), [`EVIDENCE_MATRIX.md`](EVIDENCE_MATRIX.md), `scripts/radar_gate.py`.
 
 ## Dashboard views
 
@@ -41,7 +51,7 @@ Empty / hard-fail path: `empty_snapshot(...)` ? `ok=false`, `mtf_ensure_ok=false
 ## MTF ensure
 
 1. Build universe (group poll: cex / memes / stables).
-2. Up to **2** ensure rounds: prelim ? `2◊top_n` scored symbols + listings + **CEX keyword memes**; attach 15m/1h/4h via KuCoin then Binance/Bybit/MEXC.
+2. Up to **2** ensure rounds: prelim ? `2ùtop_n` scored symbols + listings + **CEX keyword memes**; attach 15m/1h/4h via KuCoin then Binance/Bybit/MEXC.
 3. Early-exit when spot, futures, listings, and CEX-meme top-N fill ? **0.85**.
 4. After rounds: if still below 0.85 ? `mtf_ensure_ok=false` ? snapshot `ok=false`.
 
@@ -51,7 +61,7 @@ Empty / hard-fail path: `empty_snapshot(...)` ? `ok=false`, `mtf_ensure_ok=false
 
 - Crate: `native/radar_native` (Cargo / maturin).
 - Config default: `native.prefer` + `fail_closed` true in `config/default.yaml`.
-- **Docker / GitHub CI:** `RADAR_NATIVE_*=0` ? documented **python-lab** profile. Do not claim ìprod nativeî from compose alone.
+- **Docker / GitHub CI:** `RADAR_NATIVE_*=0` ? documented **python-lab** profile. Do not claim ùprod nativeù from compose alone.
 
 ## Money
 
@@ -61,8 +71,8 @@ Futures tops skip commodity/FX/index bases (`is_non_crypto_futures_symbol`).
 
 ## Related docs
 
-- [`OPS.md`](OPS.md) ó run profiles  
-- [`DASHBOARD.md`](DASHBOARD.md) ó UI  
-- [`TRADE.md`](TRADE.md) ó auto gates  
-- [`SECURITY.md`](SECURITY.md) ó exposure  
-- [`DISCLAIMER.md`](DISCLAIMER.md) ó liability  
+- [`OPS.md`](OPS.md) ù run profiles  
+- [`DASHBOARD.md`](DASHBOARD.md) ù UI  
+- [`TRADE.md`](TRADE.md) ù auto gates  
+- [`SECURITY.md`](SECURITY.md) ù exposure  
+- [`DISCLAIMER.md`](DISCLAIMER.md) ù liability  

@@ -1,9 +1,12 @@
-"""Ops metrics — JSON + Prometheus text exposition."""
+"""Ops metrics — JSON + Prometheus text exposition (MetricsExporterPort)."""
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Any, Dict, List, Optional
+
+from radar.observability.ports import MetricsExporterPort, MetricsSnapshot, snapshot_from_payload
 
 _PROM_LABEL_RE = re.compile(r"[^A-Za-z0-9_.\-]")
 
@@ -74,7 +77,59 @@ def build_metrics_payload(
     }
 
 
-def to_prometheus(payload: Dict[str, Any]) -> str:
+class PrometheusMetricsExporter:
+    """Hand-built Prometheus 0.0.4 text — fail-closed on NaN/Inf."""
+
+    def render(self, snapshot: MetricsSnapshot) -> str:
+        payload = {
+            "product": snapshot.product,
+            "schema_version": snapshot.schema_version,
+            "score_backend": snapshot.score_backend,
+            "last_scan_ok": snapshot.last_scan_ok,
+            "universe_size": snapshot.universe_size,
+            "elapsed_ms": snapshot.elapsed_ms,
+            "native_available": snapshot.native_available,
+            "cache": dict(snapshot.cache),
+            "circuit": dict(snapshot.circuit),
+            "http": dict(snapshot.http),
+            "dedupe": dict(snapshot.dedupe),
+            "auto_trade": dict(snapshot.auto_trade),
+            "trade_rate_limit": dict(snapshot.trade_rate_limit),
+            "trade": dict(snapshot.trade),
+            "auth": dict(snapshot.auth),
+            "telegram": dict(snapshot.telegram),
+            "recovery": dict(snapshot.recovery),
+            "deployment_mode": snapshot.deployment_mode,
+            "secrets_backend": snapshot.secrets_backend,
+        }
+        return _render_prometheus(payload)
+
+
+_EXPORTER: MetricsExporterPort = PrometheusMetricsExporter()
+
+
+def get_metrics_exporter() -> MetricsExporterPort:
+    return _EXPORTER
+
+
+def to_prometheus(payload: Dict[str, Any], *, deployment_mode: str = "lab") -> str:
+    snap = snapshot_from_payload(payload, deployment_mode=deployment_mode)
+    return get_metrics_exporter().render(snap)
+
+
+def _safe_float(value: Any) -> Optional[float]:
+    try:
+        if isinstance(value, bool):
+            return 1.0 if value else 0.0
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(v) or math.isinf(v):
+        return None
+    return v
+
+
+def _render_prometheus(payload: Dict[str, Any]) -> str:
     lines: List[str] = [
         "# HELP radar_up 1 if process serving metrics",
         "# TYPE radar_up gauge",
@@ -84,12 +139,11 @@ def to_prometheus(payload: Dict[str, Any]) -> str:
     def gauge(name: str, value: Any, labels: str = "") -> None:
         if value is None:
             return
-        try:
-            v = int(value) if isinstance(value, bool) else float(value)
-        except (TypeError, ValueError):
+        v = _safe_float(value)
+        if v is None:
             return
         if isinstance(value, bool):
-            v = 1 if value else 0
+            v = 1.0 if value else 0.0
         lab = f"{{{labels}}}" if labels else ""
         lines.append(f"{name}{lab} {v}")
 
@@ -166,6 +220,21 @@ def to_prometheus(payload: Dict[str, Any]) -> str:
     auth = payload.get("auth") or {}
     gauge("radar_auth_ok_total", auth.get("auth_ok"))
     gauge("radar_auth_fail_total", auth.get("auth_fail"))
+
+    rec = payload.get("recovery") or {}
+    gauge("radar_recovery_running", 1 if rec.get("running") else 0)
+    gauge("radar_recovery_consecutive_scan_fails", rec.get("consecutive_scan_fails"))
+    stats = rec.get("stats") or {}
+    gauge("radar_recovery_network_recoveries_total", stats.get("network_recoveries"))
+    gauge("radar_recovery_auto_restarts_total", stats.get("auto_restarts"))
+    gauge("radar_recovery_telegram_restarts_total", stats.get("telegram_restarts"))
+    gauge("radar_recovery_background_scans_total", stats.get("background_scans"))
+
+    mode = _prom_label_value(payload.get("deployment_mode") or "lab")
+    backend = _prom_label_value(payload.get("secrets_backend") or "env")
+    lines.append(
+        f'radar_deployment_info{{mode="{mode}",secrets_backend="{backend}"}} 1'
+    )
 
     lines.append("")
     return "\n".join(lines)

@@ -22,7 +22,9 @@ Sector tabs render **only** on Watchlist. Switching sectors updates the table in
 ## Live updates
 
 - HTTP poll remains the source of truth (snapshot ~60s, markets ~30s, clock ~30s).
-- Optional `WS /ws` nudges a snapshot refresh on `snapshot` / `alert` / `trade` (5s debounce). Soft: poll continues if WS fails.
+- Optional `WS /ws` nudges a snapshot refresh on `snapshot` / `alert` / `trade` / `recovery` (5s debounce).
+- WS **reconnects** with exponential backoff on close; poll continues if WS fails.
+- Server-side self-heal: [`RECOVERY.md`](RECOVERY.md).
 
 ## Language
 

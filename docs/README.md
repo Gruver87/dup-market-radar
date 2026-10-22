@@ -1,19 +1,22 @@
 # DUP Market Radar — documentation index
 
-**Product:** DUP Market Radar · **Org:** DUP Labs · **Pin:** `0.2.66`  
+**Product:** DUP Market Radar · **Org:** DUP Labs · **Pin:** `0.2.68`  
 **Repo:** https://github.com/Gruver87/dup-market-radar
 
 Read order for operators:
 
 1. [`DISCLAIMER.md`](DISCLAIMER.md) — liability / not financial advice  
 2. [`LIVE_MONEY.md`](LIVE_MONEY.md) — before any live capital  
-3. [`OPS.md`](OPS.md) — run / verify / Docker  
-4. [`DASHBOARD.md`](DASHBOARD.md) — UI pages  
-5. [`TRADE.md`](TRADE.md) — manual / auto / Telegram gates  
-6. [`SECURITY.md`](SECURITY.md) — keys, CORS, exposure  
-7. [`ARCHITECTURE.md`](ARCHITECTURE.md) — pipeline / native / snapshot  
-8. [`EVIDENCE.md`](EVIDENCE.md) — smoke / pre-soak / soak packs  
-9. [`BRAND.md`](BRAND.md) — naming & URLs  
+3. [`PROFILES.md`](PROFILES.md) — lab / python-lab / native / live-money  
+4. [`OPS.md`](OPS.md) — run / verify / Docker  
+5. [`RECOVERY.md`](RECOVERY.md) — self-heal after network / worker death  
+6. [`EVIDENCE_MATRIX.md`](EVIDENCE_MATRIX.md) — claim → pack honesty  
+7. [`DASHBOARD.md`](DASHBOARD.md) — UI pages  
+8. [`TRADE.md`](TRADE.md) — manual / auto / Telegram gates  
+9. [`SECURITY.md`](SECURITY.md) — SecretManagerPort, CORS, exposure  
+10. [`ARCHITECTURE.md`](ARCHITECTURE.md) — pipeline / native / snapshot  
+11. [`EVIDENCE.md`](EVIDENCE.md) — how to produce packs  
+12. [`BRAND.md`](BRAND.md) — naming & URLs  
 
 Root:
 

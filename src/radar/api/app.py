@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import asyncio
 import json as _json
@@ -49,6 +49,8 @@ from radar.persist import sha256_text
 from radar.pipeline import empty_snapshot, run_scan
 from radar.rate_limit import RateLimiter
 from radar.scan_cache import SnapshotCache
+from radar.logging_setup import configure_json_logging_if_enabled
+from radar.secret_mgmt import deployment_mode, secrets_status
 from radar.secrets_redact import configure_secure_logging, redact_exc, redact_text
 from radar.trade.auto_engine import AutoTradeEngine
 from radar.trade.kucoin_manual import (
@@ -63,6 +65,7 @@ from radar.telegram import TelegramBot
 from radar.telegram.alerts import find_row_public
 from radar.api.ws_hub import HUB
 from radar.notify.webhook import get_webhook_notifier
+from radar.recovery import RecoverySupervisor
 from radar.trade.events import read_trade_events, record_trade_event
 from radar.trade.oid_ledger import ClientOidLedger
 from radar.trade.paper_ledger import PaperLedger
@@ -70,6 +73,7 @@ from radar.trade.stats import TRADE_STATS
 from radar.trade.symbol_meta import SymbolMetaCache
 
 configure_secure_logging()
+configure_json_logging_if_enabled(deployment_mode=deployment_mode())
 logger = logging.getLogger("radar.api")
 
 _cache = SnapshotCache()
@@ -324,6 +328,9 @@ def _ops_problems(*, for_ready: bool) -> list[str]:
         problems.append("kucoin_base_url_refused")
     if not api_key_gate_ok():
         problems.append("api_key_required_but_unset")
+    sec = secrets_status()
+    if sec.get("ok") is False:
+        problems.append("secrets_backend_refused")
     meta = (trader_st.get("symbol_meta") or {}) if trader_st else {}
     if meta.get("base_url_ok") is False:
         problems.append("symbol_meta_base_url_refused")
@@ -338,6 +345,17 @@ def _ops_problems(*, for_ready: bool) -> list[str]:
             and watches.get("persist_ok") is False
         ):
             problems.append("telegram_watches_persist_degraded")
+        # Only flag when status explicitly reports dead workers (missing key = legacy/fake).
+        if tg.get("env_ready") and tg.get("threads_alive") is False:
+            problems.append("telegram_threads_dead")
+    if not _auto.loop_alive():
+        problems.append("auto_loop_dead")
+    if _recovery is not None and "pytest" not in sys.modules:
+        rec = _recovery.status()
+        if rec.get("enabled") and not rec.get("running"):
+            problems.append("recovery_supervisor_dead")
+        if int(rec.get("consecutive_scan_fails") or 0) >= 3:
+            problems.append("recovery_scan_failing")
     if not for_ready:
         circuit = get_breaker(load_config()).status()
         if circuit.get("open_remaining_ms"):
@@ -346,6 +364,52 @@ def _ops_problems(*, for_ready: bool) -> list[str]:
 
 
 _auto = AutoTradeEngine(_trader, lambda: _get_snapshot(force=False))
+_recovery: Optional[RecoverySupervisor] = None
+
+
+def _build_recovery() -> RecoverySupervisor:
+    def _tg_wanted() -> bool:
+        if _tg is None:
+            return False
+        st = _tg.status()
+        return bool(st.get("env_ready") and (load_config().get("telegram") or {}).get("enabled") is not False)
+
+    def _tg_alive() -> bool:
+        return bool(_tg is not None and _tg.threads_alive())
+
+    def _ensure_tg() -> bool:
+        if _tg is None:
+            return False
+        return bool(_tg.ensure_running())
+
+    def _on_recovered(payload: Dict[str, Any]) -> None:
+        if _tg is None:
+            return
+        msg = (
+            "🌐 <b>Network recovered</b>\n"
+            f"prev_fails={payload.get('prev_consecutive_fails')}\n"
+            f"ok={payload.get('ok')} mtf={payload.get('mtf_ensure_ok')}\n"
+            f"universe={payload.get('universe_size')}"
+        )
+        _tg.broadcast(msg)
+        try:
+            HUB.publish({"type": "recovery", "event": payload})
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _ensure_auto() -> bool:
+        _auto.start()
+        return _auto.loop_alive()
+
+    return RecoverySupervisor(
+        snapshot_fn=lambda: _get_snapshot(force=False),
+        ensure_auto=_ensure_auto,
+        ensure_telegram=_ensure_tg,
+        auto_alive=_auto.loop_alive,
+        telegram_wanted=_tg_wanted,
+        telegram_alive=_tg_alive,
+        on_network_recovered=_on_recovered,
+    )
 
 
 def _tg_trade_place(
@@ -558,7 +622,7 @@ def _public_trade_surface(*, detail: bool = False) -> Dict[str, Any]:
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    global _tg, _tg_start_error
+    global _tg, _tg_start_error, _recovery
     # Fail-closed startup when docker/prod requires API key but none is set.
     if not api_key_gate_ok() and "pytest" not in sys.modules:
         raise RuntimeError(
@@ -589,11 +653,18 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
             "telegram start failed — continuing without bot: %s",
             _tg_start_error,
         )
+    # Under pytest: build status object but do not start daemon (avoids live scans in unit tests).
+    _recovery = _build_recovery()
+    if "pytest" in sys.modules:
+        logger.info("recovery supervisor built but not started (pytest)")
+    else:
+        _recovery.start()
     wh = get_webhook_notifier().status()
     logger.info(
-        "webhook configured=%s host_ok=%s",
+        "webhook configured=%s host_ok=%s recovery=%s",
         wh.get("configured"),
         wh.get("host_ok"),
+        (_recovery.status() if _recovery else {}).get("running"),
     )
     if bool(_api_cfg().get("warm_scan_on_startup", True)):
 
@@ -607,7 +678,10 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
         threading.Thread(target=_warm, name="radar-warm-scan", daemon=True).start()
     yield
-    logger.info("shutdown: stopping telegram + auto-trade")
+    logger.info("shutdown: stopping recovery + telegram + auto-trade")
+    if _recovery is not None:
+        _recovery.stop(join_timeout_sec=5.0)
+        _recovery = None
     _auto.set_on_action(None)
     if _tg is not None:
         _tg.stop(join_timeout_sec=5.0)
@@ -627,7 +701,7 @@ def _openapi_enabled() -> bool:
 _OPENAPI_ON = _openapi_enabled()
 app = FastAPI(
     title="DUP Market Radar",
-    version="0.2.66",
+    version="0.2.68",
     lifespan=_lifespan,
     docs_url="/docs" if _OPENAPI_ON else None,
     redoc_url="/redoc" if _OPENAPI_ON else None,
@@ -754,7 +828,7 @@ _install_trusted_hosts()
 
 def _metrics_dict() -> Dict[str, Any]:
     snap = _cache.peek()
-    return build_metrics_payload(
+    body = build_metrics_payload(
         cache=_cache.status(),
         circuit=get_breaker(load_config()).status(),
         snap=snap,
@@ -765,6 +839,12 @@ def _metrics_dict() -> Dict[str, Any]:
         telegram=_telegram_public_status(),
         auth_stats=AUTH_STATS.snapshot(),
     )
+    sec = secrets_status()
+    body["deployment_mode"] = deployment_mode()
+    body["secrets_backend"] = sec.get("backend") or "env"
+    body["secrets_ok"] = bool(sec.get("ok"))
+    body["recovery"] = _recovery.status() if _recovery else {"running": False}
+    return body
 
 
 def _check_ops_rate(request: Request) -> None:
@@ -873,6 +953,19 @@ def ready(request: Request) -> Dict[str, Any]:
     return body
 
 
+@app.get("/api/ops/recovery")
+def ops_recovery(request: Request) -> Dict[str, Any]:
+    """Self-recovery supervisor status (watchdog + background scan)."""
+    _check_ops_rate(request)
+    if _recovery is None:
+        return {
+            "ok": False,
+            "recovery": {"enabled": False, "running": False, "note": "not started"},
+        }
+    st = _recovery.status()
+    return {"ok": bool(st.get("running")), "recovery": st}
+
+
 @app.get("/api/health")
 def health(request: Request) -> Dict[str, Any]:
     """Honest health — not always green (ops dashboard; not a k8s probe)."""
@@ -890,6 +983,9 @@ def health(request: Request) -> Dict[str, Any]:
         "native": native_status(),
         "manual_trade": surface["manual_trade"],
         "auto_trade": surface["auto_trade"],
+        "recovery": _recovery.status() if _recovery else {"running": False},
+        "secrets": secrets_status(),
+        "deployment_mode": deployment_mode(),
         "cache": _cache.status(),
         "circuit": get_breaker(load_config()).status(),
         "trade_rate_limit": _trade_limiter().status(),
@@ -917,7 +1013,8 @@ def metrics_json(request: Request) -> Dict[str, Any]:
 @app.get("/api/metrics/prometheus")
 def metrics_prometheus(request: Request) -> Response:
     _check_metrics_rate(request)
-    body = to_prometheus(_metrics_dict())
+    md = _metrics_dict()
+    body = to_prometheus(md, deployment_mode=str(md.get("deployment_mode") or "lab"))
     return PlainTextResponse(body, media_type="text/plain; version=0.0.4; charset=utf-8")
 
 

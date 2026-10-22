@@ -1,5 +1,11 @@
 # Changelog — DUP Market Radar
 
+## 0.2.65
+
+- Pre-soak gate: `scripts/pre_soak_gate.ps1` (native + pytest + live smoke evidence + short soak)
+- Soak lab: prefer/fail_closed native when `radar_native` importable; soft only when missing
+- Native crate / pyproject version aligned to app pin `0.2.65`
+
 ## 0.2.64
 
 - Ensure: CEX keyword memes included in MTF short-window targets + `meme_cex_fill_ratio` honesty

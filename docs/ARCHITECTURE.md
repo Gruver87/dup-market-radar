@@ -1,6 +1,6 @@
 # Architecture
 
-**Pin:** 0.2.83 ? Index: [`README.md`](README.md)
+**Pin:** 0.2.83 | Index: [`README.md`](README.md)
 
 ## Layers
 

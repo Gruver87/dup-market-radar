@@ -36,7 +36,8 @@ _SKIP_BINANCE_KLINE_VENUES = frozenset({"bybit", "mexc"})
 # the whole kline budget before scored top-N round 2.
 _WATERFALL_STAGE_CAP = 24
 # Parallel kline fan-out (AllowlistHttp lock no longer wraps network I/O).
-KLINE_PARALLEL_WORKERS = 8
+# 12 (0.2.80; was 8) — primary+display share the same budgeted waterfall.
+KLINE_PARALLEL_WORKERS = 12
 
 _T = TypeVar("_T")
 _R = TypeVar("_R")

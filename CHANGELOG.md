@@ -1,5 +1,13 @@
 ﻿# Changelog - DUP Market Radar
 
+## 0.2.80
+
+- Display ensure: patch-from-universe first, then miss-detect (avoids redundant kline when score omitted MTF copy)
+- Kline fan-out: `KLINE_PARALLEL_WORKERS=12` (was 8)
+- Display cap stays 8 — trial at 4 regressed live spot_mtf (~7/10); not shipped
+- Package / FastAPI / User-Agent / `__version__` / native pin `0.2.80`
+- Soak / 48h: **not** claimed this pin
+
 ## 0.2.79
 
 - Primary ensure: `ensure_rank_n = ensure_cap` (was top_n*2) — absorb more post-MTF display tops in the parallel window

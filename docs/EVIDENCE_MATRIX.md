@@ -1,6 +1,6 @@
 # Evidence matrix — DUP Market Radar
 
-**Pin:** 0.2.79 · Companion product — **not** L1 mesh evidence.
+**Pin:** 0.2.80 · Companion product — **not** L1 mesh evidence.
 
 Claims require on-disk packs. Missing pack в‡’ **вЏі** / do not invent PASS.
 
@@ -26,6 +26,7 @@ Claims require on-disk packs. Missing pack в‡’ **вЏі** / do not invent P
 | MEXC/Bybit bootstrap parallel (0.2.77) | 3-way venue GETs; display time in ensure_ms | live venue_ms |
 | Ensure gate widen + display acc preserve + Dex skip (0.2.78) | ensure_rank_n=top_n*2; no clobber; Dex @>=12 | live ensure_ms / short_window_ensure |
 | Ensure rank = ensure_cap (0.2.79) | ensure_rank_n fills cap; fewer display misses | live display_ensure_ms |
+| Display patch-first + kline×12 (0.2.80) | pre-patch before miss; workers 12; cap stays 8 | live display_ensure_ms / ensure_ms |
 | Ensure GET budget | `ingest.max_kline_gets` + `http_stats.kline_gets` | incomplete fill still fail-closed |
 
 ## Packaging

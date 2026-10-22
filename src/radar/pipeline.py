@@ -224,6 +224,7 @@ def _display_missing_mtf_symbols(
 
     Only ``spot_alts`` + ``futures`` (no memes/listings/whales) and hard-capped
     so display fill cannot dominate scan wall-clock.
+    Cap stays 8 — live 0.2.80 trial at 4 regressed spot_mtf (~7/10 vs 10/10).
     """
     spot: set[str] = set()
     fut: set[str] = set()
@@ -598,6 +599,9 @@ def run_scan(
         # Display honesty: scored tops may diverge from frozen gate — fill MTF
         # for missing display rows from remaining kline budget, then patch metrics.
         # Attribute wall time to ensure_ms (not score_ms).
+        # Patch-first (0.2.80): universe may already hold MTF for scored rows
+        # when score omitted copying — avoid a redundant kline round-trip.
+        pre_patched = _patch_sectors_mtf_from_universe(sectors, universe)
         kb_left = budget_status(http).get("kline_budget_left")
         if kb_left is None or int(kb_left) > 0:
             miss_spot, miss_fut = _display_missing_mtf_symbols(sectors)
@@ -622,11 +626,12 @@ def run_scan(
                     disp_ms = int(time.time() * 1000) - t_disp
                     ensure_ms = int(ensure_ms) + disp_ms
                     universe["short_window_ensure"] = primary_acc
+                    primary_acc["display_pre_patched"] = int(pre_patched)
                     primary_acc["display_ensure_ms"] = disp_ms
                     primary_acc["display_spot_targets"] = len(miss_spot)
                     primary_acc["display_fut_targets"] = len(miss_fut)
-                    primary_acc["display_patched"] = _patch_sectors_mtf_from_universe(
-                        sectors, universe
+                    primary_acc["display_patched"] = int(pre_patched) + int(
+                        _patch_sectors_mtf_from_universe(sectors, universe)
                     )
                     primary_acc["ensure_ms"] = ensure_ms
                     primary_acc["kline_budget"] = budget_status(http)
@@ -638,6 +643,10 @@ def run_scan(
                         "display MTF ensure soft-fail: %s",
                         redact_exc(disp_exc, max_len=128),
                     )
+        # Honesty: record patch-first even when no display network round.
+        acc0 = universe.get("short_window_ensure")
+        if isinstance(acc0, dict) and "display_pre_patched" not in acc0:
+            acc0["display_pre_patched"] = int(pre_patched)
         # Bound public error list — never dump unbounded venue noise
         errors = [
             redact_text(str(e))[:256]

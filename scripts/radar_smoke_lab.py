@@ -18,6 +18,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 
 def offline() -> int:
+    import yaml
+
     from radar.config import load_config
     from radar.ingest.normalize import enrich_list
     from radar.money import PRICE_SCALE, quote_i
@@ -26,7 +28,12 @@ def offline() -> int:
 
     cfg = load_config()
     assert cfg["venues"][0] == "kucoin"
-    assert cfg["native"].get("fail_closed") is True
+    # Pin honesty: default.yaml on disk (CI python-lab overlays RADAR_NATIVE_*=0).
+    raw = yaml.safe_load(
+        (ROOT / "config" / "default.yaml").read_text(encoding="utf-8")
+    )
+    assert (raw.get("native") or {}).get("fail_closed") is True
+    assert (raw.get("native") or {}).get("prefer") is True
     assert quote_i("10") == 10_000_000
 
     universe = {

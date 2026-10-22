@@ -1,5 +1,13 @@
 # Changelog — DUP Market Radar
 
+## 0.2.73
+
+- Binance ingest: parallel bootstrap (spot 24hr ∥ futures 24hr ∥ premium ∥ exchangeInfo)
+- KuCoin ingest: parallel bootstrap (allTickers ∥ contracts ∥ symbols) + whales overlapped; whale histories fan-out parallel
+- Evidence packager: treat `hard_fails=0` correctly (was falsy `or 1` → false fail)
+- Package / FastAPI / User-Agent / `__version__` / native pin `0.2.73`
+- Soak / 48h: **not** claimed this pin
+
 ## 0.2.72
 
 - Smoke evidence: export `ingest_ms` / `ensure_ms` / `score_ms` / `venue_ms` / `kline_gets` in live packs

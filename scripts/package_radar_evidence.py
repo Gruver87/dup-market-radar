@@ -81,9 +81,11 @@ def package(inputs: List[Path], *, label: str) -> Path:
             entry["hard_fails"] = body.get("hard_fails")
             entry["approx_48h_claim_ok"] = body.get("approx_48h_claim_ok")
             entry["pack_kind"] = body.get("pack_kind")
-            if body.get("approx_48h_claim_ok") is True and int(body.get("hard_fails") or 1) == 0:
+            hard = body.get("hard_fails")
+            hard_zero = hard is not None and int(hard) == 0
+            if body.get("approx_48h_claim_ok") is True and hard_zero:
                 statuses.append("pass_48h_candidate")
-            elif body.get("ok") is True or int(body.get("hard_fails") or 1) == 0:
+            elif body.get("ok") is True or hard_zero:
                 statuses.append("ok")
             else:
                 statuses.append("fail")

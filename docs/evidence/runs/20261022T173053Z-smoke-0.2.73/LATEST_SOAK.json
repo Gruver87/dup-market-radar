@@ -1,0 +1,99 @@
+{
+  "product": "DUP Market Radar",
+  "pack_kind": "soak_lab",
+  "generated_at_utc": "20261022T002444Z",
+  "disclaimer": "Evidence only — not financial advice; author accepts no liability. Not a 48h soak claim unless duration≈48h and hard_fails=0.",
+  "cycles_planned": 3,
+  "cycles_ran": 3,
+  "interval_sec": 45.0,
+  "duration_hours_requested": null,
+  "duration_ms": 132172,
+  "hard_fails": 0,
+  "approx_48h_claim_ok": false,
+  "results": [
+    {
+      "at_ms": 1792628566424,
+      "ok": true,
+      "mtf_ensure_ok": true,
+      "score_backend": "radar_native",
+      "native_prefer": true,
+      "native_fail_closed": true,
+      "native": {
+        "available": true,
+        "backend": "radar_native",
+        "version": "0.2.65",
+        "error": null
+      },
+      "elapsed_ms": 13919,
+      "universe_size": 4639,
+      "hard_fail": false,
+      "reasons": [],
+      "errors": [],
+      "short_window_ensure": {
+        "spot_fill_ratio": 0.9,
+        "fut_fill_ratio": 0.9,
+        "list_spot_fill_ratio": null,
+        "list_fut_fill_ratio": 1.0,
+        "meme_cex_fill_ratio": 1.0,
+        "meme_cex_targets": 1,
+        "rounds": 1
+      }
+    },
+    {
+      "at_ms": 1792628625636,
+      "ok": true,
+      "mtf_ensure_ok": true,
+      "score_backend": "radar_native",
+      "native_prefer": true,
+      "native_fail_closed": true,
+      "native": {
+        "available": true,
+        "backend": "radar_native",
+        "version": "0.2.65",
+        "error": null
+      },
+      "elapsed_ms": 14049,
+      "universe_size": 4639,
+      "hard_fail": false,
+      "reasons": [],
+      "errors": [],
+      "short_window_ensure": {
+        "spot_fill_ratio": 1.0,
+        "fut_fill_ratio": 0.9,
+        "list_spot_fill_ratio": null,
+        "list_fut_fill_ratio": 1.0,
+        "meme_cex_fill_ratio": 1.0,
+        "meme_cex_targets": 1,
+        "rounds": 1
+      }
+    },
+    {
+      "at_ms": 1792628684421,
+      "ok": true,
+      "mtf_ensure_ok": true,
+      "score_backend": "radar_native",
+      "native_prefer": true,
+      "native_fail_closed": true,
+      "native": {
+        "available": true,
+        "backend": "radar_native",
+        "version": "0.2.65",
+        "error": null
+      },
+      "elapsed_ms": 13579,
+      "universe_size": 4639,
+      "hard_fail": false,
+      "reasons": [],
+      "errors": [],
+      "short_window_ensure": {
+        "spot_fill_ratio": 1.0,
+        "fut_fill_ratio": 0.9,
+        "list_spot_fill_ratio": null,
+        "list_fut_fill_ratio": 1.0,
+        "meme_cex_fill_ratio": 1.0,
+        "meme_cex_targets": 1,
+        "rounds": 1
+      }
+    }
+  ]
+}

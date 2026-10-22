@@ -3,12 +3,50 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Dict, List, Optional, Tuple
 
 from radar.http_client import AllowlistHttp
 from radar.secrets_redact import redact_exc
 
 logger = logging.getLogger("radar.ingest.kucoin")
+
+
+def _bootstrap_kucoin(
+    http: AllowlistHttp,
+) -> Tuple[Any, Any, Any]:
+    """Parallel allTickers + contracts/active + spot symbols meta."""
+
+    def _tickers() -> Any:
+        return http.get_json("https://api.kucoin.com/api/v1/market/allTickers")
+
+    def _contracts() -> Any:
+        return http.get_json("https://api-futures.kucoin.com/api/v1/contracts/active")
+
+    def _symbols() -> Any:
+        return http.get_json("https://api.kucoin.com/api/v2/symbols")
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        f_t = pool.submit(_tickers)
+        f_c = pool.submit(_contracts)
+        f_s = pool.submit(_symbols)
+        # Tickers are hard-required; contracts/symbols soft-fail.
+        spot_raw = f_t.result()
+        try:
+            contracts = f_c.result()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "kucoin futures tickers soft-fail: %s", redact_exc(exc, max_len=256)
+            )
+            contracts = None
+        try:
+            symbols = f_s.result()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "kucoin spot listings soft-fail: %s", redact_exc(exc, max_len=256)
+            )
+            symbols = None
+        return spot_raw, contracts, symbols
 
 
 def fetch_kucoin(http: AllowlistHttp) -> Dict[str, Any]:
@@ -18,14 +56,20 @@ def fetch_kucoin(http: AllowlistHttp) -> Dict[str, Any]:
     ``ensure_universe_short_windows`` (budget + reuse TTL). Ingest-time
     attach previously burned ~40 unbudgeted kline GETs per cex refresh.
     """
-    spot_raw = http.get_json("https://api.kucoin.com/api/v1/market/allTickers")
-    tickers = (spot_raw.get("data") or {}).get("ticker") or []
+    # Whales overlap with bootstrap (histories ∥ tickers/contracts/symbols).
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        f_boot = pool.submit(_bootstrap_kucoin, http)
+        f_whales = pool.submit(
+            _sample_whales, http, ["BTC-USDT", "ETH-USDT", "SOL-USDT"]
+        )
+        spot_raw, contracts, symbols_info = f_boot.result()
+        whales = f_whales.result()
+    tickers = ((spot_raw or {}).get("data") or {}).get("ticker") or []
     spot_rows = [_norm_spot(r) for r in tickers if isinstance(r, dict)]
 
     fut_rows: List[Dict[str, Any]] = []
     contracts_data: List[Any] = []
-    try:
-        contracts = http.get_json("https://api-futures.kucoin.com/api/v1/contracts/active")
+    if isinstance(contracts, dict):
         data = contracts.get("data") or []
         if isinstance(data, list):
             contracts_data = data
@@ -34,12 +78,11 @@ def fetch_kucoin(http: AllowlistHttp) -> Dict[str, Any]:
                 for r in data
                 if isinstance(r, dict) and r.get("status") == "Open"
             ]
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("kucoin futures tickers soft-fail: %s", redact_exc(exc, max_len=256))
-        fut_rows = []
 
-    listings = _listings(http, contracts_data=contracts_data)
-    whales = _sample_whales(http, ["BTC-USDT", "ETH-USDT", "SOL-USDT"])
+    listings = _listings_from_payloads(
+        symbols_info if isinstance(symbols_info, dict) else None,
+        contracts_data=contracts_data,
+    )
 
     return {
         "venue": "kucoin",
@@ -114,59 +157,39 @@ def _norm_fut(r: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _listings(
-    http: AllowlistHttp, *, contracts_data: List[Any] | None = None
+def _listings_from_payloads(
+    symbols_info: Optional[Dict[str, Any]],
+    *,
+    contracts_data: List[Any] | None = None,
 ) -> List[Dict[str, Any]]:
-    """Spot symbols + futures firstOpenDate.
-
-    Pass ``contracts_data`` from the already-fetched ``contracts/active`` payload
-    to avoid a duplicate GET (0.2.70).
-    """
+    """Build listings from already-fetched symbols + contracts payloads."""
     out: List[Dict[str, Any]] = []
-    try:
-        info = http.get_json("https://api.kucoin.com/api/v2/symbols")
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("kucoin spot listings soft-fail: %s", redact_exc(exc, max_len=256))
-        return out
-    for s in info.get("data") or []:
-        if not isinstance(s, dict):
-            continue
-        if not s.get("enableTrading"):
-            continue
-        ts = s.get("tradingStartTime")
-        if ts is None:
-            continue
-        try:
-            ts_i = int(ts)
-        except (TypeError, ValueError):
-            continue
-        raw = s.get("symbol")
-        out.append(
-            {
-                "venue": "kucoin",
-                "market": "spot",
-                "symbol": normalize_symbol(raw),
-                "symbol_raw": raw,
-                "base": s.get("baseCurrency"),
-                "quote": s.get("quoteCurrency"),
-                "listed_at_ms": ts_i,
-            }
-        )
-    # Futures firstOpenDate — reuse ingest contracts payload when available.
-    fut_src = contracts_data
-    if fut_src is None:
-        try:
-            contracts = http.get_json(
-                "https://api-futures.kucoin.com/api/v1/contracts/active"
+    if isinstance(symbols_info, dict):
+        for s in symbols_info.get("data") or []:
+            if not isinstance(s, dict):
+                continue
+            if not s.get("enableTrading"):
+                continue
+            ts = s.get("tradingStartTime")
+            if ts is None:
+                continue
+            try:
+                ts_i = int(ts)
+            except (TypeError, ValueError):
+                continue
+            raw = s.get("symbol")
+            out.append(
+                {
+                    "venue": "kucoin",
+                    "market": "spot",
+                    "symbol": normalize_symbol(raw),
+                    "symbol_raw": raw,
+                    "base": s.get("baseCurrency"),
+                    "quote": s.get("quoteCurrency"),
+                    "listed_at_ms": ts_i,
+                }
             )
-            raw_list = contracts.get("data") or []
-            fut_src = raw_list if isinstance(raw_list, list) else []
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "kucoin futures listings soft-fail: %s", redact_exc(exc, max_len=256)
-            )
-            fut_src = []
-    for r in fut_src or []:
+    for r in contracts_data or []:
         if not isinstance(r, dict) or r.get("status") != "Open":
             continue
         ts = r.get("firstOpenDate")
@@ -191,9 +214,80 @@ def _listings(
     return out
 
 
-def _sample_whales(http: AllowlistHttp, symbols: List[str]) -> List[Dict[str, Any]]:
+def _listings(
+    http: AllowlistHttp, *, contracts_data: List[Any] | None = None
+) -> List[Dict[str, Any]]:
+    """Spot symbols + futures firstOpenDate.
+
+    Pass ``contracts_data`` from the already-fetched ``contracts/active`` payload
+    to avoid a duplicate GET (0.2.70). Prefer ``_listings_from_payloads`` when
+    bootstrap already fetched symbols.
+    """
+    try:
+        info = http.get_json("https://api.kucoin.com/api/v2/symbols")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("kucoin spot listings soft-fail: %s", redact_exc(exc, max_len=256))
+        info = None
+    fut_src = contracts_data
+    if fut_src is None:
+        try:
+            contracts = http.get_json(
+                "https://api-futures.kucoin.com/api/v1/contracts/active"
+            )
+            raw_list = contracts.get("data") or []
+            fut_src = raw_list if isinstance(raw_list, list) else []
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "kucoin futures listings soft-fail: %s", redact_exc(exc, max_len=256)
+            )
+            fut_src = []
+    return _listings_from_payloads(
+        info if isinstance(info, dict) else None,
+        contracts_data=fut_src,
+    )
+
+
+def _whale_prints_from_histories(
+    sym: str, data: Any
+) -> List[Dict[str, Any]]:
     prints: List[Dict[str, Any]] = []
-    for sym in symbols:
+    if not isinstance(data, dict):
+        return prints
+    for t in data.get("data") or []:
+        price = t.get("price")
+        qty = t.get("size")
+        if price is None or qty is None or price == "" or qty == "":
+            continue
+        # KuCoin trade time is ns sometimes
+        ts = t.get("time")
+        try:
+            ts_i = int(ts)
+            if ts_i > 10_000_000_000_000:  # ns
+                ts_i //= 1_000_000
+        except (TypeError, ValueError):
+            ts_i = None
+        prints.append(
+            {
+                "venue": "kucoin",
+                "symbol": normalize_symbol(sym),
+                "symbol_raw": sym,
+                "price": price,  # string → enrich → price_i / notional_i
+                "qty": qty,
+                "side": (t.get("side") or "").lower(),
+                "ts_ms": ts_i,
+                "market": "spot",
+            }
+        )
+    return prints
+
+
+def _sample_whales(http: AllowlistHttp, symbols: List[str]) -> List[Dict[str, Any]]:
+    """Parallel histories fan-out for BTC/ETH/SOL (KuCoin-primary whales)."""
+    syms = [s for s in symbols if s]
+    if not syms:
+        return []
+
+    def _one(sym: str) -> List[Dict[str, Any]]:
         try:
             data = http.get_json(
                 "https://api.kucoin.com/api/v1/market/histories",
@@ -204,30 +298,14 @@ def _sample_whales(http: AllowlistHttp, symbols: List[str]) -> List[Dict[str, An
             logger.warning(
                 "kucoin whale soft-fail %s: %s", sym, redact_exc(exc, max_len=256)
             )
-            continue
-        for t in data.get("data") or []:
-            price = t.get("price")
-            qty = t.get("size")
-            if price is None or qty is None or price == "" or qty == "":
-                continue
-            # KuCoin trade time is ns sometimes
-            ts = t.get("time")
-            try:
-                ts_i = int(ts)
-                if ts_i > 10_000_000_000_000:  # ns
-                    ts_i //= 1_000_000
-            except (TypeError, ValueError):
-                ts_i = None
-            prints.append(
-                {
-                    "venue": "kucoin",
-                    "symbol": normalize_symbol(sym),
-                    "symbol_raw": sym,
-                    "price": price,  # string → enrich → price_i / notional_i
-                    "qty": qty,
-                    "side": (t.get("side") or "").lower(),
-                    "ts_ms": ts_i,
-                    "market": "spot",
-                }
-            )
+            return []
+        return _whale_prints_from_histories(sym, data)
+
+    if len(syms) == 1:
+        return _one(syms[0])
+    prints: List[Dict[str, Any]] = []
+    with ThreadPoolExecutor(max_workers=min(4, len(syms))) as pool:
+        futs = {pool.submit(_one, s): s for s in syms}
+        for fut in as_completed(futs):
+            prints.extend(fut.result())
     return prints

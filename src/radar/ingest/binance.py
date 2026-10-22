@@ -37,14 +37,44 @@ def filter_rows_to_trading(
     return [r for r in rows if str(r.get("symbol") or "") in trading]
 
 
+def _bootstrap_binance(
+    http: AllowlistHttp,
+) -> Tuple[Any, Any, Any, Any]:
+    """Parallel independent Binance payloads (spot/fut/premium/exchangeInfo)."""
+
+    def _spot() -> Any:
+        return http.get_json("https://api.binance.com/api/v3/ticker/24hr")
+
+    def _fut() -> Any:
+        return http.get_json("https://fapi.binance.com/fapi/v1/ticker/24hr")
+
+    def _prem() -> Any:
+        return http.get_json("https://fapi.binance.com/fapi/v1/premiumIndex")
+
+    def _info() -> Any:
+        return http.get_json("https://api.binance.com/api/v3/exchangeInfo")
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        f_spot = pool.submit(_spot)
+        f_fut = pool.submit(_fut)
+        f_prem = pool.submit(_prem)
+        f_info = pool.submit(_info)
+        return f_spot.result(), f_fut.result(), f_prem.result(), f_info.result()
+
+
 def fetch_binance(http: AllowlistHttp) -> Dict[str, Any]:
-    spot = http.get_json("https://api.binance.com/api/v3/ticker/24hr")
-    futures = http.get_json("https://fapi.binance.com/fapi/v1/ticker/24hr")
-    premium = http.get_json("https://fapi.binance.com/fapi/v1/premiumIndex")
+    spot, futures, premium, exchange_info = _bootstrap_binance(http)
     oi_rows: List[Dict[str, Any]] = []
-    spot_rows = [_norm_spot(r) for r in spot if isinstance(r, dict)]
-    fut_rows = [_norm_fut(r) for r in futures if isinstance(r, dict)]
-    funding = {_p["symbol"]: _p for _p in premium if isinstance(_p, dict) and "symbol" in _p}
+    spot_list = spot if isinstance(spot, list) else []
+    fut_list = futures if isinstance(futures, list) else []
+    prem_list = premium if isinstance(premium, list) else []
+    spot_rows = [_norm_spot(r) for r in spot_list if isinstance(r, dict)]
+    fut_rows = [_norm_fut(r) for r in fut_list if isinstance(r, dict)]
+    funding = {
+        _p["symbol"]: _p
+        for _p in prem_list
+        if isinstance(_p, dict) and "symbol" in _p
+    }
 
     # Soft-cap OI fan-out — top by quote volume; parallel GETs (was serial ~3–6s).
     fut_sorted = sorted(fut_rows, key=quote_volume_sort_key, reverse=True)[:_OI_SAMPLE_N]
@@ -68,8 +98,9 @@ def fetch_binance(http: AllowlistHttp) -> Dict[str, Any]:
             row["index_price"] = keep_num(prem.get("indexPrice"))
             row.setdefault("open_interest", None)
 
-    exchange_info = http.get_json("https://api.binance.com/api/v3/exchangeInfo")
-    listings = _extract_listings(exchange_info)
+    listings = _extract_listings(
+        exchange_info if isinstance(exchange_info, dict) else {}
+    )
     # 24hr ticker includes BREAK (delisted) pairs with residual quoteVolume —
     # windowed /klines return [] → spot_mtf stuck at 0 on score top (NFP/VIC…).
     trading = trading_symbols_from_exchange_info(

@@ -2,6 +2,7 @@
 
 ## 0.2.87
 
+- Docs honesty: README/OPS/ARCHITECTURE/PROFILES/DISCLAIMER — `ci-native.yml` exists (maturin + parity on PR/main); stop claiming “Maturin native CI not in this pin”
 - Ensure: process-lifetime MTF reuse cache — hydrate stamped short-windows onto fresh ingest rows before waterfall (`mtf_cache_hydrate_*`)
 - Profile: `RADAR_PROFILE=light` overlays `config/light.yaml` (KuCoin-only venues, slower memes/stables poll, tighter secondary walls)
 - Config: `RADAR_CONFIG` / `RADAR_CONFIG_PATH` for full alternate YAML

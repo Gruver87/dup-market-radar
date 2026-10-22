@@ -51,7 +51,7 @@ References to KuCoin, Binance, Bybit, MEXC, DexScreener, CoinGecko, Telegram, or
 
 ## 5. Experimental / R&D status
 
-This repository is **R&D / ops-lab** software. It is **not** a certified, audited, or regulated trading system. Evidence in CI is primarily unit tests + offline smoke under a **python-lab** profile unless you build and run native locally.
+This repository is **R&D / ops-lab** software. It is **not** a certified, audited, or regulated trading system. GitHub CI runs a **python-lab** full suite (`ci.yml`) plus a separate **ci-native** maturin/score-parity job (`ci-native.yml`). Neither is a 48h soak or regulated trading certification; live capital still requires operator evidence packs and [`LIVE_MONEY.md`](LIVE_MONEY.md).
 
 ## 6. Russian summary (не является офертой)
 

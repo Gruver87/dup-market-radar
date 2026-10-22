@@ -7,7 +7,7 @@ Read order for operators:
 
 1. [`DISCLAIMER.md`](DISCLAIMER.md) — liability / not financial advice  
 2. [`LIVE_MONEY.md`](LIVE_MONEY.md) — before any live capital  
-3. [`PROFILES.md`](PROFILES.md) — lab / python-lab / native / live-money  
+3. [`PROFILES.md`](PROFILES.md) — lab / python-lab / ci-native / native / live-money  
 4. [`OPS.md`](OPS.md) — run / verify / Docker  
 5. [`RECOVERY.md`](RECOVERY.md) — self-heal after network / worker death  
 6. [`EVIDENCE_MATRIX.md`](EVIDENCE_MATRIX.md) — claim → pack honesty  

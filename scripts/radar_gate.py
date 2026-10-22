@@ -49,7 +49,15 @@ def main() -> int:
     need(ROOT / "src" / "radar" / "recovery.py", "RecoverySupervisor", "recovery")
     need(ROOT / "docs" / "EVIDENCE_MATRIX.md", "approx_48h_claim_ok", "evidence_matrix")
     need(ROOT / "docs" / "PROFILES.md", "python-lab", "profiles")
+    need(ROOT / "docs" / "PROFILES.md", "ci-native", "profiles_ci_native")
     need(ROOT / "docs" / "DISCLAIMER.md", "Not financial advice", "disclaimer")
+    # CI honesty: both workflows must exist; README must not deny ci-native.
+    need(ROOT / ".github" / "workflows" / "ci.yml", "python-lab-only", "ci_python_lab")
+    need(ROOT / ".github" / "workflows" / "ci-native.yml", "maturin", "ci_native_workflow")
+    need(ROOT / "README.md", "ci-native.yml", "readme_ci_native")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8", errors="replace")
+    if "Maturin native CI is not in this pin" in readme:
+        FAILURES.append("readme_denies_ci_native")
 
     # CORS never *
     api_app = (ROOT / "src" / "radar" / "api" / "app.py").read_text(

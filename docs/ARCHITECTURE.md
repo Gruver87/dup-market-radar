@@ -84,7 +84,8 @@ HTTP client: TLS verify on; allowlist hosts; `httpx.Limits(max_connections=32, m
 
 - Crate: `native/radar_native` (Cargo / maturin).
 - Config default: `native.prefer` + `fail_closed` true in `config/default.yaml`.
-- **Docker / GitHub CI:** `RADAR_NATIVE_*=0` -> documented **python-lab** profile. Do not claim "prod native" from compose alone.
+- **Docker compose:** `RADAR_NATIVE_*=0` -> **python-lab** (no maturin wheel in image). Do not claim "prod native" from compose alone.
+- **GitHub CI:** `ci.yml` = python-lab full suite; `ci-native.yml` = maturin + score parity with prefer/fail_closed on. Both run on PR/`main` (since 0.2.62). ci-native ? full pytest under native.
 
 ## Money
 

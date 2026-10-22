@@ -14,10 +14,18 @@ Default UI: `http://127.0.0.1:8787/` — pages `#watchlist` / `#markets` / `#ops
 | Profile | How | Native | Use |
 |---------|-----|--------|-----|
 | **default.yaml** | Local with wheel built | prefer + fail_closed | Closest to “honest native” |
-| **python-lab** | Docker compose / CI env | prefer=0 fail_closed=0 | Labs, CI, no maturin in image |
+| **python-lab** | Docker compose + `ci.yml` | prefer=0 fail_closed=0 | Labs / full unit suite, no maturin in image |
+| **ci-native** | `.github/workflows/ci-native.yml` | prefer+fail_closed | Maturin build + score parity only |
 | **live smoke** | `radar_smoke_lab.py --live` | often soft | One-shot evidence |
 
-CI job name: `test (python-lab-only)`.
+GitHub Actions (both on PR + `main`):
+
+| Workflow | Job | What it proves |
+|----------|-----|----------------|
+| `ci.yml` | `test (python-lab-only)` | Full pytest + offline smoke, native prefer **off** |
+| `ci-native.yml` | `maturin + score parity` | Wheel builds; `test_score_parity` / non-crypto fut with prefer **on** |
+
+Do **not** claim “CI = full native prod” from ci-native alone (parity subset, not full suite under native).
 
 ## Health
 

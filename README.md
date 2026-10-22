@@ -29,7 +29,7 @@ Companion to industrial L1 work ([`dup-protocol`](https://github.com/Gruver87/du
 - **Listings:** live book join; ghost listings skipped; `cross_venue_live` flags.
 - **Integer money** only (price `1e8`, USDT micros `1e6`, bps, score centi) — no float on money paths.
 - **Security posture:** HTTPS allowlist, TLS verify on, CORS deny `*`, API key gate for trade mutations, secret redaction in logs.
-- **Hybrid score:** Rust `radar_native` (PyO3) when built; Docker/CI default to **python-lab** profile (native prefer off) — see honesty below.
+- **Hybrid score:** Rust `radar_native` (PyO3) when built; Docker compose default = **python-lab** (prefer off). GitHub runs **both** `ci.yml` (python-lab full suite) and `ci-native.yml` (maturin + score parity) — see honesty below.
 - **Auto fail-closed:** refuses buys on `ok=false` / `mtf_ensure_ok=false` / native-prefer + python backend; with open positions runs **stop-only** via KuCoin mark.
 - **Ingest speed (0.2.73–0.2.87):** parallel venue bootstraps; Dex/CG walls; KuCoin warm stale-OK; process MTF reuse cache; optional `RADAR_PROFILE=light` (KuCoin-primary); display wall scales with board fill.
 - **Dashboard pages** (like DUP Console): Watchlist · Markets ~6m table · Ops (clock/FX) · Help · hash routes `#watchlist` / `#markets` / `#ops` / `#help`.
@@ -134,7 +134,7 @@ Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (or allow-list), `TELEGRAM_ENABLED=
 - Scores are **heuristics**, not alpha guarantees.
 - MTF is **sampled top-N / ensure_cap**, not every symbol on the book.
 - Whales = notional size proxy; **not** labeled smart money.
-- CI workflow is **`python-lab-only`** (native prefer off). Maturin native CI is not in this pin yet.
+- CI: **`ci.yml`** = `test (python-lab-only)` (full pytest, `RADAR_NATIVE_*=0`). **`ci-native.yml`** = maturin develop + score parity (`RADAR_NATIVE_*=1`). Docker compose image remains python-lab (no wheel) — not the same as ci-native.
 - `elapsed_ok` in smoke is **evidence**, not a hard fail gate.
 - No 48h soak claim without an on-disk evidence pack (`approx_48h_claim_ok=true`, `hard_fails=0`).
 - Opening port `8787` to the internet without reverse-proxy + API key is **operator negligence**.

@@ -12,8 +12,10 @@ Claims require on-disk packs. Missing pack ⇒ **⏳** / do not invent PASS.
 | Short soak | `radar_soak_lab.py --cycles N` → `LATEST_SOAK.json` | `hard_fails=0`; **not** 48h |
 | **48h soak** | `radar_soak_48h.ps1` + pack | `approx_48h_claim_ok=true` **and** `hard_fails=0` only |
 | Native prefer | `score_backend=radar_native` in smoke/soak | Lab-python compose does **not** count |
+| CI python-lab | `.github/workflows/ci.yml` | Full pytest, `RADAR_NATIVE_*=0` |
+| CI native parity | `.github/workflows/ci-native.yml` | Maturin + score parity; **not** full suite under native |
 | Hashed run package | `scripts/package_radar_evidence.py` → `docs/evidence/runs/<id>/` | `manifest.status`; missing inputs ⇒ `incomplete` |
-| Static posture | `python scripts/radar_gate.py` | PASS needles (secrets/recovery/profiles) |
+| Static posture | `python scripts/radar_gate.py` | PASS needles (secrets/recovery/profiles/ci-native) |
 | Phase timers (0.2.69+) | snapshot `ingest_ms`/`ensure_ms`/`score_ms` + Prom gauges | honesty only — not a soak gate |
 | Venue / ensure stage ms (0.2.71+) | `venue_ms`, `short_window_ensure.stage_ms` + Prom | honesty — not soak |
 | Smoke phase export (0.2.72) | `radar_smoke_lab` summary: `ingest_ms`/`ensure_ms`/`venue_ms`/`kline_gets` | pack must include fields |

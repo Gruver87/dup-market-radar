@@ -109,6 +109,12 @@ function Invoke-SmokeLive {
 function Invoke-Ruff {
     Step "ruff check"
     $py = Get-RadarPython
+    & $py -c "import ruff" 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "ruff missing — pip install ruff"
+        & $py -m pip install -q ruff
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    }
     & $py -m ruff check src tests scripts
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }

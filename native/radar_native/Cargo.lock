@@ -151,7 +151,7 @@ dependencies = [
 
 [[package]]
 name = "radar_native"
-version = "0.2.61"
+version = "0.2.65"
 dependencies = [
  "pyo3",
  "serde",

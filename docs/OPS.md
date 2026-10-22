@@ -52,9 +52,16 @@ docker compose up --build
 - Secrets via env / `.env` — never baked into the image.  
 - Lab-python native overrides — see compose header comments.
 
+## Pre-soak then 48h
+
+```powershell
+.\scripts\pre_soak_gate.ps1          # native + pytest + live smoke + short soak
+.\scripts\radar_soak_48h.ps1         # only after gate PASS
+```
+
 ## No soak claim
 
-Do not report “48h soak passed” unless you ran it and stored an evidence pack on disk.
+Do not report “48h soak passed” unless you ran it and stored an evidence pack on disk with `approx_48h_claim_ok=true`.
 
 ## Native Docker
 

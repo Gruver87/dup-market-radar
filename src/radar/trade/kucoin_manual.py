@@ -541,7 +541,7 @@ class KuCoinManualTrader:
         try:
             with self._signed_client() as client:
                 resp = client.get(f"{base}{path}", headers={
-                    "User-Agent": "DUP-Market-Radar/0.2.64-manual",
+                    "User-Agent": "DUP-Market-Radar/0.2.65-manual",
                 })
                 resp.raise_for_status()
                 body = read_capped_json(
@@ -681,7 +681,7 @@ class KuCoinManualTrader:
             "KC-API-PASSPHRASE": pp,
             "KC-API-KEY-VERSION": "2",
             "Content-Type": "application/json",
-            "User-Agent": "DUP-Market-Radar/0.2.64-manual",
+            "User-Agent": "DUP-Market-Radar/0.2.65-manual",
         }
 
     @staticmethod

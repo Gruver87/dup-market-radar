@@ -31,14 +31,22 @@ def _one_cycle(force: bool = True) -> dict:
     from radar.pipeline import run_scan
 
     cfg = dict(load_config())
-    # Soft native for lab hosts without wheel — still records backend in pack.
-    # prefer=false so missing radar_native does not paint every cycle hard_fail
-    # via score_backend_degraded (honest lab soak, not silent prod green).
-    cfg["native"] = {
-        **(cfg.get("native") or {}),
-        "prefer": False,
-        "fail_closed": False,
-    }
+    from radar.native_bridge import native_available
+
+    # Prefer native fail-closed when the wheel is importable (pre-soak / industrial).
+    # Without wheel: soft prefer=false so lab soak is not hard_fail every cycle.
+    if native_available():
+        cfg["native"] = {
+            **(cfg.get("native") or {}),
+            "prefer": True,
+            "fail_closed": True,
+        }
+    else:
+        cfg["native"] = {
+            **(cfg.get("native") or {}),
+            "prefer": False,
+            "fail_closed": False,
+        }
     poll_state().reset()
     t0 = int(time.time() * 1000)
     snap = run_scan(cfg, force=force)
@@ -59,11 +67,15 @@ def _one_cycle(force: bool = True) -> dict:
         if "mtf_ensure_failed" not in reasons:
             reasons.append("mtf_ensure_failed")
     swe = snap.get("short_window_ensure") or {}
+    native_cfg = cfg.get("native") or {}
     return {
         "at_ms": int(time.time() * 1000),
         "ok": ok,
         "mtf_ensure_ok": mtf,
         "score_backend": snap.get("score_backend"),
+        "native_prefer": bool(native_cfg.get("prefer")),
+        "native_fail_closed": bool(native_cfg.get("fail_closed")),
+        "native": snap.get("native"),
         "elapsed_ms": snap.get("elapsed_ms") or elapsed,
         "universe_size": snap.get("universe_size"),
         "hard_fail": hard,

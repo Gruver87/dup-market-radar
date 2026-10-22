@@ -1,6 +1,6 @@
 # Self-recovery
 
-**Pin:** 0.2.70 · Index: [`README.md`](README.md)
+**Pin:** 0.2.71 · Index: [`README.md`](README.md)
 
 When the network drops, a venue flaps, or a worker thread dies, Radar must **come back by itself** without silent green or auto-enabling trade.
 
@@ -15,7 +15,7 @@ When the network drops, a venue flaps, or a worker thread dies, Radar must **com
 | Telegram poll | Continues after `getUpdates` error (3s wait) |
 | Docker `restart: unless-stopped` | Container process restart only |
 
-## What 0.2.70 adds
+## What 0.2.71 adds
 
 `radar.recovery.RecoverySupervisor` (daemon `radar-recovery`):
 

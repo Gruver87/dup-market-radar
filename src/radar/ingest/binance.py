@@ -85,14 +85,14 @@ def fetch_binance(http: AllowlistHttp) -> Dict[str, Any]:
             )
     else:
         logger.warning("binance exchangeInfo TRADING set empty — spot unfiltered")
-    whales = _sample_whales(http, ["BTCUSDT", "ETHUSDT", "SOLUSDT"])
+    # Whales: KuCoin-primary only (0.2.71) — skip Binance aggTrades fan-out.
 
     return {
         "venue": "binance",
         "spot": spot_rows,
         "futures": fut_rows,
         "listings": listings,
-        "whales": whales,
+        "whales": [],
         "oi_sample": oi_rows,
     }
 

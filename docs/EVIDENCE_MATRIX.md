@@ -1,6 +1,6 @@
 # Evidence matrix — DUP Market Radar
 
-**Pin:** 0.2.70 · Companion product — **not** L1 mesh evidence.
+**Pin:** 0.2.71 · Companion product — **not** L1 mesh evidence.
 
 Claims require on-disk packs. Missing pack ⇒ **⏳** / do not invent PASS.
 
@@ -15,7 +15,7 @@ Claims require on-disk packs. Missing pack ⇒ **⏳** / do not invent PASS.
 | Hashed run package | `scripts/package_radar_evidence.py` → `docs/evidence/runs/<id>/` | `manifest.status`; missing inputs ⇒ `incomplete` |
 | Static posture | `python scripts/radar_gate.py` | PASS needles (secrets/recovery/profiles) |
 | Phase timers (0.2.69+) | snapshot `ingest_ms`/`ensure_ms`/`score_ms` + Prom gauges | honesty only — not a soak gate |
-| Venue / ensure stage ms (0.2.70) | `venue_ms`, `short_window_ensure.stage_ms` + Prom | re-smoke after pin — not soak |
+| Venue / ensure stage ms (0.2.71) | `venue_ms`, `short_window_ensure.stage_ms` + Prom | re-smoke after pin — not soak |
 | Ensure GET budget | `ingest.max_kline_gets` + `http_stats.kline_gets` | incomplete fill still fail-closed |
 
 ## Packaging

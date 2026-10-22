@@ -716,6 +716,12 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         _tg.stop(join_timeout_sec=5.0)
     _auto.stop_loop(join_timeout_sec=8.0)
     _SCAN_EXECUTOR.shutdown(wait=False, cancel_futures=True)
+    try:
+        from radar.http_pool import close_http_pool
+
+        close_http_pool()
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _openapi_enabled() -> bool:
@@ -731,7 +737,7 @@ def _openapi_enabled() -> bool:
 _OPENAPI_ON = _openapi_enabled()
 app = FastAPI(
     title="DUP Market Radar",
-    version="0.2.70",
+    version="0.2.71",
     lifespan=_lifespan,
     docs_url="/docs" if _OPENAPI_ON else None,
     redoc_url="/redoc" if _OPENAPI_ON else None,

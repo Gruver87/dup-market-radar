@@ -46,6 +46,7 @@ def build_universe(
     # Local error list + shared http.errors (workers may append onto http).
     errors: List[str] = []
     err_baseline = len(http.errors)
+    stats_baseline = {k: int(v or 0) for k, v in (http.stats or {}).items()}
     spot: List[Dict[str, Any]] = []
     futures: List[Dict[str, Any]] = []
     listings: List[Dict[str, Any]] = []
@@ -220,7 +221,10 @@ def build_universe(
     if n_err > 64:
         errors = errors[:64]
         errors.append(f"errors_truncated:{n_err}")
-    http_stats = {k: int(v or 0) for k, v in (http.stats or {}).items()}
+    http_stats = {
+        k: int(v or 0) - int(stats_baseline.get(k) or 0)
+        for k, v in (http.stats or {}).items()
+    }
     return {
         "generated_at_ms": int(time.time() * 1000),
         "generated_at": int(time.time()),

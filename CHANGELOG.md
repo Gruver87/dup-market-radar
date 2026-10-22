@@ -1,5 +1,14 @@
 # Changelog — DUP Market Radar
 
+## 0.2.71
+
+- DexScreener: parallel token expand + keyword search; soft-skip search when boosted rows ≥24
+- Whales: KuCoin-only (Binance aggTrades fan-out removed)
+- Process-lifetime `AllowlistHttp` pool (`http_pool.py`) — TLS/cache reuse; close on API shutdown
+- Ensure: spot∥futures waterfalls in parallel; atomic thread-safe `budget_consume`
+- Package / FastAPI / User-Agent / `__version__` / native pin `0.2.71`
+- Soak / 48h: **not** claimed this pin
+
 ## 0.2.70
 
 - Ingest speed: Binance OI fan-out parallel (8 workers); whale dual-market cut (spot-only Binance; Bybit whales off — KuCoin primary)

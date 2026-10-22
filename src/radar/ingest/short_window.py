@@ -862,170 +862,190 @@ def ensure_universe_short_windows(
     """Fill MTF on merged rows missing windows.
 
     If spot_symbols/fut_symbols given — target those (post prelim).
-    KuCoin → Binance → Bybit (spot);
-    KuCoin (venue=kucoin only) → Binance fapi → Bybit linear → MEXC contract (fut).
-    Short-circuits venue waterfall when target fill ≥ fill_threshold.
+    Spot and futures waterfalls run in parallel (shared atomic kline budget).
+    Short-circuits venue stages when target fill ≥ fill_threshold.
     """
     thr = float(fill_threshold)
     ttl = max(0, int(reuse_ttl_ms or 0))
-    skipped_venues: List[str] = []
-    stage_ms: Dict[str, int] = {}
 
-    def _timed(label: str, fn: Callable[[], Any]) -> Any:
-        t0 = int(time.time() * 1000)
-        try:
-            return fn()
-        finally:
-            stage_ms[label] = int(stage_ms.get(label) or 0) + (
-                int(time.time() * 1000) - t0
-            )
+    def _run_spot() -> Tuple[Dict[str, int], List[Dict[str, Any]], List[str], Dict[str, int]]:
+        skipped: List[str] = []
+        stage: Dict[str, int] = {}
 
-    spot = [r for r in (universe.get("spot") or []) if isinstance(r, dict)]
-    need_spot = [r for r in spot if _missing_15m(r, reuse_ttl_ms=ttl)]
-    if spot_symbols is not None:
-        need_spot = [r for r in need_spot if str(r.get("symbol") or "") in spot_symbols]
-    for r in need_spot:
-        derived = kucoin_spot_symbol_raw(r)
-        if derived and not r.get("symbol_raw"):
-            r["symbol_raw"] = derived
-    kucoin_ready = [r for r in need_spot if r.get("symbol_raw")]
+        def _timed(label: str, fn: Callable[[], Any]) -> Any:
+            t0 = int(time.time() * 1000)
+            try:
+                return fn()
+            finally:
+                stage[label] = int(stage.get(label) or 0) + (
+                    int(time.time() * 1000) - t0
+                )
 
-    def _spot_kucoin() -> Dict[str, int]:
-        if spot_symbols is None:
-            return attach_kucoin_short_windows(http, kucoin_ready, top_n=spot_top_n)
-        return _attach_spot_rows(http, kucoin_ready[: max(64, spot_top_n)])
+        spot = [r for r in (universe.get("spot") or []) if isinstance(r, dict)]
+        need = [r for r in spot if _missing_15m(r, reuse_ttl_ms=ttl)]
+        if spot_symbols is not None:
+            need = [r for r in need if str(r.get("symbol") or "") in spot_symbols]
+        for r in need:
+            derived = kucoin_spot_symbol_raw(r)
+            if derived and not r.get("symbol_raw"):
+                r["symbol_raw"] = derived
+        kucoin_ready = [r for r in need if r.get("symbol_raw")]
 
-    sw = _timed("spot_kucoin_ms", _spot_kucoin)
-    for r in need_spot:
-        _apply_pct_windows_to_bps(r)
+        def _kc() -> Dict[str, int]:
+            if spot_symbols is None:
+                return attach_kucoin_short_windows(http, kucoin_ready, top_n=spot_top_n)
+            return _attach_spot_rows(http, kucoin_ready[: max(64, spot_top_n)])
 
-    def _spot_ok() -> bool:
-        return _target_fill_ratio(need_spot) >= thr if need_spot else True
-
-    if not _spot_ok():
-        still = [r for r in need_spot if _missing_15m(r, reuse_ttl_ms=0)]
-
-        def _spot_bn() -> Dict[str, int]:
-            return attach_binance_spot_short_windows(
-                http, still, top_n=max(len(still), spot_top_n)
-            )
-
-        bw = _timed("spot_binance_ms", _spot_bn)
-        for r in still:
+        sw = _timed("spot_kucoin_ms", _kc)
+        for r in need:
             _apply_pct_windows_to_bps(r)
-        _merge_window_counts(sw, bw)
-        sw["n_binance"] = int(bw.get("n_15m") or 0)
-    else:
-        skipped_venues.append("binance_spot")
-        sw["n_binance"] = 0
 
-    if not _spot_ok():
-        still = [r for r in need_spot if _missing_15m(r, reuse_ttl_ms=0)]
+        def _ok() -> bool:
+            return _target_fill_ratio(need) >= thr if need else True
 
-        def _spot_by() -> Dict[str, int]:
-            return attach_bybit_spot_short_windows(
-                http, still, top_n=max(len(still), spot_top_n)
+        if not _ok():
+            still = [r for r in need if _missing_15m(r, reuse_ttl_ms=0)]
+            bw = _timed(
+                "spot_binance_ms",
+                lambda: attach_binance_spot_short_windows(
+                    http, still, top_n=max(len(still), spot_top_n)
+                ),
             )
+            for r in still:
+                _apply_pct_windows_to_bps(r)
+            _merge_window_counts(sw, bw)
+            sw["n_binance"] = int(bw.get("n_15m") or 0)
+        else:
+            skipped.append("binance_spot")
+            sw["n_binance"] = 0
 
-        yw = _timed("spot_bybit_ms", _spot_by)
-        for r in still:
-            _apply_pct_windows_to_bps(r)
-        _merge_window_counts(sw, yw)
-        sw["n_bybit"] = int(yw.get("n_15m") or 0)
-    else:
-        skipped_venues.append("bybit_spot")
-        sw.setdefault("n_bybit", 0)
-
-    fut = [r for r in (universe.get("futures") or []) if isinstance(r, dict)]
-    need_fut = [r for r in fut if _missing_15m(r, reuse_ttl_ms=ttl)]
-    if fut_symbols is not None:
-        need_fut = [r for r in need_fut if str(r.get("symbol") or "") in fut_symbols]
-    fut_targets = len(need_fut)
-    # Do NOT stamp KuCoin …USDTM onto binance/bybit/mexc rows (breaks MEXC path).
-    for r in need_fut:
-        if str(r.get("venue") or "") != "kucoin":
-            continue
-        derived = kucoin_futures_symbol_raw(r)
-        if derived and not r.get("symbol_raw"):
-            r["symbol_raw"] = derived
-    kucoin_fut = [
-        r
-        for r in need_fut
-        if r.get("symbol_raw") and str(r.get("venue") or "") == "kucoin"
-    ]
-
-    def _fut_kucoin() -> Dict[str, int]:
-        if fut_symbols is None:
-            return attach_kucoin_futures_short_windows(http, kucoin_fut, top_n=fut_top_n)
-        return _attach_fut_rows(http, kucoin_fut[: max(64, fut_top_n)])
-
-    fw = _timed("fut_kucoin_ms", _fut_kucoin)
-    for r in need_fut:
-        _apply_pct_windows_to_bps(r)
-
-    def _fut_ok() -> bool:
-        return _target_fill_ratio(need_fut) >= thr if need_fut else True
-
-    if not _fut_ok():
-        still_f = [r for r in need_fut if _missing_15m(r, reuse_ttl_ms=0)]
-
-        def _fut_bn() -> Dict[str, int]:
-            return attach_binance_futures_short_windows(
-                http, still_f, top_n=max(len(still_f), fut_top_n)
+        if not _ok():
+            still = [r for r in need if _missing_15m(r, reuse_ttl_ms=0)]
+            yw = _timed(
+                "spot_bybit_ms",
+                lambda: attach_bybit_spot_short_windows(
+                    http, still, top_n=max(len(still), spot_top_n)
+                ),
             )
+            for r in still:
+                _apply_pct_windows_to_bps(r)
+            _merge_window_counts(sw, yw)
+            sw["n_bybit"] = int(yw.get("n_15m") or 0)
+        else:
+            skipped.append("bybit_spot")
+            sw.setdefault("n_bybit", 0)
+        return sw, need, skipped, stage
 
-        bfw = _timed("fut_binance_ms", _fut_bn)
-        for r in still_f:
+    def _run_fut() -> Tuple[Dict[str, int], List[Dict[str, Any]], List[str], Dict[str, int]]:
+        skipped: List[str] = []
+        stage: Dict[str, int] = {}
+
+        def _timed(label: str, fn: Callable[[], Any]) -> Any:
+            t0 = int(time.time() * 1000)
+            try:
+                return fn()
+            finally:
+                stage[label] = int(stage.get(label) or 0) + (
+                    int(time.time() * 1000) - t0
+                )
+
+        fut = [r for r in (universe.get("futures") or []) if isinstance(r, dict)]
+        need = [r for r in fut if _missing_15m(r, reuse_ttl_ms=ttl)]
+        if fut_symbols is not None:
+            need = [r for r in need if str(r.get("symbol") or "") in fut_symbols]
+        for r in need:
+            if str(r.get("venue") or "") != "kucoin":
+                continue
+            derived = kucoin_futures_symbol_raw(r)
+            if derived and not r.get("symbol_raw"):
+                r["symbol_raw"] = derived
+        kucoin_fut = [
+            r
+            for r in need
+            if r.get("symbol_raw") and str(r.get("venue") or "") == "kucoin"
+        ]
+
+        def _kc() -> Dict[str, int]:
+            if fut_symbols is None:
+                return attach_kucoin_futures_short_windows(
+                    http, kucoin_fut, top_n=fut_top_n
+                )
+            return _attach_fut_rows(http, kucoin_fut[: max(64, fut_top_n)])
+
+        fw = _timed("fut_kucoin_ms", _kc)
+        for r in need:
             _apply_pct_windows_to_bps(r)
-        _merge_window_counts(fw, bfw)
-        fw["n_binance"] = int(bfw.get("n_15m") or 0)
-    else:
-        skipped_venues.append("binance_fut")
-        fw["n_binance"] = 0
 
-    if not _fut_ok():
-        still_f = [r for r in need_fut if _missing_15m(r, reuse_ttl_ms=0)]
+        def _ok() -> bool:
+            return _target_fill_ratio(need) >= thr if need else True
 
-        def _fut_by() -> Dict[str, int]:
-            return attach_bybit_futures_short_windows(
-                http, still_f, top_n=max(len(still_f), fut_top_n)
+        if not _ok():
+            still_f = [r for r in need if _missing_15m(r, reuse_ttl_ms=0)]
+            bfw = _timed(
+                "fut_binance_ms",
+                lambda: attach_binance_futures_short_windows(
+                    http, still_f, top_n=max(len(still_f), fut_top_n)
+                ),
             )
+            for r in still_f:
+                _apply_pct_windows_to_bps(r)
+            _merge_window_counts(fw, bfw)
+            fw["n_binance"] = int(bfw.get("n_15m") or 0)
+        else:
+            skipped.append("binance_fut")
+            fw["n_binance"] = 0
 
-        yfw = _timed("fut_bybit_ms", _fut_by)
-        for r in still_f:
-            _apply_pct_windows_to_bps(r)
-        _merge_window_counts(fw, yfw)
-        fw["n_bybit"] = int(yfw.get("n_15m") or 0)
-    else:
-        skipped_venues.append("bybit_fut")
-        fw.setdefault("n_bybit", 0)
-
-    if not _fut_ok():
-        still_f = [r for r in need_fut if _missing_15m(r, reuse_ttl_ms=0)]
-
-        def _fut_mx() -> Dict[str, int]:
-            return attach_mexc_futures_short_windows(
-                http, still_f, top_n=max(len(still_f), fut_top_n)
+        if not _ok():
+            still_f = [r for r in need if _missing_15m(r, reuse_ttl_ms=0)]
+            yfw = _timed(
+                "fut_bybit_ms",
+                lambda: attach_bybit_futures_short_windows(
+                    http, still_f, top_n=max(len(still_f), fut_top_n)
+                ),
             )
+            for r in still_f:
+                _apply_pct_windows_to_bps(r)
+            _merge_window_counts(fw, yfw)
+            fw["n_bybit"] = int(yfw.get("n_15m") or 0)
+        else:
+            skipped.append("bybit_fut")
+            fw.setdefault("n_bybit", 0)
 
-        mfw = _timed("fut_mexc_ms", _fut_mx)
-        for r in still_f:
-            _apply_pct_windows_to_bps(r)
-        _merge_window_counts(fw, mfw)
-        fw["n_mexc"] = int(mfw.get("n_15m") or 0)
-    else:
-        skipped_venues.append("mexc_fut")
-        fw.setdefault("n_mexc", 0)
+        if not _ok():
+            still_f = [r for r in need if _missing_15m(r, reuse_ttl_ms=0)]
+            mfw = _timed(
+                "fut_mexc_ms",
+                lambda: attach_mexc_futures_short_windows(
+                    http, still_f, top_n=max(len(still_f), fut_top_n)
+                ),
+            )
+            for r in still_f:
+                _apply_pct_windows_to_bps(r)
+            _merge_window_counts(fw, mfw)
+            fw["n_mexc"] = int(mfw.get("n_15m") or 0)
+        else:
+            skipped.append("mexc_fut")
+            fw.setdefault("n_mexc", 0)
+        return fw, need, skipped, stage
 
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        fut_spot = pool.submit(_run_spot)
+        fut_fut = pool.submit(_run_fut)
+        sw, need_spot, skip_s, stage_s = fut_spot.result()
+        fw, need_fut, skip_f, stage_f = fut_fut.result()
+
+    stage_ms = {**stage_s, **stage_f}
+    skipped_venues = skip_s + skip_f
     out = {
         "spot": sw,
         "futures": fw,
         "spot_targets": len(need_spot),
-        "fut_targets": fut_targets,
+        "fut_targets": len(need_fut),
         "spot_fill_ratio": round(_target_fill_ratio(need_spot), 4) if need_spot else None,
         "fut_fill_ratio": round(_target_fill_ratio(need_fut), 4) if need_fut else None,
         "waterfall_skipped": skipped_venues[:16],
         "stage_ms": stage_ms,
+        "books_parallel": True,
         "kline_budget": budget_status(http),
     }
     universe["short_window_ensure"] = out

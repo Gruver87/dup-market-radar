@@ -217,6 +217,21 @@ def _cand_missing_15m(cand: Dict[str, Any]) -> bool:
     return m.get("change_bps_15m") is None and cand.get("change_bps_15m") is None
 
 
+def _board_mtf_fill_ratio(
+    sectors: Dict[str, Any], key: str, *, top_n: int
+) -> float | None:
+    """Fraction of scored board rows with 15m MTF. Empty board → None."""
+    rows = [
+        c
+        for c in (sectors.get(key) or [])[: max(0, int(top_n))]
+        if isinstance(c, dict)
+    ]
+    if not rows:
+        return None
+    ok = sum(1 for c in rows if not _cand_missing_15m(c))
+    return ok / float(len(rows))
+
+
 def _display_missing_mtf_symbols(
     sectors: Dict[str, Any], *, cap: int = 8
 ) -> tuple[set[str], set[str]]:
@@ -602,8 +617,18 @@ def run_scan(
         # Patch-first (0.2.80): universe may already hold MTF for scored rows
         # when score omitted copying — avoid a redundant kline round-trip.
         pre_patched = _patch_sectors_mtf_from_universe(sectors, universe)
+        # 0.2.83: same ≥0.85 bar as mtf_ensure_ok — skip residual display
+        # network when boards already honest after patch-first.
+        spot_board = _board_mtf_fill_ratio(sectors, "spot_alts", top_n=top_n)
+        fut_board = _board_mtf_fill_ratio(sectors, "futures", top_n=top_n)
+        display_cov_ok = _ensure_bucket_ok(spot_board) and _ensure_bucket_ok(
+            fut_board
+        )
         kb_left = budget_status(http).get("kline_budget_left")
-        if kb_left is None or int(kb_left) > 0:
+        if (
+            not display_cov_ok
+            and (kb_left is None or int(kb_left) > 0)
+        ):
             miss_spot, miss_fut = _display_missing_mtf_symbols(sectors)
             if miss_spot or miss_fut:
                 t_disp = int(time.time() * 1000)
@@ -630,6 +655,12 @@ def run_scan(
                     primary_acc["display_ensure_ms"] = disp_ms
                     primary_acc["display_spot_targets"] = len(miss_spot)
                     primary_acc["display_fut_targets"] = len(miss_fut)
+                    primary_acc["display_board_spot"] = (
+                        None if spot_board is None else round(float(spot_board), 4)
+                    )
+                    primary_acc["display_board_fut"] = (
+                        None if fut_board is None else round(float(fut_board), 4)
+                    )
                     primary_acc["display_patched"] = int(pre_patched) + int(
                         _patch_sectors_mtf_from_universe(sectors, universe)
                     )
@@ -643,10 +674,20 @@ def run_scan(
                         "display MTF ensure soft-fail: %s",
                         redact_exc(disp_exc, max_len=128),
                     )
-        # Honesty: record patch-first even when no display network round.
+        # Honesty: record patch-first / coverage skip even without network round.
         acc0 = universe.get("short_window_ensure")
-        if isinstance(acc0, dict) and "display_pre_patched" not in acc0:
-            acc0["display_pre_patched"] = int(pre_patched)
+        if isinstance(acc0, dict):
+            if "display_pre_patched" not in acc0:
+                acc0["display_pre_patched"] = int(pre_patched)
+            if display_cov_ok and "display_ensure_ms" not in acc0:
+                acc0["display_skipped_coverage"] = True
+                acc0["display_ensure_ms"] = 0
+                acc0["display_board_spot"] = (
+                    None if spot_board is None else round(float(spot_board), 4)
+                )
+                acc0["display_board_fut"] = (
+                    None if fut_board is None else round(float(fut_board), 4)
+                )
         # Bound public error list — never dump unbounded venue noise
         errors = [
             redact_text(str(e))[:256]

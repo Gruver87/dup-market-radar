@@ -1,6 +1,6 @@
 # Architecture
 
-**Pin:** 0.2.82 · Index: [README.md](README.md)
+**Pin:** 0.2.83 · Index: [README.md](README.md)
 
 ## Layers
 
@@ -58,7 +58,7 @@ Venue workers run under `ingest.parallel_workers` (default 6):
 
 | Venue | Bootstrap (pin notes) |
 |-------|------------------------|
-| KuCoin (primary) | allTickers ? contracts, then `/v2/symbols`; whales overlap bootstrap (0.2.73 / 0.2.82) |
+| KuCoin (primary) | allTickers ? contracts, then `/v2/symbols`; whales overlap bootstrap (0.2.73 / 0.2.83) |
 | Binance | spot 24hr ? fut 24hr ? premium ? exchangeInfo (0.2.73) |
 | Bybit / MEXC | 3-way parallel each (0.2.77) |
 | DexScreener | boosted + batched `/tokens/{a,b,...}`; keyword search soft-skip (0.2.75 / 0.2.78) |
@@ -66,7 +66,7 @@ Venue workers run under `ingest.parallel_workers` (default 6):
 
 Dex / CoinGecko GETs use `ingest.secondary_http_timeout_ms` (default **2500**, one-shot ? 0.2.81) so secondary hosts cannot stretch ingest past CEX. CEX keeps `http_timeout_ms`.
 
-HTTP client: TLS verify on; allowlist hosts; `httpx.Limits(max_connections=32, max_keepalive_connections=16)` (0.2.82).
+HTTP client: TLS verify on; allowlist hosts; `httpx.Limits(max_connections=32, max_keepalive_connections=16)` (0.2.83).
 
 ## MTF ensure
 

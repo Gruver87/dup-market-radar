@@ -49,19 +49,39 @@ def _bootstrap_kucoin(
         return spot_raw, contracts, symbols
 
 
-def fetch_kucoin(http: AllowlistHttp) -> Dict[str, Any]:
+def whale_symbols_kucoin(raw: Optional[List[Any]] = None) -> List[str]:
+    """Map Radar USDT symbols (BTCUSDT) → KuCoin spot form (BTC-USDT)."""
+    src = list(raw or []) or ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+    out: List[str] = []
+    seen: set[str] = set()
+    for item in src:
+        s = str(item or "").upper().replace("-", "").replace("_", "")
+        if not s.endswith("USDT") or len(s) <= 4:
+            continue
+        pair = f"{s[:-4]}-USDT"
+        if pair in seen:
+            continue
+        seen.add(pair)
+        out.append(pair)
+        if len(out) >= 16:
+            break
+    return out or ["BTC-USDT", "ETH-USDT", "SOL-USDT"]
+
+
+def fetch_kucoin(
+    http: AllowlistHttp, *, whale_symbols: Optional[List[str]] = None
+) -> Dict[str, Any]:
     """KuCoin tickers + listings + whales.
 
     MTF short-windows are **not** attached here — owned by
     ``ensure_universe_short_windows`` (budget + reuse TTL). Ingest-time
     attach previously burned ~40 unbudgeted kline GETs per cex refresh.
     """
+    watch = whale_symbols_kucoin(whale_symbols)
     # Whales overlap with bootstrap (histories ∥ tickers/contracts/symbols).
     with ThreadPoolExecutor(max_workers=2) as pool:
         f_boot = pool.submit(_bootstrap_kucoin, http)
-        f_whales = pool.submit(
-            _sample_whales, http, ["BTC-USDT", "ETH-USDT", "SOL-USDT"]
-        )
+        f_whales = pool.submit(_sample_whales, http, watch)
         spot_raw, contracts, symbols_info = f_boot.result()
         whales = f_whales.result()
     tickers = ((spot_raw or {}).get("data") or {}).get("ticker") or []

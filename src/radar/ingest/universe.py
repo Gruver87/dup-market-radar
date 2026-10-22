@@ -54,8 +54,11 @@ def build_universe(
     memes: List[Dict[str, Any]] = list(cached.get("memes") or [])
     stables: List[Dict[str, Any]] = list(cached.get("stables") or [])
 
+    whales_cfg = (cfg.get("sectors") or {}).get("whales") or {}
+    whale_watch = list(whales_cfg.get("symbols_watch") or [])
+
     fetchers: Dict[str, Callable[[AllowlistHttp], Dict[str, Any]]] = {
-        "kucoin": fetch_kucoin,
+        "kucoin": lambda h, w=whale_watch: fetch_kucoin(h, whale_symbols=w),
         "binance": fetch_binance,
         "bybit": fetch_bybit,
         "mexc": fetch_mexc,

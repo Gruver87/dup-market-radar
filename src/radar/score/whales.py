@@ -7,8 +7,20 @@ from radar.score.common import candidate, clamp_i, mtf_bias_bps
 
 
 def score_whales(universe: Dict[str, Any], cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Size-proxy whale sector — aggregate prints then apply min notional.
+
+    Per-print ≥ min_notional (legacy) painted empty under KuCoin histories
+    (recent tape rarely has a single ≥100k USDT print). Correct semantics:
+    sum by (venue, symbol, side), drop dust prints, then gate the bucket.
+    """
     sec = (cfg.get("sectors") or {}).get("whales") or {}
-    min_n = quote_i(sec.get("min_notional_usdt") or 100_000) or (100_000 * QUOTE_SCALE)
+    min_n = quote_i(sec.get("min_notional_usdt") or 10_000) or (10_000 * QUOTE_SCALE)
+    # Dust floor: skip sub-print noise; never above min_n / 50.
+    dust_cfg = sec.get("min_print_usdt")
+    if dust_cfg is not None:
+        dust = quote_i(dust_cfg) or 0
+    else:
+        dust = max(100 * QUOTE_SCALE, min_n // 50)
 
     # Spot short-window join (BTC/ETH/SOL usually in sampled top-N) — no extra HTTP.
     spot_by_sym: Dict[str, Dict[str, Any]] = {}
@@ -20,7 +32,7 @@ def score_whales(universe: Dict[str, Any], cfg: Dict[str, Any]) -> List[Dict[str
     buckets: Dict[tuple, Dict[str, Any]] = {}
     for row in universe.get("whales") or []:
         notional = int(row.get("notional_i") or 0)
-        if notional < min_n:
+        if notional < dust:
             continue
         key = (row.get("venue"), row.get("symbol"), row.get("side") or "unknown")
         b = buckets.get(key)
@@ -41,6 +53,8 @@ def score_whales(universe: Dict[str, Any], cfg: Dict[str, Any]) -> List[Dict[str
 
     out: List[Dict[str, Any]] = []
     for b in buckets.values():
+        if int(b["notional_i"]) < min_n:
+            continue
         # min(notional/min_n, 20) * 5 score → centi
         ratio = min(b["notional_i"] // max(min_n, 1), 20)
         score = clamp_i(ratio * 5 * SCORE_CENTI)

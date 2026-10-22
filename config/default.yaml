@@ -184,8 +184,18 @@ sectors:
     lookback_hours: 48
   whales:
     poll_sec: 20
-    min_notional_usdt: 100000
-    symbols_watch: ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+    # Bucket sum after aggregate (KuCoin histories ≪ single 100k prints).
+    min_notional_usdt: 10000
+    min_print_usdt: 100                 # dust floor per print before sum
+    symbols_watch:
+      - BTCUSDT
+      - ETHUSDT
+      - SOLUSDT
+      - XRPUSDT
+      - DOGEUSDT
+      - ADAUSDT
+      - LINKUSDT
+      - AVAXUSDT
 
 stable_bases:
   - USDT

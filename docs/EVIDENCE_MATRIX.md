@@ -1,6 +1,6 @@
 # Evidence matrix — DUP Market Radar
 
-**Pin:** 0.2.72 · Companion product — **not** L1 mesh evidence.
+**Pin:** 0.2.74 · Companion product — **not** L1 mesh evidence.
 
 Claims require on-disk packs. Missing pack ⇒ **⏳** / do not invent PASS.
 
@@ -19,7 +19,8 @@ Claims require on-disk packs. Missing pack ⇒ **⏳** / do not invent PASS.
 | Smoke phase export (0.2.72) | `radar_smoke_lab` summary: `ingest_ms`/`ensure_ms`/`venue_ms`/`kline_gets` | pack must include fields |
 | Oid write-behind (0.2.72) | `claim` sync; `mark_accepted`/`release` debounce + `close()` flush | unit tests; not soak |
 | Ensure gate freeze (0.2.72) | fill ratios vs frozen top-N (no mid-ensure re-rank) | live smoke `mtf_ensure_ok` |
-| Venue bootstrap parallel (0.2.73) | Binance 4-way + KuCoin 3-way bootstrap; `venue_ms` drop | live smoke vs 0.2.72 pack |
+| Venue bootstrap parallel (0.2.73) | Binance 4-way + KuCoin 3-way bootstrap; `venue_ms` drop | live smoke vs prior pack |
+| Whales aggregate-first (0.2.74) | bucket sum ≥ `min_notional`; KuCoin `symbols_watch` | live smoke `counts.whales` > 0 |
 | Ensure GET budget | `ingest.max_kline_gets` + `http_stats.kline_gets` | incomplete fill still fail-closed |
 
 ## Packaging

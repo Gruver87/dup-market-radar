@@ -1,5 +1,13 @@
 # Changelog — DUP Market Radar
 
+## 0.2.74
+
+- Whales: aggregate prints then apply `min_notional` (Python + `radar_native` parity)
+- Was per-print ≥100k → empty under KuCoin histories; calibrate `min_notional_usdt=10000`, `min_print_usdt=100`
+- Expand `symbols_watch` to 8 pairs; wire into KuCoin whale histories fan-out
+- Package / FastAPI / User-Agent / `__version__` / native pin `0.2.74`
+- Soak / 48h: **not** claimed this pin
+
 ## 0.2.73
 
 - Binance ingest: parallel bootstrap (spot 24hr ∥ futures 24hr ∥ premium ∥ exchangeInfo)

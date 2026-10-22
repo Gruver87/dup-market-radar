@@ -144,6 +144,25 @@ def validate_config(cfg: Dict[str, Any]) -> None:
                 ps = sec.get("poll_sec")
                 if not isinstance(ps, int) or isinstance(ps, bool) or ps < 5 or ps > 3600:
                     errors.append(f"sectors.{sk}.poll_sec must be int 5..3600")
+        whales = sectors.get("whales") if isinstance(sectors.get("whales"), dict) else {}
+        if whales:
+            for mk in ("min_notional_usdt", "min_print_usdt"):
+                if mk in whales and not isinstance(whales[mk], int):
+                    errors.append(f"sectors.whales.{mk} must be int")
+            mn = whales.get("min_notional_usdt")
+            if isinstance(mn, int) and (mn < 100 or mn > 10_000_000):
+                errors.append("sectors.whales.min_notional_usdt must be int 100..10000000")
+            mp = whales.get("min_print_usdt")
+            if isinstance(mp, int) and (mp < 0 or mp > 1_000_000):
+                errors.append("sectors.whales.min_print_usdt must be int 0..1000000")
+            sw = whales.get("symbols_watch")
+            if sw is not None:
+                if not isinstance(sw, list) or len(sw) > 32:
+                    errors.append("sectors.whales.symbols_watch must be list ≤32")
+                elif any(not isinstance(s, str) or not str(s).strip() for s in sw):
+                    errors.append(
+                        "sectors.whales.symbols_watch entries must be non-empty strings"
+                    )
 
     native = cfg.get("native")
     if not isinstance(native, dict):

@@ -911,7 +911,12 @@ fn score_listings(universe: &Value, cfg: &Value) -> Vec<Value> {
 
 fn score_whales(universe: &Value, cfg: &Value) -> Vec<Value> {
     let sec = sector_cfg(cfg, "whales");
-    let min_n = cfg_usdt_micros(sec.get("min_notional_usdt"), 100_000);
+    // Aggregate-first: default 10k USDT (KuCoin histories rarely have single ≥100k prints).
+    let min_n = cfg_usdt_micros(sec.get("min_notional_usdt"), 10_000);
+    let dust = match sec.get("min_print_usdt") {
+        Some(v) => cfg_usdt_micros(Some(v), 100),
+        None => (min_n / 50).max(100 * 1_000_000),
+    };
     let mut spot_by_sym: std::collections::HashMap<String, &Value> =
         std::collections::HashMap::new();
     if let Some(rows) = universe.get("spot").and_then(|v| v.as_array()) {
@@ -928,7 +933,7 @@ fn score_whales(universe: &Value, cfg: &Value) -> Vec<Value> {
     };
     for row in rows {
         let notional = as_i64(row.get("notional_i")).unwrap_or(0);
-        if notional < min_n {
+        if notional < dust {
             continue;
         }
         let venue = row
@@ -972,6 +977,9 @@ fn score_whales(universe: &Value, cfg: &Value) -> Vec<Value> {
     let mut out = Vec::new();
     for b in buckets.into_values() {
         let notional = as_i64(b.get("notional_i")).unwrap_or(0);
+        if notional < min_n {
+            continue;
+        }
         let prints = as_i64(b.get("prints")).unwrap_or(0);
         let side = b
             .get("side")

@@ -1,5 +1,11 @@
 ﻿# Changelog - DUP Market Radar
 
+## 0.2.79
+
+- Primary ensure: `ensure_rank_n = ensure_cap` (was top_n*2) — absorb more post-MTF display tops in the parallel window
+- Package / FastAPI / User-Agent / `__version__` / native pin `0.2.79`
+- Soak / 48h: **not** claimed this pin
+
 ## 0.2.78
 
 - Primary ensure: widen 24h gate to `top_n*2` (fill-check stays `top_n`) so post-MTF display tops fill in the parallel window

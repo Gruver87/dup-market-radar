@@ -475,7 +475,9 @@ def run_scan(
         # them — live 0.2.78 attempt blew spot_kucoin without cutting display).
         ensure_cap = max(top_n * 3, 24)
         expand_n = max(8, top_n)
-        ensure_rank_n = max(top_n * 2, 16)
+        # Fill the ensure cap with 24h-ranked symbols (0.2.79) — top_n*2 still
+        # left ~8 display misses (live 0.2.78); use full cap as ensure rank.
+        ensure_rank_n = int(ensure_cap)
         ensure_acc: Dict[str, Any] = {}
         t_ensure = int(time.time() * 1000)
 

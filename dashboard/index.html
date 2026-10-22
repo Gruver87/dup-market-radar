@@ -53,18 +53,26 @@
       border-bottom: 1px solid var(--border);
     }
     button.tab {
-      background: transparent;
+      background: #12171f;
       border: 1px solid var(--border);
       color: var(--muted);
-      padding: 6px 12px;
+      padding: 8px 14px;
       cursor: pointer;
       font: inherit;
-      border-radius: 2px;
+      font-size: 0.86rem;
+      border-radius: 8px;
+      transition: border-color 0.12s, color 0.12s, background 0.12s, box-shadow 0.12s;
+    }
+    button.tab:hover {
+      color: var(--text);
+      border-color: #3d4a5c;
+      background: #182029;
     }
     button.tab.active {
-      color: var(--text);
+      color: #fff;
       border-color: var(--accent);
-      background: #1a2330;
+      background: linear-gradient(180deg, #1c2a3a 0%, #152030 100%);
+      box-shadow: 0 0 0 1px rgba(61, 156, 240, 0.25), inset 0 1px 0 rgba(255,255,255,0.04);
     }
     main { padding: 16px 24px 40px; }
     .method { color: var(--muted); font-size: 0.85rem; margin-bottom: 12px; max-width: 960px; line-height: 1.45; }
@@ -275,36 +283,66 @@
       white-space: pre-wrap;
     }
     .bubbles-wrap {
-      background: #0a0e14;
+      background:
+        radial-gradient(ellipse 80% 60% at 50% 45%, #121a24 0%, #070a0f 70%, #05070a 100%);
       border: 1px solid var(--border);
+      border-radius: 12px;
       margin-bottom: 16px;
       max-width: 1100px;
       overflow: hidden;
+      box-shadow: inset 0 0 80px rgba(0,0,0,0.45);
     }
     .bubbles-head {
       display: flex;
       flex-wrap: wrap;
       justify-content: space-between;
       gap: 8px;
-      padding: 10px 14px;
-      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(42, 51, 64, 0.8);
       align-items: baseline;
     }
-    .bubbles-head h2 { margin: 0; font-size: 0.95rem; }
+    .bubbles-head h2 { margin: 0; font-size: 0.95rem; letter-spacing: 0.01em; }
     .bubbles-meta { color: var(--muted); font-size: 0.75rem; font-family: var(--mono); }
-    #bubblesSvg { display: block; width: 100%; height: min(62vh, 560px); }
+    .bubbles-legend {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+    .bubbles-legend i {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 4px;
+      vertical-align: -1px;
+    }
+    #bubblesSvg {
+      display: block;
+      width: 100%;
+      height: min(68vh, 640px);
+      cursor: default;
+    }
+    #bubblesSvg g.bub { cursor: pointer; }
+    #bubblesSvg g.bub:hover circle.main { filter: brightness(1.12); }
     .bubble-tip {
       position: fixed;
       z-index: 40;
       pointer-events: none;
-      background: #1a2330;
-      border: 1px solid var(--border);
+      background: rgba(18, 24, 32, 0.96);
+      border: 1px solid #3d4a5c;
+      border-radius: 8px;
       color: var(--text);
-      padding: 8px 10px;
+      padding: 10px 12px;
       font-size: 0.78rem;
       font-family: var(--mono);
-      max-width: 280px;
+      max-width: 300px;
       display: none;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+      white-space: pre-line;
+      line-height: 1.45;
     }
   </style>
 </head>
@@ -357,9 +395,14 @@
     <div class="bubbles-wrap">
       <div class="bubbles-head">
         <h2 data-i18n="bubbles_title">Crypto Bubbles · топ-100 · ~6м</h2>
+        <div class="bubbles-legend" aria-hidden="true">
+          <span><i style="background:#3fb950"></i>up</span>
+          <span><i style="background:#6e7681"></i>0</span>
+          <span><i style="background:#f85149"></i>down</span>
+        </div>
         <div class="bubbles-meta" id="bubblesMeta">…</div>
       </div>
-      <svg id="bubblesSvg" viewBox="0 0 1100 560" role="img" aria-label="crypto bubbles"></svg>
+      <svg id="bubblesSvg" viewBox="0 0 1100 640" role="img" aria-label="crypto bubbles"></svg>
       <div class="bubble-tip" id="bubbleTip"></div>
     </div>
     <div class="help">
@@ -545,16 +588,29 @@
 
     function bubbleColor(bps) {
       const v = Number(bps || 0);
-      // green up / red down — crypto-bubbles style
-      if (v >= 8000) return "#1a7f37";
-      if (v >= 2000) return "#2ea043";
-      if (v >= 500) return "#3fb950";
-      if (v > 0) return "#56d364";
-      if (v === 0) return "#6e7681";
-      if (v > -500) return "#f85149";
-      if (v > -2000) return "#da3633";
-      if (v > -8000) return "#b62324";
-      return "#8b1518";
+      // crypto-bubbles style: deep green up / deep red down
+      if (v >= 12000) return "#0d5c2e";
+      if (v >= 5000) return "#1a7f37";
+      if (v >= 1500) return "#238636";
+      if (v >= 400) return "#2ea043";
+      if (v > 0) return "#3fb950";
+      if (v === 0) return "#484f58";
+      if (v > -400) return "#f85149";
+      if (v > -1500) return "#da3633";
+      if (v > -5000) return "#b62324";
+      if (v > -12000) return "#8b1518";
+      return "#6e1012";
+    }
+
+    function bubbleHiColor(fill) {
+      // lighter rim for fake 3D gradient
+      const map = {
+        "#0d5c2e": "#3fb950", "#1a7f37": "#56d364", "#238636": "#56d364",
+        "#2ea043": "#7ee787", "#3fb950": "#aff5b4", "#484f58": "#8b949e",
+        "#f85149": "#ff7b72", "#da3633": "#ff8e86", "#b62324": "#f85149",
+        "#8b1518": "#da3633", "#6e1012": "#b62324",
+      };
+      return map[fill] || "#c9d1d9";
     }
 
     function packBubbles(coins, W, H) {
@@ -562,41 +618,62 @@
         .filter((c) => c && c.market_cap_i != null && c.market_cap_i > 0)
         .slice(0, 100)
         .map((c) => {
-          // market_cap_i is USDT micros → USD for bubble radius
           const mUsd = Math.max(1, Number(c.market_cap_i) / 1e6);
-          const r = Math.max(10, Math.min(90, 10 + Math.sqrt(mUsd) / 3500));
+          // denser, more crypto-bubbles-like size curve
+          const r = Math.max(12, Math.min(108, 11 + Math.pow(mUsd, 0.42) / 55));
           return { ...c, r };
         })
         .sort((a, b) => b.r - a.r);
-      const placed = [];
+
+      // Seed spiral then relax overlaps (cheap circle packing)
       const cx0 = W / 2, cy0 = H / 2;
-      for (const it of items) {
-        let placedOk = false;
-        for (let attempt = 0; attempt < 400 && !placedOk; attempt++) {
-          const ang = attempt * 0.55;
-          const rad = 8 + attempt * 1.35;
-          const x = cx0 + Math.cos(ang) * rad;
-          const y = cy0 + Math.sin(ang) * rad * 0.72;
-          if (x - it.r < 4 || y - it.r < 4 || x + it.r > W - 4 || y + it.r > H - 4) continue;
-          let hit = false;
-          for (const p of placed) {
-            const dx = p.x - x, dy = p.y - y;
-            if (dx * dx + dy * dy < (p.r + it.r + 1.5) * (p.r + it.r + 1.5)) {
-              hit = true;
-              break;
+      const placed = items.map((it, i) => {
+        const ang = i * 2.399963; // golden angle
+        const rad = 6 + Math.sqrt(i) * 22;
+        return {
+          ...it,
+          x: cx0 + Math.cos(ang) * rad,
+          y: cy0 + Math.sin(ang) * rad * 0.78,
+        };
+      });
+
+      const pad = 6;
+      for (let iter = 0; iter < 48; iter++) {
+        for (let i = 0; i < placed.length; i++) {
+          const a = placed[i];
+          // soft pull to center
+          a.x += (cx0 - a.x) * 0.012;
+          a.y += (cy0 - a.y) * 0.012;
+          for (let j = i + 1; j < placed.length; j++) {
+            const b = placed[j];
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const minD = a.r + b.r + 1.2;
+            const d2 = dx * dx + dy * dy;
+            if (d2 < 0.01) {
+              a.x -= 0.5; b.x += 0.5;
+              continue;
+            }
+            if (d2 < minD * minD) {
+              const d = Math.sqrt(d2);
+              const push = (minD - d) * 0.52;
+              const ux = dx / d, uy = dy / d;
+              const wa = b.r / (a.r + b.r);
+              const wb = a.r / (a.r + b.r);
+              a.x -= ux * push * wa;
+              a.y -= uy * push * wa;
+              b.x += ux * push * wb;
+              b.y += uy * push * wb;
             }
           }
-          if (!hit) {
-            placed.push({ ...it, x, y });
-            placedOk = true;
-          }
-        }
-        if (!placedOk) {
-          placed.push({ ...it, x: cx0, y: cy0 });
+          a.x = Math.max(a.r + pad, Math.min(W - a.r - pad, a.x));
+          a.y = Math.max(a.r + pad, Math.min(H - a.r - pad, a.y));
         }
       }
       return placed;
     }
+
+    let bubbleSelected = null;
 
     function renderBubbles(payload) {
       const svg = document.getElementById("bubblesSvg");
@@ -604,7 +681,8 @@
       const tip = document.getElementById("bubbleTip");
       if (!svg) return;
       const coins = (payload && payload.coins) || [];
-      const W = 1100, H = 560;
+      const W = 1100, H = 640;
+      svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
       const packed = packBubbles(coins, W, H);
       const stale = payload && payload.stale ? " · STALE" : "";
       const age = payload && payload.age_ms != null ? ` · age=${Math.floor(payload.age_ms / 1000)}s` : "";
@@ -612,34 +690,75 @@
         `n=${coins.length} · ${payload.period_label || "~6m"} · src=${payload.source || "—"}${stale}${age}` +
         (payload.error ? ` · err=${payload.error}` : "");
       const PRICE = 100000000;
-      let html = "";
+
+      let defs = `<defs>
+        <radialGradient id="bubVignette" cx="50%" cy="45%" r="65%">
+          <stop offset="0%" stop-color="#15202b" stop-opacity="0.35"/>
+          <stop offset="100%" stop-color="#05070a" stop-opacity="0"/>
+        </radialGradient>`;
+      const fills = new Set();
+      for (const b of packed) fills.add(bubbleColor(b.change_6m_bps));
+      let gi = 0;
+      const gradId = {};
+      for (const fill of fills) {
+        const id = "bg" + (gi++);
+        gradId[fill] = id;
+        const hi = bubbleHiColor(fill);
+        defs += `<radialGradient id="${id}" cx="35%" cy="30%" r="70%">
+          <stop offset="0%" stop-color="${hi}" stop-opacity="0.95"/>
+          <stop offset="55%" stop-color="${fill}" stop-opacity="0.98"/>
+          <stop offset="100%" stop-color="${fill}" stop-opacity="1"/>
+        </radialGradient>`;
+      }
+      defs += `</defs>`;
+
+      let html = defs + `<rect width="${W}" height="${H}" fill="url(#bubVignette)"/>`;
       for (const b of packed) {
         const fill = bubbleColor(b.change_6m_bps);
         const pct = bpsToPctLabel(b.change_6m_bps);
-        const fs = Math.max(7, Math.min(14, b.r * 0.38));
+        const fs = Math.max(8, Math.min(18, b.r * 0.42));
         const price =
           b.price_i != null ? (Number(b.price_i) / PRICE).toPrecision(4) : "—";
+        const sel = bubbleSelected === b.symbol;
+        const stroke = sel ? "#e6edf3" : "rgba(0,0,0,0.55)";
+        const sw = sel ? 3.2 : 1.1;
         html += `<g class="bub" data-sym="${esc(b.symbol)}" data-name="${esc(b.name)}" ` +
-          `data-pct="${esc(pct)}" data-price="${esc(price)}" data-rank="${esc(b.rank)}">` +
-          `<circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="${b.r.toFixed(1)}" ` +
-          `fill="${fill}" fill-opacity="0.88" stroke="#0e1116" stroke-width="1.2"/>` +
-          `<text x="${b.x.toFixed(1)}" y="${(b.y - fs * 0.15).toFixed(1)}" text-anchor="middle" ` +
-          `fill="#e6edf3" font-size="${fs}" font-family="Segoe UI,sans-serif" font-weight="650">${esc(b.symbol)}</text>` +
+          `data-pct="${esc(pct)}" data-price="${esc(price)}" data-rank="${esc(b.rank)}" ` +
+          `data-bps="${esc(b.change_6m_bps)}">` +
+          `<circle class="main" cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="${b.r.toFixed(1)}" ` +
+          `fill="url(#${gradId[fill]})" stroke="${stroke}" stroke-width="${sw}"/>` +
+          `<circle cx="${(b.x - b.r * 0.28).toFixed(1)}" cy="${(b.y - b.r * 0.32).toFixed(1)}" ` +
+          `r="${Math.max(2, b.r * 0.18).toFixed(1)}" fill="#fff" fill-opacity="0.18"/>` +
+          `<text x="${b.x.toFixed(1)}" y="${(b.y - fs * 0.12).toFixed(1)}" text-anchor="middle" ` +
+          `fill="#fff" font-size="${fs}" font-family="Segoe UI,system-ui,sans-serif" ` +
+          `font-weight="700" style="paint-order:stroke;stroke:rgba(0,0,0,0.35);stroke-width:2px">${esc(b.symbol)}</text>` +
           `<text x="${b.x.toFixed(1)}" y="${(b.y + fs * 0.95).toFixed(1)}" text-anchor="middle" ` +
-          `fill="#e6edf3" font-size="${Math.max(6, fs * 0.75)}" font-family="Consolas,monospace">${esc(pct)}</text>` +
+          `fill="rgba(255,255,255,0.92)" font-size="${Math.max(7, fs * 0.72)}" ` +
+          `font-family="Cascadia Code,Consolas,monospace" font-weight="600">${esc(pct)}</text>` +
           `</g>`;
       }
       svg.innerHTML = html;
       svg.querySelectorAll("g.bub").forEach((g) => {
         g.addEventListener("mousemove", (ev) => {
           tip.style.display = "block";
-          tip.style.left = (ev.clientX + 12) + "px";
-          tip.style.top = (ev.clientY + 12) + "px";
+          tip.style.left = (ev.clientX + 14) + "px";
+          tip.style.top = (ev.clientY + 14) + "px";
           tip.textContent =
-            `#${g.dataset.rank} ${g.dataset.sym} · ${g.dataset.name}\n` +
-            `price≈$${g.dataset.price} · 6m ${g.dataset.pct}`;
+            `#${g.dataset.rank}  ${g.dataset.sym} · ${g.dataset.name}\n` +
+            `price ≈ $${g.dataset.price}\n` +
+            `~6m  ${g.dataset.pct}`;
         });
         g.addEventListener("mouseleave", () => { tip.style.display = "none"; });
+        g.addEventListener("click", () => {
+          bubbleSelected = g.dataset.sym;
+          // re-stroke without full re-pack
+          svg.querySelectorAll("g.bub circle.main").forEach((c) => {
+            const parent = c.parentElement;
+            const on = parent && parent.dataset.sym === bubbleSelected;
+            c.setAttribute("stroke", on ? "#e6edf3" : "rgba(0,0,0,0.55)");
+            c.setAttribute("stroke-width", on ? "3.2" : "1.1");
+          });
+        });
       });
     }
 
@@ -915,8 +1034,17 @@
         const b = document.createElement("button");
         b.className = "tab" + (s.id === state.sector ? " active" : "");
         b.type = "button";
+        b.setAttribute("aria-pressed", s.id === state.sector ? "true" : "false");
         b.textContent = s.label;
-        b.onclick = () => { state.sector = s.id; render(); };
+        b.onclick = () => {
+          if (state.sector === s.id) return;
+          state.sector = s.id;
+          renderTabs();
+          render();
+          try {
+            document.getElementById("table").scrollIntoView({ behavior: "smooth", block: "nearest" });
+          } catch (_) { /* soft */ }
+        };
         nav.appendChild(b);
       });
     }
@@ -1072,6 +1200,7 @@
     function render() {
       const snap = state.snap;
       if (!snap) return;
+      renderTabs();
       renderTradeStatus(snap);
       const metaKey = state.sector.startsWith("futures") ? "futures" : state.sector;
       const meta = (snap.sector_meta || {})[metaKey] || {};

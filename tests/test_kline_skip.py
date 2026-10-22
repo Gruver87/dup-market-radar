@@ -38,26 +38,18 @@ def test_patch_display_helpers():
             {"symbol": "BBBUSDT", "metrics": {"change_bps_15m": 10}},
         ],
         "futures": [{"symbol": "BTCUSDT", "metrics": {}}],
-        "listings": [{"symbol": "NEWUSDT", "metrics": {}}],  # ignored for display ensure
         "memes": [
             {
                 "symbol": "PEPEUSDT",
                 "venue": "kucoin",
                 "metrics": {"source": "cex"},
             },
-            {
-                "symbol": "DEX/SOL",
-                "venue": "dexscreener",
-                "metrics": {"source": "dex"},
-            },
         ],
     }
-    miss_s, miss_f = _display_missing_mtf_symbols(sectors)
+    miss_s, miss_f = _display_missing_mtf_symbols(sectors, cap=8)
     assert "AAAUSDT" in miss_s
     assert "BBBUSDT" not in miss_s
-    assert "PEPEUSDT" in miss_s
-    assert "DEX/SOL" not in miss_s
-    assert "NEWUSDT" not in miss_s
+    assert "PEPEUSDT" not in miss_s  # memes excluded from display ensure
     assert "BTCUSDT" in miss_f
 
     universe = {

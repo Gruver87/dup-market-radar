@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Dict, List, Tuple
 
 from radar.http_client import AllowlistHttp
 from radar.ingest.parse import fraction_to_pct_str, keep_num
@@ -14,23 +15,66 @@ logger = logging.getLogger("radar.ingest.bybit")
 _bybit_change_pct_str = fraction_to_pct_str
 
 
-def fetch_bybit(http: AllowlistHttp) -> Dict[str, Any]:
-    spot = http.get_json(
-        "https://api.bybit.com/v5/market/tickers",
-        params={"category": "spot"},
-    )
-    linear = http.get_json(
-        "https://api.bybit.com/v5/market/tickers",
-        params={"category": "linear"},
-    )
-    spot_rows = [_norm(r, "spot") for r in (spot.get("result") or {}).get("list") or []]
-    fut_rows = [_norm_fut(r) for r in (linear.get("result") or {}).get("list") or []]
+def _bootstrap_bybit(
+    http: AllowlistHttp,
+) -> Tuple[Any, Any, Any]:
+    """Parallel spot tickers ∥ linear tickers ∥ spot instruments-info."""
 
-    instruments = http.get_json(
-        "https://api.bybit.com/v5/market/instruments-info",
-        params={"category": "spot", "limit": 1000},
+    def _spot() -> Any:
+        return http.get_json(
+            "https://api.bybit.com/v5/market/tickers",
+            params={"category": "spot"},
+        )
+
+    def _linear() -> Any:
+        return http.get_json(
+            "https://api.bybit.com/v5/market/tickers",
+            params={"category": "linear"},
+        )
+
+    def _instruments() -> Any:
+        return http.get_json(
+            "https://api.bybit.com/v5/market/instruments-info",
+            params={"category": "spot", "limit": 1000},
+        )
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        f_s = pool.submit(_spot)
+        f_l = pool.submit(_linear)
+        f_i = pool.submit(_instruments)
+        spot = f_s.result()
+        try:
+            linear = f_l.result()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("bybit linear soft-fail: %s", redact_exc(exc, max_len=128))
+            linear = None
+        try:
+            instruments = f_i.result()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "bybit instruments soft-fail: %s", redact_exc(exc, max_len=128)
+            )
+            instruments = None
+        return spot, linear, instruments
+
+
+def fetch_bybit(http: AllowlistHttp) -> Dict[str, Any]:
+    spot, linear, instruments = _bootstrap_bybit(http)
+    spot_rows = [
+        _norm(r, "spot")
+        for r in ((spot or {}).get("result") or {}).get("list") or []
+        if isinstance(r, dict)
+    ]
+    fut_rows = [
+        _norm_fut(r)
+        for r in ((linear or {}).get("result") or {}).get("list") or []
+        if isinstance(r, dict)
+    ]
+    listings = _listings(
+        ((instruments or {}).get("result") or {}).get("list") or []
+        if isinstance(instruments, dict)
+        else []
     )
-    listings = _listings((instruments.get("result") or {}).get("list") or [])
 
     # Whales: KuCoin-primary only (0.2.70) — skip Bybit recent-trade fan-out.
     return {
@@ -73,6 +117,8 @@ def _norm_fut(r: Dict[str, Any]) -> Dict[str, Any]:
 def _listings(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     for s in rows:
+        if not isinstance(s, dict):
+            continue
         launch = s.get("launchTime")
         if launch is None:
             continue

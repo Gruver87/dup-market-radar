@@ -218,32 +218,27 @@ def _cand_missing_15m(cand: Dict[str, Any]) -> bool:
 
 
 def _display_missing_mtf_symbols(
-    sectors: Dict[str, Any],
+    sectors: Dict[str, Any], *, cap: int = 8
 ) -> tuple[set[str], set[str]]:
     """Symbols on primary scored boards still lacking 15m MTF.
 
-    Only ``spot_alts`` + ``futures`` (+ CEX memes) — listings/whales skipped so
-    display fill cannot dominate scan wall-clock.
+    Only ``spot_alts`` + ``futures`` (no memes/listings/whales) and hard-capped
+    so display fill cannot dominate scan wall-clock.
     """
     spot: set[str] = set()
     fut: set[str] = set()
+    n_cap = max(0, int(cap))
     for cand in sectors.get("spot_alts") or []:
+        if len(spot) >= n_cap:
+            break
         if not isinstance(cand, dict) or not _cand_missing_15m(cand):
-            continue
-        sym = str(cand.get("symbol") or "")
-        if sym:
-            spot.add(sym)
-    for cand in sectors.get("memes") or []:
-        if not isinstance(cand, dict) or not _cand_missing_15m(cand):
-            continue
-        venue = str(cand.get("venue") or "").lower()
-        src = str((cand.get("metrics") or {}).get("source") or "").lower()
-        if src == "dex" or venue == "dexscreener":
             continue
         sym = str(cand.get("symbol") or "")
         if sym:
             spot.add(sym)
     for cand in sectors.get("futures") or []:
+        if len(fut) >= n_cap:
+            break
         if not isinstance(cand, dict) or not _cand_missing_15m(cand):
             continue
         sym = str(cand.get("symbol") or "")
@@ -584,8 +579,10 @@ def run_scan(
     t_score = int(time.time() * 1000)
     try:
         sectors, backend = score_sectors(universe, cfg, top_n)
+        score_ms = int(time.time() * 1000) - t_score
         # Display honesty: scored tops may diverge from frozen gate — fill MTF
         # for missing display rows from remaining kline budget, then patch metrics.
+        # Attribute wall time to ensure_ms (not score_ms).
         kb_left = budget_status(http).get("kline_budget_left")
         if kb_left is None or int(kb_left) > 0:
             miss_spot, miss_fut = _display_missing_mtf_symbols(sectors)
@@ -599,14 +596,17 @@ def run_scan(
                         fut_symbols=miss_fut or set(),
                         reuse_ttl_ms=reuse_ttl,
                     )
+                    disp_ms = int(time.time() * 1000) - t_disp
+                    ensure_ms = int(ensure_ms) + disp_ms
                     acc = universe.get("short_window_ensure")
                     if isinstance(acc, dict):
-                        acc["display_ensure_ms"] = int(time.time() * 1000) - t_disp
+                        acc["display_ensure_ms"] = disp_ms
                         acc["display_spot_targets"] = len(miss_spot)
                         acc["display_fut_targets"] = len(miss_fut)
                         acc["display_patched"] = _patch_sectors_mtf_from_universe(
                             sectors, universe
                         )
+                        acc["ensure_ms"] = ensure_ms
                         acc["kline_budget"] = budget_status(http)
                         sm = acc.setdefault("stage_ms", {})
                         for k, v in (disp.get("stage_ms") or {}).items():
@@ -618,7 +618,6 @@ def run_scan(
                         "display MTF ensure soft-fail: %s",
                         redact_exc(disp_exc, max_len=128),
                     )
-        score_ms = int(time.time() * 1000) - t_score
         # Bound public error list — never dump unbounded venue noise
         errors = [
             redact_text(str(e))[:256]

@@ -1,4 +1,12 @@
-# Changelog ? DUP Market Radar
+﻿# Changelog — DUP Market Radar
+
+## 0.2.77
+
+- MEXC / Bybit ingest: parallel bootstrap (3 independent GETs each)
+- Timer honesty: display MTF ensure wall-time adds to `ensure_ms`, not `score_ms`
+- Display ensure: spot_alts+futures only, cap 8/side (no memes) — avoid ensure blow-ups
+- Package / FastAPI / User-Agent / `__version__` / native pin `0.2.77`
+- Soak / 48h: **not** claimed this pin
 
 ## 0.2.76
 

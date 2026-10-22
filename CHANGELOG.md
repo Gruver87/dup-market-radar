@@ -2,6 +2,8 @@
 
 ## 0.2.87
 
+- Ops: quiet Ctrl+C — `run_radar_server.py` filters uvicorn SIGINT/lifespan ERROR; WS/`HUB.close_all` + lifespan `finally`
+
 - Ops: `run_radar.ps1` default reload-off; `-Reload` watches only src/config/dashboard (fixes `.venv` reload cascade + `~adar_native` return)
 - Ops: `build_native.ps1` uses maturin build+pip (clears `~adar_native` leftovers); CoinGecko stables stale-OK + poll 180s; Binance kline 400 process denylist (AKE/ILY quiet after first refuse + `kline_skip_hits`)
 - Ops: `scripts/test_all.ps1` + verify `-Profile Full` (gate/ruff/pytest/offline/warm/live; no soak)

@@ -70,6 +70,7 @@ Operator full local check (**no soak**):
 | CoinGecko `429` / `stables: 0` | free-tier rate limit | accepted soft; stables poll 180s + stale-OK; optional API key later |
 | Binance kline `400` (AKE/ILY/…) | delisted / invalid symbol | **done** — process denylist (`_kline_skip_persist`); one `info` on first refuse, then silent skip + `kline_skip_hits`; waterfall covers |
 | Starlette `httpx` TestClient deprecation | pytest warning | migrate to `httpx2` later — not a gate |
+| Ctrl+C uvicorn ERROR (`KeyboardInterrupt` + lifespan `CancelledError`) | uvicorn re-raises SIGINT after clean shutdown | **mitigated** — `scripts/run_radar_server.py` filters that ERROR; WS/`HUB.close_all` + lifespan `finally` |
 
 ---
 

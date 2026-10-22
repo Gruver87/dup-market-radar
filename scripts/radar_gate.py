@@ -71,8 +71,14 @@ def main() -> int:
     run_radar = (ROOT / "scripts" / "run_radar.ps1").read_text(
         encoding="utf-8", errors="replace"
     )
+    need(ROOT / "scripts" / "run_radar.ps1", "run_radar_server.py", "run_radar_quiet_entry")
     need(ROOT / "scripts" / "run_radar.ps1", "--reload-dir", "run_radar_scoped_reload")
     need(ROOT / "scripts" / "run_radar.ps1", "~adar_native", "run_radar_leftover_cleanup")
+    need(
+        ROOT / "scripts" / "run_radar_server.py",
+        "_ShutdownNoiseFilter",
+        "run_radar_shutdown_filter",
+    )
     if "--reload" in run_radar and "--reload-dir" not in run_radar:
         FAILURES.append("run_radar_bare_reload")
     if "build_native.ps1" in run_radar and "maturin develop" in run_radar.lower():

@@ -45,6 +45,17 @@ class WsHub:
         with self._lock:
             self._subs.discard(q)
 
+    def close_all(self) -> None:
+        """Wake waiters and clear subs — used on process shutdown (Ctrl+C)."""
+        with self._lock:
+            subs = list(self._subs)
+            self._subs.clear()
+        for q in subs:
+            try:
+                q.put_nowait({"type": "_shutdown"})
+            except Exception:  # noqa: BLE001
+                pass
+
     def publish(self, event: Dict[str, Any]) -> None:
         """Thread-safe publish; schedules onto bound event loop when needed."""
         payload = dict(event)

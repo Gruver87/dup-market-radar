@@ -33,33 +33,23 @@ Write-Host "DUP Market Radar -> http://127.0.0.1:8787/"
 Write-Host "Watchlist + manual/auto KuCoin. Futures never auto-traded."
 Write-Host "Native: not rebuilt here (build_native.ps1 if needed)."
 
-$uvArgs = @(
-  "-m", "uvicorn",
-  "radar.api.app:app",
+$server = Join-Path $Root "scripts\run_radar_server.py"
+$pyArgs = @(
+  $server,
   "--host", "127.0.0.1",
-  "--port", "8787",
-  "--limit-concurrency", "128",
-  "--timeout-keep-alive", "30"
+  "--port", "8787"
 )
 
 if ($Reload) {
-  # Watch only app sources - never .venv / site-packages / cargo target.
-  # Broad --reload was creating reload cascades + ~adar_native when .pyd locked.
   Write-Host "Reload: ON (dirs src, config, dashboard - .venv excluded)"
-  $uvArgs += @(
+  $pyArgs += @(
     "--reload",
     "--reload-dir", (Join-Path $Root "src"),
     "--reload-dir", (Join-Path $Root "config"),
-    "--reload-dir", (Join-Path $Root "dashboard"),
-    "--reload-exclude", ".venv",
-    "--reload-exclude", "**/site-packages/**",
-    "--reload-exclude", "**/~*",
-    "--reload-exclude", "**/native/**/target/**",
-    "--reload-exclude", "**/evidence/**",
-    "--reload-exclude", "**/.pytest_cache/**"
+    "--reload-dir", (Join-Path $Root "dashboard")
   )
 } else {
   Write-Host "Reload: OFF (stable ops / PreSoak). Dev: .\scripts\run_radar.ps1 -Reload"
 }
 
-& $py @uvArgs
+& $py @pyArgs

@@ -708,26 +708,33 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
                 logger.error("warm scan failed: %s", redact_exc(exc, max_len=256))
 
         threading.Thread(target=_warm, name="radar-warm-scan", daemon=True).start()
-    yield
-    logger.info("shutdown: stopping recovery + telegram + auto-trade")
-    if _recovery is not None:
-        _recovery.stop(join_timeout_sec=5.0)
-        _recovery = None
-    _auto.set_on_action(None)
-    if _tg is not None:
-        _tg.stop(join_timeout_sec=5.0)
-    _auto.stop_loop(join_timeout_sec=8.0)
-    _SCAN_EXECUTOR.shutdown(wait=False, cancel_futures=True)
     try:
-        from radar.http_pool import close_http_pool
+        yield
+    finally:
+        # Always run cleanup on Ctrl+C / CancelledError — quiet exit, no orphan locks.
+        logger.info("shutdown: stopping recovery + telegram + auto-trade")
+        try:
+            HUB.close_all()
+        except Exception:  # noqa: BLE001
+            pass
+        if _recovery is not None:
+            _recovery.stop(join_timeout_sec=5.0)
+            _recovery = None
+        _auto.set_on_action(None)
+        if _tg is not None:
+            _tg.stop(join_timeout_sec=5.0)
+        _auto.stop_loop(join_timeout_sec=8.0)
+        _SCAN_EXECUTOR.shutdown(wait=False, cancel_futures=True)
+        try:
+            from radar.http_pool import close_http_pool
 
-        close_http_pool()
-    except Exception:  # noqa: BLE001
-        pass
-    try:
-        _trader.close_ledger()
-    except Exception:  # noqa: BLE001
-        pass
+            close_http_pool()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            _trader.close_ledger()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def _openapi_enabled() -> bool:
@@ -1302,12 +1309,19 @@ async def ws_live(websocket: WebSocket) -> None:
         while True:
             try:
                 msg = await asyncio.wait_for(q.get(), timeout=25.0)
-                await websocket.send_text(_json.dumps(msg, ensure_ascii=False, default=str))
+                if isinstance(msg, dict) and msg.get("type") == "_shutdown":
+                    break
+                await websocket.send_text(
+                    _json.dumps(msg, ensure_ascii=False, default=str)
+                )
             except asyncio.TimeoutError:
                 await websocket.send_text(
                     _json.dumps({"type": "ping", "at_ms": int(time.time() * 1000)})
                 )
     except WebSocketDisconnect:
+        pass
+    except asyncio.CancelledError:
+        # Normal uvicorn stop / Ctrl+C — do not surface as ASGI ERROR traceback.
         pass
     except Exception as exc:  # noqa: BLE001
         logger.info("ws disconnect: %s", redact_exc(exc, max_len=64))

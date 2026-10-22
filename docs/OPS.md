@@ -3,11 +3,14 @@
 ## Local process
 
 ```powershell
-.\scripts\build_native.ps1   # optional but recommended
-.\scripts\run_radar.ps1
+.\scripts\build_native.ps1   # optional but recommended (run_radar does NOT rebuild native)
+.\scripts\run_radar.ps1              # stable: no uvicorn --reload
+.\scripts\run_radar.ps1 -Reload      # dev only: watches src/config/dashboard (.venv excluded)
 ```
 
 Default UI: `http://127.0.0.1:8787/` — pages `#watchlist` / `#markets` / `#ops` / `#help` (see [`DASHBOARD.md`](DASHBOARD.md)).
+
+**Reload / `~adar_native`:** bare `--reload` watches the whole tree including `.venv`. A locked `radar_native` `.pyd` + pip rename creates `~adar_native` and can cascade reloads. Default `run_radar.ps1` is reload-off; `-Reload` scopes watch dirs and excludes `.venv`.
 
 ## Profiles
 
@@ -58,6 +61,17 @@ Operator full local check (**no soak**):
 ```
 
 `elapsed_ok` vs ~25s is **evidence**, not a hard CI fail.
+
+## Known soft fails (not Full-FAIL)
+
+| Symptom | Meaning | Operator action |
+|---------|---------|-----------------|
+| `~adar_native` under `.venv\Lib\site-packages` | `.pyd` locked (often by `run_radar` + broad `--reload` / pip) | stop server → `build_native.ps1` or `run_radar.ps1` startup cleanup; use reload-off or `-Reload` (no `.venv` watch) |
+| CoinGecko `429` / `stables: 0` | free-tier rate limit | accepted soft; stables poll 180s + stale-OK; optional API key later |
+| Binance kline `400` (AKE/ILY/…) | delisted / invalid symbol | **done** — process denylist (`_kline_skip_persist`); one `info` on first refuse, then silent skip + `kline_skip_hits`; waterfall covers |
+| Starlette `httpx` TestClient deprecation | pytest warning | migrate to `httpx2` later — not a gate |
+
+---
 
 ## Docker
 

@@ -19,6 +19,8 @@ _STABLE_IDS = {
 
 def fetch_stable_prices(http: AllowlistHttp, symbols: List[str]) -> List[Dict[str, Any]]:
     ids = ",".join(_STABLE_IDS.keys())
+    # CoinGecko free tier 429s often — prefer warm last-good over empty stables
+    # (0.2.87+). Secondary host still one-shot soft-walled per GET.
     data = http.get_json(
         "https://api.coingecko.com/api/v3/simple/price",
         params={
@@ -27,6 +29,8 @@ def fetch_stable_prices(http: AllowlistHttp, symbols: List[str]) -> List[Dict[st
             "include_24hr_vol": "true",
             "include_24hr_change": "true",
         },
+        stale_ok_ms=300_000,
+        stale_on_error_ms=900_000,
     )
     want = {s.upper() for s in symbols}
     out: List[Dict[str, Any]] = []

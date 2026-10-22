@@ -181,7 +181,7 @@ sectors:
     include_cex_spot: true              # score CEX keyword memes into memes sector (auto-tradeable)
     min_cex_quote_volume_usdt: 200000
   stables:
-    poll_sec: 60
+    poll_sec: 180                       # CoinGecko free-tier 429 soft; slower poll (0.2.87+)
     depeg_warn_pct: 0.3
     depeg_warn_bps: 30
     symbols: ["USDT", "USDC", "DAI", "FDUSD", "TUSD", "USDE", "PYUSD"]

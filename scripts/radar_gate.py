@@ -67,6 +67,17 @@ def main() -> int:
     if 'allow_origins=["*"]' in api_app or "allow_origins=['*']" in api_app:
         FAILURES.append("cors_star_hardcoded")
 
+    # run_radar: never bare --reload on whole tree (causes .venv / ~adar_native cascades)
+    run_radar = (ROOT / "scripts" / "run_radar.ps1").read_text(
+        encoding="utf-8", errors="replace"
+    )
+    need(ROOT / "scripts" / "run_radar.ps1", "--reload-dir", "run_radar_scoped_reload")
+    need(ROOT / "scripts" / "run_radar.ps1", "~adar_native", "run_radar_leftover_cleanup")
+    if "--reload" in run_radar and "--reload-dir" not in run_radar:
+        FAILURES.append("run_radar_bare_reload")
+    if "build_native.ps1" in run_radar and "maturin develop" in run_radar.lower():
+        FAILURES.append("run_radar_rebuilds_native")
+
     if FAILURES:
         print("radar_gate FAIL")
         for f in FAILURES[:32]:

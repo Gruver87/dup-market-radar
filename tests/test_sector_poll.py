@@ -16,7 +16,7 @@ def test_group_poll_is_min_of_drivers():
     assert sector_poll_sec(cfg, "futures") == 45
     assert group_poll_sec(cfg, "cex") == 45
     assert group_poll_sec(cfg, "memes") == 45  # aligned with snapshot_refresh_ms (0.2.69)
-    assert group_poll_sec(cfg, "stables") == 60
+    assert group_poll_sec(cfg, "stables") == 180  # CoinGecko free-tier soft (0.2.87+)
 
 
 def test_due_groups_force_and_cache():

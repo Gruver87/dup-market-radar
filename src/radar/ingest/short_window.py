@@ -19,6 +19,7 @@ from radar.ingest.kline_budget import budget_consume, budget_status
 from radar.ingest.kline_skip import (
     is_client_refuse_exc,
     kline_skip_add,
+    kline_skip_bump,
     kline_skip_has,
 )
 from radar.ingest.parse import abs_change_bps_sort_key, quote_volume_sort_key
@@ -611,6 +612,7 @@ def attach_binance_spot_short_windows(
         if not sym:
             return row, None
         if kline_skip_has(http, "binance_spot", sym):
+            kline_skip_bump(http)
             return row, None
         if not budget_consume(http):
             return row, None
@@ -628,12 +630,19 @@ def attach_binance_spot_short_windows(
             )
         except Exception as exc:  # noqa: BLE001
             if is_client_refuse_exc(exc):
-                kline_skip_add(http, "binance_spot", sym)
-            logger.warning(
-                "binance 15m kline soft-fail %s: %s",
-                sym[:32],
-                redact_exc(exc, max_len=128),
-            )
+                is_new = kline_skip_add(http, "binance_spot", sym)
+                # One info line on first refuse; later scans silent via denylist.
+                if is_new:
+                    logger.info(
+                        "binance 15m kline denylist %s (client refuse)",
+                        sym[:32],
+                    )
+            else:
+                logger.warning(
+                    "binance 15m kline soft-fail %s: %s",
+                    sym[:32],
+                    redact_exc(exc, max_len=128),
+                )
             return row, None
         return row, data if isinstance(data, list) else None
 
@@ -723,6 +732,7 @@ def attach_binance_futures_short_windows(
         if not sym:
             return row, None
         if kline_skip_has(http, "binance_fut", sym):
+            kline_skip_bump(http)
             return row, None
         if not budget_consume(http):
             return row, None
@@ -740,12 +750,18 @@ def attach_binance_futures_short_windows(
             )
         except Exception as exc:  # noqa: BLE001
             if is_client_refuse_exc(exc):
-                kline_skip_add(http, "binance_fut", sym)
-            logger.warning(
-                "binance fut 15m kline soft-fail %s: %s",
-                sym[:32],
-                redact_exc(exc, max_len=128),
-            )
+                is_new = kline_skip_add(http, "binance_fut", sym)
+                if is_new:
+                    logger.info(
+                        "binance fut 15m kline denylist %s (client refuse)",
+                        sym[:32],
+                    )
+            else:
+                logger.warning(
+                    "binance fut 15m kline soft-fail %s: %s",
+                    sym[:32],
+                    redact_exc(exc, max_len=128),
+                )
             return row, None
         return row, data if isinstance(data, list) else None
 

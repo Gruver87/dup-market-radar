@@ -7,6 +7,7 @@ import os
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Dict, Optional
 
@@ -78,6 +79,19 @@ logger = logging.getLogger("radar.api")
 
 _cache = SnapshotCache()
 DASHBOARD = ROOT / "dashboard"
+
+
+def _scan_pool_size() -> int:
+    try:
+        n = int((load_config().get("ingest") or {}).get("scan_executor_workers") or 2)
+    except (TypeError, ValueError):
+        n = 2
+    return max(1, min(8, n))
+
+
+_SCAN_EXECUTOR = ThreadPoolExecutor(
+    max_workers=_scan_pool_size(), thread_name_prefix="radar-scan"
+)
 
 
 def _build_trader() -> KuCoinManualTrader:
@@ -187,11 +201,17 @@ def _scan(*, force: bool = False) -> Dict[str, Any]:
         return empty_snapshot(safe, cfg=cfg)
 
 
+def _scan_on_pool(*, force: bool = False) -> Dict[str, Any]:
+    """Run scan on dedicated executor so API/ops threads stay responsive."""
+    fut = _SCAN_EXECUTOR.submit(_scan, force=force)
+    return fut.result(timeout=180)
+
+
 def _get_snapshot(force: bool = False) -> Dict[str, Any]:
     return _cache.get(
         force=force,
         refresh_ms=_refresh_ms(),
-        scan_fn=lambda: _scan(force=force),
+        scan_fn=lambda: _scan_on_pool(force=force),
     )
 
 
@@ -670,6 +690,15 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
         def _warm() -> None:
             try:
+                # Warm KuCoin symbol meta before first trade path / scan anchors.
+                try:
+                    n_meta = _trader.refresh_symbol_meta()
+                    logger.info("warm symbol_meta n=%s", n_meta)
+                except Exception as meta_exc:  # noqa: BLE001
+                    logger.warning(
+                        "warm symbol_meta soft-fail: %s",
+                        redact_exc(meta_exc, max_len=128),
+                    )
                 logger.info("warm scan starting")
                 _get_snapshot(force=True)
                 logger.info("warm scan done ok=%s", (_cache.peek() or {}).get("ok"))
@@ -686,6 +715,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     if _tg is not None:
         _tg.stop(join_timeout_sec=5.0)
     _auto.stop_loop(join_timeout_sec=8.0)
+    _SCAN_EXECUTOR.shutdown(wait=False, cancel_futures=True)
 
 
 def _openapi_enabled() -> bool:
@@ -701,7 +731,7 @@ def _openapi_enabled() -> bool:
 _OPENAPI_ON = _openapi_enabled()
 app = FastAPI(
     title="DUP Market Radar",
-    version="0.2.68",
+    version="0.2.69",
     lifespan=_lifespan,
     docs_url="/docs" if _OPENAPI_ON else None,
     redoc_url="/redoc" if _OPENAPI_ON else None,

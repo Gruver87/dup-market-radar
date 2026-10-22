@@ -424,6 +424,17 @@ def validate_config(cfg: Dict[str, Any]) -> None:
         for k in ("circuit_fail_threshold", "circuit_open_ms", "http_backoff_ms"):
             if k in ingest and (not isinstance(ingest[k], int) or ingest[k] <= 0):
                 errors.append(f"ingest.{k} must be positive int")
+        mkg = ingest.get("max_kline_gets")
+        if mkg is not None and (not isinstance(mkg, int) or mkg < 8 or mkg > 512):
+            errors.append("ingest.max_kline_gets must be int 8..512")
+        mtf_ttl = ingest.get("mtf_reuse_ttl_ms")
+        if mtf_ttl is not None and (
+            not isinstance(mtf_ttl, int) or mtf_ttl < 0 or mtf_ttl > 3_600_000
+        ):
+            errors.append("ingest.mtf_reuse_ttl_ms must be int 0..3600000")
+        sew = ingest.get("scan_executor_workers")
+        if sew is not None and (not isinstance(sew, int) or sew < 1 or sew > 8):
+            errors.append("ingest.scan_executor_workers must be int 1..8")
 
     bubbles = cfg.get("bubbles")
     if bubbles is not None:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Callable, Dict, List, Set
+from typing import Any, Callable, Dict, List
 
 from radar.config import venue_priority
 from radar.http_client import AllowlistHttp
@@ -28,29 +28,14 @@ def build_universe(
     *,
     force: bool = False,
 ) -> Dict[str, Any]:
-    """Parallel ingest: each worker owns its own TLS client (thread-safe).
+    """Parallel ingest on the shared AllowlistHttp (thread-safe TLS + cache).
 
     Honors sectors.*.poll_sec via fetch groups (cex / memes / stables).
     Stale groups are served from SectorPollState cache.
+    Caller owns http lifecycle (do not close here — ensure reuses the same client).
     """
     venues = cfg.get("venues") or ["kucoin", "binance", "bybit", "mexc"]
-    allow: Set[str] = set(cfg.get("allowlist_hosts") or [])
-    if cfg.get("http_timeout_ms") is not None:
-        timeout_ms = int(cfg["http_timeout_ms"])
-    else:
-        timeout_ms = int(round(float(cfg.get("http_timeout_sec") or 12) * 1000))
-    if cfg.get("cache_ttl_ms") is not None:
-        ttl_ms = int(cfg["cache_ttl_ms"])
-    else:
-        ttl_ms = int(round(float(cfg.get("cache_ttl_sec") or 25) * 1000))
     ingest_cfg = cfg.get("ingest") or {}
-    retries = int(ingest_cfg.get("http_retries") if ingest_cfg.get("http_retries") is not None else 2)
-    backoff_ms = int(ingest_cfg.get("http_backoff_ms") or 200)
-    max_resp = int(
-        ingest_cfg.get("max_response_bytes")
-        if ingest_cfg.get("max_response_bytes") is not None
-        else 8_388_608
-    )
     breaker = get_breaker(cfg)
     skipped_circuit: List[str] = []
     state = poll_state()
@@ -58,14 +43,9 @@ def build_universe(
     cached = state.cached_slices()
     skipped_poll: List[str] = []
 
-    errors: List[str] = list(http.errors)
-    http_stats: Dict[str, int] = {
-        "gets": 0,
-        "retries": 0,
-        "cache_hits": 0,
-        "rate_limited": 0,
-        "response_too_large": 0,
-    }
+    # Local error list + shared http.errors (workers may append onto http).
+    errors: List[str] = []
+    err_baseline = len(http.errors)
     spot: List[Dict[str, Any]] = []
     futures: List[Dict[str, Any]] = []
     listings: List[Dict[str, Any]] = []
@@ -83,72 +63,43 @@ def build_universe(
     memes_cfg = (cfg.get("sectors") or {}).get("memes") or {}
     stables_cfg = (cfg.get("sectors") or {}).get("stables") or {}
 
-    def _client() -> AllowlistHttp:
-        return AllowlistHttp(
-            allow,
-            timeout_ms=timeout_ms,
-            cache_ttl_ms=ttl_ms,
-            retries=retries,
-            backoff_ms=backoff_ms,
-            max_response_bytes=max_resp,
-        )
-
-    def _merge_stats(c: AllowlistHttp) -> None:
-        for k in http_stats:
-            http_stats[k] += int(c.stats.get(k) or 0)
-
     def run_venue(name: str) -> tuple[str, Any]:
         if not breaker.allow(name):
             skipped_circuit.append(name)
             raise RuntimeError(f"circuit_open:{name}")
-        c = _client()
         try:
-            pack = fetchers[name](c)
+            pack = fetchers[name](http)
             breaker.record_ok(name)
             return name, pack
         except Exception as exc:
             breaker.record_fail(name, redact_exc(exc, max_len=120))
             raise
-        finally:
-            errors.extend(c.errors)
-            _merge_stats(c)
-            c.close()
 
     def run_memes() -> tuple[str, Any]:
         name = "dexscreener"
         if not breaker.allow(name):
             skipped_circuit.append(name)
             raise RuntimeError(f"circuit_open:{name}")
-        c = _client()
         try:
-            pack = fetch_meme_pairs(c, list(memes_cfg.get("chains") or []))
+            pack = fetch_meme_pairs(http, list(memes_cfg.get("chains") or []))
             breaker.record_ok(name)
             return name, pack
         except Exception as exc:
             breaker.record_fail(name, redact_exc(exc, max_len=120))
             raise
-        finally:
-            errors.extend(c.errors)
-            _merge_stats(c)
-            c.close()
 
     def run_stables() -> tuple[str, Any]:
         name = "coingecko"
         if not breaker.allow(name):
             skipped_circuit.append(name)
             raise RuntimeError(f"circuit_open:{name}")
-        c = _client()
         try:
-            pack = fetch_stable_prices(c, list(stables_cfg.get("symbols") or []))
+            pack = fetch_stable_prices(http, list(stables_cfg.get("symbols") or []))
             breaker.record_ok(name)
             return name, pack
         except Exception as exc:
             breaker.record_fail(name, redact_exc(exc, max_len=120))
             raise
-        finally:
-            errors.extend(c.errors)
-            _merge_stats(c)
-            c.close()
 
     work: List[Callable[[], tuple[str, Any]]] = []
     fetch_cex = "cex" in due
@@ -255,11 +206,15 @@ def build_universe(
     if stables_fresh:
         state.store_stables(stables)
 
-    # Bound error noise from venue clients (each has a ring; merge can still grow)
+    # Merge http-ring errors from this build with local scheduling messages.
+    for msg in http.errors[err_baseline:]:
+        if msg not in errors:
+            errors.append(msg)
     n_err = len(errors)
     if n_err > 64:
         errors = errors[:64]
         errors.append(f"errors_truncated:{n_err}")
+    http_stats = {k: int(v or 0) for k, v in (http.stats or {}).items()}
     return {
         "generated_at_ms": int(time.time() * 1000),
         "generated_at": int(time.time()),
@@ -272,6 +227,7 @@ def build_universe(
         "universe_size": len(spot) + len(futures) + len(memes),
         "errors": errors,
         "ingest_parallel": True,
+        "http_shared": True,
         "http_stats": http_stats,
         "circuit": breaker.status(),
         "circuit_skipped": skipped_circuit[:32],

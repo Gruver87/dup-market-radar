@@ -44,8 +44,8 @@ def test_sector_meta_for_injects_poll_sec():
     cfg = load_config()
     meta = sector_meta_for(cfg)
     assert meta["memes"]["group"] == "memes"
-    assert meta["memes"]["poll_sec"] == 30
-    assert meta["memes"]["group_poll_sec"] == 30
+    assert meta["memes"]["poll_sec"] == 45
+    assert meta["memes"]["group_poll_sec"] == 45
     assert meta["whales"]["group"] == "cex"
     assert "bundled with cex" in meta["whales"]["poll_hint"].lower()
     # cex group = min(spot 60, futures 45, listings 60) = 45

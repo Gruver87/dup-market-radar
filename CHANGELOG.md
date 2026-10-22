@@ -1,5 +1,15 @@
 # Changelog — DUP Market Radar
 
+## 0.2.69
+
+- Speed / efficiency wave (P0→P1): phase timers `ingest_ms` / `ensure_ms` + Prometheus gauges (`score_ms`, `kline_gets`, `ensure_rounds`)
+- Cheap prelim targets (vol+|chg| / listings / CEX meme keywords) — full sector score only for top-N honesty + optional 2nd ensure
+- Ensure waterfall short-circuit at ≥0.85 fill; hard `ingest.max_kline_gets` budget; `mtf_reuse_ttl_ms` stamp skip
+- Shared AllowlistHttp across venue workers + ensure (TLS/cache reuse); memes `poll_sec` 45 aligned with refresh
+- Startup warm: symbol meta refresh; dedicated `scan_executor_workers` pool for scans
+- Package / FastAPI / User-Agent / `__version__` / native pin `0.2.69`
+- Soak / 48h: **not** claimed this pin — unit + lab only
+
 ## 0.2.68
 
 - Industrial base wave (necessary only): `SecretManagerPort` (env + file refuse in prod), `MetricsExporterPort`, `RADAR_LOG_JSON`

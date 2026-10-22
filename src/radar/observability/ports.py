@@ -17,6 +17,11 @@ class MetricsSnapshot:
     last_scan_ok: Optional[bool] = None
     universe_size: Optional[int] = None
     elapsed_ms: Optional[int] = None
+    ingest_ms: Optional[int] = None
+    ensure_ms: Optional[int] = None
+    score_ms: Optional[int] = None
+    kline_gets: Optional[int] = None
+    ensure_rounds: Optional[int] = None
     native_available: bool = False
     cache: Mapping[str, Any] = field(default_factory=dict)
     circuit: Mapping[str, Any] = field(default_factory=dict)
@@ -47,6 +52,11 @@ def snapshot_from_payload(payload: Dict[str, Any], *, deployment_mode: str = "la
         last_scan_ok=payload.get("last_scan_ok"),
         universe_size=payload.get("universe_size"),
         elapsed_ms=payload.get("elapsed_ms"),
+        ingest_ms=payload.get("ingest_ms"),
+        ensure_ms=payload.get("ensure_ms"),
+        score_ms=payload.get("score_ms"),
+        kline_gets=payload.get("kline_gets"),
+        ensure_rounds=payload.get("ensure_rounds"),
         native_available=bool(payload.get("native_available")),
         cache=dict(payload.get("cache") or {}),
         circuit=dict(payload.get("circuit") or {}),

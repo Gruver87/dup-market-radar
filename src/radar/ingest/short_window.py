@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
 
 from radar.http_client import AllowlistHttp
+from radar.ingest.kline_budget import budget_consume, budget_status
 from radar.ingest.parse import abs_change_bps_sort_key, quote_volume_sort_key
 from radar.money import mul_div, price_i, quote_i
 from radar.secrets_redact import redact_exc
@@ -298,6 +299,8 @@ def attach_kucoin_short_windows(
         raw_sym = str(row.get("symbol_raw") or "")
         if not raw_sym:
             return row, None
+        if not budget_consume(http):
+            return row, None
         try:
             data = http.get_json(
                 "https://api.kucoin.com/api/v1/market/candles",
@@ -322,6 +325,7 @@ def attach_kucoin_short_windows(
     for row, buckets in _parallel_map(sample, _fetch):
         if buckets:
             _apply_kucoin_spot_buckets(row, buckets, now=now, counts=counts)
+            _stamp_mtf(row)
     return counts
 
 
@@ -428,24 +432,61 @@ def _attach_fut_rows(
     return attach_kucoin_futures_short_windows(http, rows, top_n=len(rows))
 
 
-def _missing_15m(row: Dict[str, Any]) -> bool:
-    return row.get("change_bps_15m") is None and row.get("change_pct_15m") is None
+def _missing_15m(row: Dict[str, Any], *, reuse_ttl_ms: int = 0) -> bool:
+    """True if row needs a kline attach.
+
+    When ``reuse_ttl_ms>0`` and MTF already present with a fresh stamp, skip
+    re-fetch (cross-scan reuse). Untyped / unstamped rows with data are kept.
+    """
+    has = row.get("change_bps_15m") is not None or row.get("change_pct_15m") is not None
+    if not has:
+        return True
+    ttl = max(0, int(reuse_ttl_ms or 0))
+    if ttl <= 0:
+        return False
+    at = row.get("mtf_attached_at_ms")
+    if at is None:
+        return False
+    try:
+        age = int(time.time() * 1000) - int(at)
+    except (TypeError, ValueError):
+        return False
+    return age >= ttl
+
+
+def _stamp_mtf(row: Dict[str, Any]) -> None:
+    row["mtf_attached_at_ms"] = int(time.time() * 1000)
+
+
+def _target_fill_ratio(rows: List[Dict[str, Any]]) -> float:
+    if not rows:
+        return 1.0
+    have = sum(
+        1
+        for r in rows
+        if r.get("change_bps_15m") is not None or r.get("change_pct_15m") is not None
+    )
+    return have / float(len(rows))
 
 
 def _usdt_missing_sample(
-    rows: List[Dict[str, Any]], *, top_n: int
+    rows: List[Dict[str, Any]], *, top_n: int, reuse_ttl_ms: int = 0
 ) -> List[Dict[str, Any]]:
     usdt = [
         r
         for r in rows
         if isinstance(r, dict)
         and str(r.get("symbol") or "").endswith("USDT")
-        and _missing_15m(r)
+        and _missing_15m(r, reuse_ttl_ms=reuse_ttl_ms)
     ]
     n = max(0, min(64, int(top_n)))
     if n <= 0:
         return []
     return select_short_window_sample(usdt, top_n=n) if len(usdt) > n else usdt[:n]
+
+
+# Stop venue waterfall when target set already meets fill honesty (same as pipeline).
+_ENSURE_FILL_OK = 0.85
 
 
 def _quote_vol_vs_median_bps(
@@ -560,6 +601,8 @@ def attach_binance_spot_short_windows(
         sym = str(row.get("symbol") or "")
         if not sym:
             return row, None
+        if not budget_consume(http):
+            return row, None
         try:
             data = http.get_json(
                 "https://api.binance.com/api/v3/klines",
@@ -584,6 +627,7 @@ def attach_binance_spot_short_windows(
     for row, buckets in _parallel_map(sample, _fetch):
         if buckets:
             _apply_ohlc_mtf(row, buckets, now=now, counts=counts, quote_vol_idx=7)
+            _stamp_mtf(row)
     return counts
 
 
@@ -605,6 +649,8 @@ def attach_bybit_spot_short_windows(
     def _fetch(row: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[List[Any]]]:
         sym = str(row.get("symbol") or "")
         if not sym:
+            return row, None
+        if not budget_consume(http):
             return row, None
         try:
             data = http.get_json(
@@ -634,6 +680,7 @@ def attach_bybit_spot_short_windows(
     for row, buckets in _parallel_map(sample, _fetch):
         if buckets:
             _apply_ohlc_mtf(row, buckets, now=now, counts=counts, quote_vol_idx=6)
+            _stamp_mtf(row)
     return counts
 
 
@@ -662,6 +709,8 @@ def attach_binance_futures_short_windows(
         sym = str(row.get("symbol") or "")
         if not sym:
             return row, None
+        if not budget_consume(http):
+            return row, None
         try:
             data = http.get_json(
                 "https://fapi.binance.com/fapi/v1/klines",
@@ -686,6 +735,7 @@ def attach_binance_futures_short_windows(
     for row, buckets in _parallel_map(sample, _fetch):
         if buckets:
             _apply_ohlc_mtf(row, buckets, now=now, counts=counts)
+            _stamp_mtf(row)
     return counts
 
 
@@ -707,6 +757,8 @@ def attach_bybit_futures_short_windows(
     def _fetch(row: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[List[Any]]]:
         sym = str(row.get("symbol") or "")
         if not sym:
+            return row, None
+        if not budget_consume(http):
             return row, None
         try:
             data = http.get_json(
@@ -736,6 +788,7 @@ def attach_bybit_futures_short_windows(
     for row, buckets in _parallel_map(sample, _fetch):
         if buckets:
             _apply_ohlc_mtf(row, buckets, now=now, counts=counts)
+            _stamp_mtf(row)
     return counts
 
 
@@ -756,6 +809,8 @@ def attach_mexc_futures_short_windows(
     def _fetch(row: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[List[Any]]]:
         path_sym = mexc_futures_contract_path(row)
         if not path_sym:
+            return row, None
+        if not budget_consume(http):
             return row, None
         try:
             data = http.get_json(
@@ -784,6 +839,7 @@ def attach_mexc_futures_short_windows(
     for row, buckets in _parallel_map(sample, _fetch):
         if buckets:
             _apply_ohlc_mtf(row, buckets, now=now, counts=counts)
+            _stamp_mtf(row)
     return counts
 
 
@@ -800,15 +856,22 @@ def ensure_universe_short_windows(
     fut_symbols: Optional[set[str]] = None,
     spot_top_n: int = DEFAULT_SHORT_SAMPLE_N,
     fut_top_n: int = DEFAULT_FUTURES_SHORT_SAMPLE_N,
+    reuse_ttl_ms: int = 0,
+    fill_threshold: float = _ENSURE_FILL_OK,
 ) -> Dict[str, Any]:
     """Fill MTF on merged rows missing windows.
 
-    If spot_symbols/fut_symbols given — target those (post prelim-score).
+    If spot_symbols/fut_symbols given — target those (post prelim).
     KuCoin → Binance → Bybit (spot);
     KuCoin (venue=kucoin only) → Binance fapi → Bybit linear → MEXC contract (fut).
+    Short-circuits venue waterfall when target fill ≥ fill_threshold.
     """
+    thr = float(fill_threshold)
+    ttl = max(0, int(reuse_ttl_ms or 0))
+    skipped_venues: List[str] = []
+
     spot = [r for r in (universe.get("spot") or []) if isinstance(r, dict)]
-    need_spot = [r for r in spot if _missing_15m(r)]
+    need_spot = [r for r in spot if _missing_15m(r, reuse_ttl_ms=ttl)]
     if spot_symbols is not None:
         need_spot = [r for r in need_spot if str(r.get("symbol") or "") in spot_symbols]
     for r in need_spot:
@@ -823,27 +886,37 @@ def ensure_universe_short_windows(
     for r in need_spot:
         _apply_pct_windows_to_bps(r)
 
-    still = [r for r in need_spot if _missing_15m(r)]
-    # Skip Bybit-only on Binance path (400); fill them via Bybit next.
-    bw = attach_binance_spot_short_windows(
-        http, still, top_n=max(len(still), spot_top_n)
-    )
-    for r in still:
-        _apply_pct_windows_to_bps(r)
-    _merge_window_counts(sw, bw)
-    sw["n_binance"] = int(bw.get("n_15m") or 0)
+    def _spot_ok() -> bool:
+        return _target_fill_ratio(need_spot) >= thr if need_spot else True
 
-    still = [r for r in need_spot if _missing_15m(r)]
-    yw = attach_bybit_spot_short_windows(
-        http, still, top_n=max(len(still), spot_top_n)
-    )
-    for r in still:
-        _apply_pct_windows_to_bps(r)
-    _merge_window_counts(sw, yw)
-    sw["n_bybit"] = int(yw.get("n_15m") or 0)
+    if not _spot_ok():
+        still = [r for r in need_spot if _missing_15m(r, reuse_ttl_ms=0)]
+        bw = attach_binance_spot_short_windows(
+            http, still, top_n=max(len(still), spot_top_n)
+        )
+        for r in still:
+            _apply_pct_windows_to_bps(r)
+        _merge_window_counts(sw, bw)
+        sw["n_binance"] = int(bw.get("n_15m") or 0)
+    else:
+        skipped_venues.append("binance_spot")
+        sw["n_binance"] = 0
+
+    if not _spot_ok():
+        still = [r for r in need_spot if _missing_15m(r, reuse_ttl_ms=0)]
+        yw = attach_bybit_spot_short_windows(
+            http, still, top_n=max(len(still), spot_top_n)
+        )
+        for r in still:
+            _apply_pct_windows_to_bps(r)
+        _merge_window_counts(sw, yw)
+        sw["n_bybit"] = int(yw.get("n_15m") or 0)
+    else:
+        skipped_venues.append("bybit_spot")
+        sw.setdefault("n_bybit", 0)
 
     fut = [r for r in (universe.get("futures") or []) if isinstance(r, dict)]
-    need_fut = [r for r in fut if _missing_15m(r)]
+    need_fut = [r for r in fut if _missing_15m(r, reuse_ttl_ms=ttl)]
     if fut_symbols is not None:
         need_fut = [r for r in need_fut if str(r.get("symbol") or "") in fut_symbols]
     fut_targets = len(need_fut)
@@ -866,38 +939,57 @@ def ensure_universe_short_windows(
     for r in need_fut:
         _apply_pct_windows_to_bps(r)
 
-    still_f = [r for r in need_fut if _missing_15m(r)]
-    bfw = attach_binance_futures_short_windows(
-        http, still_f, top_n=max(len(still_f), fut_top_n)
-    )
-    for r in still_f:
-        _apply_pct_windows_to_bps(r)
-    _merge_window_counts(fw, bfw)
-    fw["n_binance"] = int(bfw.get("n_15m") or 0)
+    def _fut_ok() -> bool:
+        return _target_fill_ratio(need_fut) >= thr if need_fut else True
 
-    still_f = [r for r in need_fut if _missing_15m(r)]
-    yfw = attach_bybit_futures_short_windows(
-        http, still_f, top_n=max(len(still_f), fut_top_n)
-    )
-    for r in still_f:
-        _apply_pct_windows_to_bps(r)
-    _merge_window_counts(fw, yfw)
-    fw["n_bybit"] = int(yfw.get("n_15m") or 0)
+    if not _fut_ok():
+        still_f = [r for r in need_fut if _missing_15m(r, reuse_ttl_ms=0)]
+        bfw = attach_binance_futures_short_windows(
+            http, still_f, top_n=max(len(still_f), fut_top_n)
+        )
+        for r in still_f:
+            _apply_pct_windows_to_bps(r)
+        _merge_window_counts(fw, bfw)
+        fw["n_binance"] = int(bfw.get("n_15m") or 0)
+    else:
+        skipped_venues.append("binance_fut")
+        fw["n_binance"] = 0
 
-    still_f = [r for r in need_fut if _missing_15m(r)]
-    mfw = attach_mexc_futures_short_windows(
-        http, still_f, top_n=max(len(still_f), fut_top_n)
-    )
-    for r in still_f:
-        _apply_pct_windows_to_bps(r)
-    _merge_window_counts(fw, mfw)
-    fw["n_mexc"] = int(mfw.get("n_15m") or 0)
+    if not _fut_ok():
+        still_f = [r for r in need_fut if _missing_15m(r, reuse_ttl_ms=0)]
+        yfw = attach_bybit_futures_short_windows(
+            http, still_f, top_n=max(len(still_f), fut_top_n)
+        )
+        for r in still_f:
+            _apply_pct_windows_to_bps(r)
+        _merge_window_counts(fw, yfw)
+        fw["n_bybit"] = int(yfw.get("n_15m") or 0)
+    else:
+        skipped_venues.append("bybit_fut")
+        fw.setdefault("n_bybit", 0)
+
+    if not _fut_ok():
+        still_f = [r for r in need_fut if _missing_15m(r, reuse_ttl_ms=0)]
+        mfw = attach_mexc_futures_short_windows(
+            http, still_f, top_n=max(len(still_f), fut_top_n)
+        )
+        for r in still_f:
+            _apply_pct_windows_to_bps(r)
+        _merge_window_counts(fw, mfw)
+        fw["n_mexc"] = int(mfw.get("n_15m") or 0)
+    else:
+        skipped_venues.append("mexc_fut")
+        fw.setdefault("n_mexc", 0)
 
     out = {
         "spot": sw,
         "futures": fw,
         "spot_targets": len(need_spot),
         "fut_targets": fut_targets,
+        "spot_fill_ratio": round(_target_fill_ratio(need_spot), 4) if need_spot else None,
+        "fut_fill_ratio": round(_target_fill_ratio(need_fut), 4) if need_fut else None,
+        "waterfall_skipped": skipped_venues[:16],
+        "kline_budget": budget_status(http),
     }
     universe["short_window_ensure"] = out
     return out
@@ -946,6 +1038,8 @@ def attach_kucoin_futures_short_windows(
         raw_sym = str(row.get("symbol_raw") or "")
         if not raw_sym:
             return row, None
+        if not budget_consume(http):
+            return row, None
         try:
             data = http.get_json(
                 "https://api-futures.kucoin.com/api/v1/kline/query",
@@ -970,4 +1064,5 @@ def attach_kucoin_futures_short_windows(
     for row, buckets in _parallel_map(sample, _fetch):
         if buckets:
             _apply_ohlc_mtf(row, buckets, now=now, counts=counts)
+            _stamp_mtf(row)
     return counts

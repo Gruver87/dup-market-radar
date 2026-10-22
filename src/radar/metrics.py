@@ -49,6 +49,11 @@ def build_metrics_payload(
         "last_scan_ok": None if snap is None else bool(snap.get("ok")),
         "universe_size": (snap or {}).get("universe_size"),
         "elapsed_ms": (snap or {}).get("elapsed_ms"),
+        "ingest_ms": (snap or {}).get("ingest_ms"),
+        "ensure_ms": (snap or {}).get("ensure_ms"),
+        "score_ms": (snap or {}).get("score_ms"),
+        "kline_gets": ((snap or {}).get("http_stats") or {}).get("kline_gets"),
+        "ensure_rounds": ((snap or {}).get("short_window_ensure") or {}).get("rounds"),
         "auto_trade": {
             "enabled": bool((auto or {}).get("enabled")),
             "open_positions": (auto or {}).get("open_positions"),
@@ -88,6 +93,11 @@ class PrometheusMetricsExporter:
             "last_scan_ok": snapshot.last_scan_ok,
             "universe_size": snapshot.universe_size,
             "elapsed_ms": snapshot.elapsed_ms,
+            "ingest_ms": snapshot.ingest_ms,
+            "ensure_ms": snapshot.ensure_ms,
+            "score_ms": snapshot.score_ms,
+            "kline_gets": snapshot.kline_gets,
+            "ensure_rounds": snapshot.ensure_rounds,
             "native_available": snapshot.native_available,
             "cache": dict(snapshot.cache),
             "circuit": dict(snapshot.circuit),
@@ -177,6 +187,11 @@ def _render_prometheus(payload: Dict[str, Any]) -> str:
     gauge("radar_last_scan_ok", 1 if payload.get("last_scan_ok") else 0)
     gauge("radar_universe_size", payload.get("universe_size"))
     gauge("radar_scan_elapsed_ms", payload.get("elapsed_ms"))
+    gauge("radar_ingest_ms", payload.get("ingest_ms"))
+    gauge("radar_ensure_ms", payload.get("ensure_ms"))
+    gauge("radar_score_ms", payload.get("score_ms"))
+    gauge("radar_kline_gets", payload.get("kline_gets"))
+    gauge("radar_ensure_rounds", payload.get("ensure_rounds"))
     gauge("radar_native_available", 1 if payload.get("native_available") else 0)
 
     auto = payload.get("auto_trade") or {}

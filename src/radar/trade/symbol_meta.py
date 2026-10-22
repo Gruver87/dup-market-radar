@@ -157,7 +157,7 @@ class SymbolMetaCache:
             ) as client:
                 resp = client.get(
                     url,
-                    headers={"User-Agent": "DUP-Market-Radar/0.2.68-meta"},
+                    headers={"User-Agent": "DUP-Market-Radar/0.2.69-meta"},
                 )
                 resp.raise_for_status()
                 payload = read_capped_json(

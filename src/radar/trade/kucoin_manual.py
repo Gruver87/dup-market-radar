@@ -247,6 +247,11 @@ class KuCoinManualTrader:
         self._sell_clamp = bool(sell_clamp)
         self._symbol_meta = symbol_meta if symbol_meta is not None else SymbolMetaCache()
         self._enforce_symbol_meta = bool(enforce_symbol_meta)
+
+    def refresh_symbol_meta(self) -> int:
+        """Warm KuCoin symbol meta cache (startup / ops). Returns mapped count."""
+        return int(self._symbol_meta.refresh())
+
     def refresh_creds(self) -> None:
         self._creds = kucoin_creds()
 
@@ -541,7 +546,7 @@ class KuCoinManualTrader:
         try:
             with self._signed_client() as client:
                 resp = client.get(f"{base}{path}", headers={
-                    "User-Agent": "DUP-Market-Radar/0.2.68-manual",
+                    "User-Agent": "DUP-Market-Radar/0.2.69-manual",
                 })
                 resp.raise_for_status()
                 body = read_capped_json(
@@ -681,7 +686,7 @@ class KuCoinManualTrader:
             "KC-API-PASSPHRASE": pp,
             "KC-API-KEY-VERSION": "2",
             "Content-Type": "application/json",
-            "User-Agent": "DUP-Market-Radar/0.2.68-manual",
+            "User-Agent": "DUP-Market-Radar/0.2.69-manual",
         }
 
     @staticmethod

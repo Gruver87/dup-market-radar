@@ -6,8 +6,13 @@ from typing import Any, Dict
 
 from radar.config import load_config
 from radar.http_client import DEFAULT_MAX_RESPONSE_BYTES, AllowlistHttp
+from radar.ingest.kline_budget import budget_status, init_kline_budget
+from radar.ingest.parse import abs_change_bps_sort_key, quote_volume_sort_key
 from radar.ingest.sector_poll import group_poll_sec, sector_poll_sec
-from radar.ingest.short_window import ensure_universe_short_windows
+from radar.ingest.short_window import (
+    ensure_universe_short_windows,
+    select_short_window_sample,
+)
 from radar.ingest.universe import build_universe
 from radar.native_bridge import native_status
 from radar.score.engine import score_sectors
@@ -131,6 +136,71 @@ def _fmt_fill(ratio: float | None) -> str:
     return "n/a" if ratio is None else f"{float(ratio):.2f}"
 
 
+def _cheap_book_syms(rows: list, *, n: int) -> set[str]:
+    """Prelim targets via vol+|chg| sample — no full sector score (CPU/GIL)."""
+    usdt = [
+        r
+        for r in (rows or [])
+        if isinstance(r, dict) and str(r.get("symbol") or "").endswith("USDT")
+    ]
+    sample = select_short_window_sample(usdt, top_n=max(0, int(n)))
+    return {str(r.get("symbol") or "") for r in sample if r.get("symbol")}
+
+
+def _cheap_listing_syms(
+    listings: list, *, n: int
+) -> tuple[set[str], set[str]]:
+    """Recent listings by age — split spot vs futures market tag."""
+    rows = [r for r in (listings or []) if isinstance(r, dict) and r.get("symbol")]
+    rows = sorted(
+        rows,
+        key=lambda r: int(r.get("listed_at") or r.get("age_hours") or 10**9),
+    )
+    spot: set[str] = set()
+    fut: set[str] = set()
+    for r in rows[: max(0, int(n))]:
+        sym = str(r.get("symbol") or "")
+        if not sym:
+            continue
+        if str(r.get("market") or "spot").lower() == "futures":
+            fut.add(sym)
+        else:
+            spot.add(sym)
+    return spot, fut
+
+
+def _cheap_cex_meme_syms(universe: Dict[str, Any], cfg: Dict[str, Any], *, n: int) -> set[str]:
+    """CEX keyword memes by volume — skip full memes score for prelim."""
+    keywords = [str(k).upper() for k in (cfg.get("meme_keywords") or []) if k]
+    if not keywords:
+        return set()
+    spot = [
+        r
+        for r in (universe.get("spot") or [])
+        if isinstance(r, dict)
+        and str(r.get("symbol") or "").endswith("USDT")
+        and str(r.get("venue") or "").lower() in {"kucoin", "binance", "bybit", "mexc"}
+    ]
+    hits: list = []
+    for r in spot:
+        sym = str(r.get("symbol") or "").upper()
+        base = sym[:-4] if sym.endswith("USDT") else sym
+        if any(k in base for k in keywords):
+            hits.append(r)
+    hits.sort(key=quote_volume_sort_key, reverse=True)
+    # Momentum fillers if volume thin
+    if len(hits) < n:
+        seen = {str(r.get("symbol") or "") for r in hits}
+        for r in sorted(hits, key=abs_change_bps_sort_key, reverse=True):
+            sym = str(r.get("symbol") or "")
+            if sym and sym not in seen:
+                hits.append(r)
+                seen.add(sym)
+            if len(hits) >= n:
+                break
+    return {str(r.get("symbol") or "") for r in hits[:n] if r.get("symbol")}
+
+
 def run_scan(
     cfg: Dict[str, Any] | None = None, *, force: bool = False
 ) -> Dict[str, Any]:
@@ -143,18 +213,30 @@ def run_scan(
         if ingest.get("max_response_bytes") is not None
         else DEFAULT_MAX_RESPONSE_BYTES
     )
+    retries = int(ingest.get("http_retries") if ingest.get("http_retries") is not None else 2)
+    backoff_ms = int(ingest.get("http_backoff_ms") or 200)
     http = AllowlistHttp(
         allow,
         timeout_ms=timeout_ms,
         cache_ttl_ms=ttl_ms,
+        retries=retries,
+        backoff_ms=backoff_ms,
         max_response_bytes=max_resp,
     )
     t0_ms = int(time.time() * 1000)
     meta = sector_meta_for(cfg)
+    ingest_ms = 0
+    ensure_ms = 0
     try:
+        t_ingest = int(time.time() * 1000)
         universe = build_universe(http, cfg, force=force)
+        ingest_ms = int(time.time() * 1000) - t_ingest
         top_n = int(cfg.get("top_n") or 10)
-        # Two rounds: fill MTF for prelim top → scores reshuffle → fill again.
+        max_kline = ingest.get("max_kline_gets")
+        max_kline_n = int(max_kline) if max_kline is not None else 96
+        reuse_ttl = int(ingest.get("mtf_reuse_ttl_ms") or 0)
+        init_kline_budget(http, max_kline_n)
+        # Round 1 cheap prelim → ensure; round 2 only if scored top-N still missing.
         try:
             from radar.rank.topn import rank_top
             from radar.score.futures import score_futures
@@ -162,7 +244,7 @@ def run_scan(
             from radar.score.memes import score_memes
             from radar.score.spot_alts import score_spot_alts
 
-            def _cex_meme_syms(n: int) -> set[str]:
+            def _cex_meme_syms_scored(n: int) -> set[str]:
                 """CEX keyword memes only — DEX has no KuCoin candle path."""
                 out: set[str] = set()
                 for r in rank_top(score_memes(universe, cfg), n):
@@ -177,40 +259,23 @@ def run_scan(
                             out.add(sym)
                 return out
 
-            # Smaller prelim + adaptive 2nd round (profile: ensure was ~28s of ~42s).
-            prelim_n = max(top_n * 2, 16)
-            ensure_acc: Dict[str, Any] = {}
-            for rnd in range(2):
-                spot_syms = {
-                    str(r.get("symbol") or "")
-                    for r in rank_top(score_spot_alts(universe, cfg), prelim_n)
-                }
-                fut_syms = {
-                    str(r.get("symbol") or "")
-                    for r in rank_top(score_futures(universe, cfg), prelim_n)
-                }
-                # Listings with live book — MTF on the joined market (spot vs futures).
-                for lr in rank_top(score_listings(universe, cfg), prelim_n):
-                    sym = str(lr.get("symbol") or "")
-                    if not sym:
-                        continue
-                    if str(lr.get("market") or "spot").lower() == "futures":
-                        fut_syms.add(sym)
-                    else:
-                        spot_syms.add(sym)
-                # CEX memes share the spot candle book — include in ensure targets.
-                spot_syms |= _cex_meme_syms(prelim_n)
-                part = ensure_universe_short_windows(
-                    http, universe, spot_symbols=spot_syms, fut_symbols=fut_syms
-                )
+            def _merge_ensure(acc: Dict[str, Any], part: Dict[str, Any], rnd: int) -> None:
                 for section in ("spot", "futures"):
-                    dst = ensure_acc.setdefault(section, {})
+                    dst = acc.setdefault(section, {})
                     for k, v in (part.get(section) or {}).items():
-                        dst[k] = int(dst.get(k) or 0) + int(v or 0)
-                ensure_acc["spot_targets"] = int(part.get("spot_targets") or 0)
-                ensure_acc["fut_targets"] = int(part.get("fut_targets") or 0)
-                ensure_acc["rounds"] = rnd + 1
-                # Early-exit only when *final* top-N books are filled (prelim can lie).
+                        if isinstance(v, (int, float)) and not isinstance(v, bool):
+                            dst[k] = int(dst.get(k) or 0) + int(v or 0)
+                acc["spot_targets"] = int(part.get("spot_targets") or 0)
+                acc["fut_targets"] = int(part.get("fut_targets") or 0)
+                acc["rounds"] = rnd
+                skipped = list(acc.get("waterfall_skipped") or [])
+                for v in part.get("waterfall_skipped") or []:
+                    if v not in skipped:
+                        skipped.append(v)
+                acc["waterfall_skipped"] = skipped[:32]
+                acc["kline_budget"] = part.get("kline_budget") or budget_status(http)
+
+            def _top_buckets() -> tuple[set[str], set[str], set[str], set[str], set[str]]:
                 spot_top = {
                     str(r.get("symbol") or "")
                     for r in rank_top(score_spot_alts(universe, cfg), top_n)
@@ -236,44 +301,64 @@ def run_scan(
                     for r in list_top
                     if str(r.get("market") or "spot").lower() == "futures"
                 }
-                meme_top = _cex_meme_syms(top_n)
-                if (
+                meme_top = _cex_meme_syms_scored(top_n)
+                return spot_top, fut_top, list_spot, list_fut, meme_top
+
+            def _fills_ok(
+                spot_top: set[str],
+                fut_top: set[str],
+                list_spot: set[str],
+                list_fut: set[str],
+                meme_top: set[str],
+            ) -> bool:
+                return (
                     _ensure_bucket_ok(_ensure_fill_ratio(universe, spot_top, "spot"))
                     and _ensure_bucket_ok(_ensure_fill_ratio(universe, fut_top, "futures"))
                     and _ensure_bucket_ok(_ensure_fill_ratio(universe, list_spot, "spot"))
                     and _ensure_bucket_ok(_ensure_fill_ratio(universe, list_fut, "futures"))
                     and _ensure_bucket_ok(_ensure_fill_ratio(universe, meme_top, "spot"))
                     and bool(spot_top or fut_top or list_spot or list_fut or meme_top)
-                ):
-                    break
-            # Final honesty: incomplete top-N fill is not "ensure ok".
-            # Empty target set for a bucket = N/A; ALL buckets empty = fail-closed.
-            spot_top = {
-                str(r.get("symbol") or "")
-                for r in rank_top(score_spot_alts(universe, cfg), top_n)
-                if r.get("symbol")
-            }
-            fut_top = {
-                str(r.get("symbol") or "")
-                for r in rank_top(score_futures(universe, cfg), top_n)
-                if r.get("symbol")
-            }
-            list_top = [
-                r
-                for r in rank_top(score_listings(universe, cfg), top_n)
-                if r.get("symbol")
-            ]
-            list_spot = {
-                str(r.get("symbol") or "")
-                for r in list_top
-                if str(r.get("market") or "spot").lower() != "futures"
-            }
-            list_fut = {
-                str(r.get("symbol") or "")
-                for r in list_top
-                if str(r.get("market") or "spot").lower() == "futures"
-            }
-            meme_top = _cex_meme_syms(top_n)
+                )
+
+            prelim_n = max(top_n * 2, 16)
+            ensure_acc: Dict[str, Any] = {}
+            t_ensure = int(time.time() * 1000)
+
+            # Round 1 — cheap prelim (no full Python sector score loops).
+            spot_syms = _cheap_book_syms(universe.get("spot") or [], n=prelim_n)
+            fut_syms = _cheap_book_syms(universe.get("futures") or [], n=prelim_n)
+            list_s, list_f = _cheap_listing_syms(
+                universe.get("listings") or [], n=prelim_n
+            )
+            spot_syms |= list_s
+            fut_syms |= list_f
+            spot_syms |= _cheap_cex_meme_syms(universe, cfg, n=prelim_n)
+            part = ensure_universe_short_windows(
+                http,
+                universe,
+                spot_symbols=spot_syms,
+                fut_symbols=fut_syms,
+                reuse_ttl_ms=reuse_ttl,
+            )
+            _merge_ensure(ensure_acc, part, 1)
+
+            spot_top, fut_top, list_spot, list_fut, meme_top = _top_buckets()
+            if not _fills_ok(spot_top, fut_top, list_spot, list_fut, meme_top):
+                # Round 2 — scored top-N only (missing-only inside ensure).
+                spot_syms2 = set(spot_top) | set(list_spot) | set(meme_top)
+                fut_syms2 = set(fut_top) | set(list_fut)
+                part2 = ensure_universe_short_windows(
+                    http,
+                    universe,
+                    spot_symbols=spot_syms2,
+                    fut_symbols=fut_syms2,
+                    reuse_ttl_ms=reuse_ttl,
+                )
+                _merge_ensure(ensure_acc, part2, 2)
+                spot_top, fut_top, list_spot, list_fut, meme_top = _top_buckets()
+
+            ensure_ms = int(time.time() * 1000) - t_ensure
+
             spot_fill = _ensure_fill_ratio(universe, spot_top, "spot")
             fut_fill = _ensure_fill_ratio(universe, fut_top, "futures")
             list_spot_fill = _ensure_fill_ratio(universe, list_spot, "spot")
@@ -295,6 +380,8 @@ def run_scan(
                 None if meme_fill is None else round(meme_fill, 4)
             )
             ensure_acc["meme_cex_targets"] = len(meme_top)
+            ensure_acc["ensure_ms"] = ensure_ms
+            ensure_acc["kline_budget"] = budget_status(http)
             universe["short_window_ensure"] = ensure_acc
             any_targets = bool(spot_top or fut_top or list_spot or list_fut or meme_top)
             fills_ok = (
@@ -321,9 +408,14 @@ def run_scan(
                     )
                 universe["errors"] = errs[:32]
         except Exception as exc:  # noqa: BLE001
+            ensure_ms = int(time.time() * 1000) - t0_ms - ingest_ms
             safe_ens = redact_exc(exc, max_len=128)
             logger.warning("short-window ensure soft-fail: %s", safe_ens)
-            universe["short_window_ensure"] = {"error": safe_ens}
+            universe["short_window_ensure"] = {
+                "error": safe_ens,
+                "ensure_ms": ensure_ms,
+                "kline_budget": budget_status(http),
+            }
             universe["mtf_ensure_ok"] = False
             errs = list(universe.get("errors") or [])
             errs.append(f"mtf_ensure_failed:{safe_ens}")
@@ -351,6 +443,11 @@ def run_scan(
             logger.error("score failed: %s", safe)
             return empty_snapshot(f"score failed: {safe}", cfg=cfg)
 
+        # Shared client: final stats cover ingest + ensure (no double-count).
+        http_stats = {k: int(v or 0) for k, v in (http.stats or {}).items()}
+        kb = budget_status(http)
+        http_stats["kline_gets"] = int(kb.get("kline_gets") or 0)
+
         return {
             "ok": ok,
             "mtf_ensure_ok": universe.get("mtf_ensure_ok"),
@@ -361,11 +458,13 @@ def run_scan(
             "generated_at_ms": int(time.time() * 1000),
             "elapsed_ms": int(time.time() * 1000) - t0_ms,
             "elapsed_sec": (int(time.time() * 1000) - t0_ms) // 1000,
+            "ingest_ms": ingest_ms,
+            "ensure_ms": ensure_ms,
             "score_backend": backend,
             "score_ms": score_ms,
             "native": native_status(),
             "universe_size": universe.get("universe_size"),
-            "http_stats": universe.get("http_stats") or {},
+            "http_stats": http_stats,
             "circuit": universe.get("circuit") or {},
             "circuit_skipped": universe.get("circuit_skipped") or [],
             "poll": universe.get("poll") or {},

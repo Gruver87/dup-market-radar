@@ -373,19 +373,21 @@
         <p class="note" style="color:var(--muted);font-size:0.75rem;margin:8px 0 0" data-i18n="clock_note">фиксированные UTC-смещения (без DST)</p>
       </div>
       <div class="ops-card">
-        <h2 data-i18n="fx_title">Обмен валют (ECB)</h2>
+        <h2 data-i18n="fx_title">Обмен валют (ECB + НБРБ)</h2>
         <div class="fx-row">
           <input id="fxAmount" type="text" value="100" aria-label="amount" />
           <select id="fxFrom" aria-label="from">
             <option>USD</option><option>EUR</option><option>GBP</option>
             <option>JPY</option><option>CHF</option><option>CNY</option>
-            <option selected>RUB</option>
+            <option>RUB</option>
+            <option selected>BYN</option>
           </select>
           <span>→</span>
           <select id="fxTo" aria-label="to">
             <option selected>USD</option><option>EUR</option><option>GBP</option>
             <option>JPY</option><option>CHF</option><option>CNY</option>
             <option>RUB</option>
+            <option>BYN</option>
           </select>
           <button class="ghost" type="button" id="fxGo" data-i18n="fx_go">Конвертировать</button>
         </div>
@@ -456,7 +458,7 @@
         disclaimer: "Watchlist · ручные Купить/Продать · авто ON/OFF (спот/мемы/листинги, без фьючерсов). Не финансовый совет.",
         world_clock: "Мировое время",
         clock_note: "фиксированные UTC-смещения (без DST)",
-        fx_title: "Обмен валют (ECB)",
+        fx_title: "Обмен валют (ECB + НБРБ)",
         fx_go: "Конвертировать",
         bubbles_title: "Crypto Bubbles · топ-100 · ~6м",
         help_title: "Как читать / ручная торговля",
@@ -481,7 +483,7 @@
         disclaimer: "Watchlist · manual Buy/Sell · auto ON/OFF (spot/memes/listings, no futures). Not financial advice.",
         world_clock: "World clock",
         clock_note: "fixed UTC offsets (no DST)",
-        fx_title: "FX (ECB)",
+        fx_title: "FX (ECB + NBRB)",
         fx_go: "Convert",
         bubbles_title: "Crypto Bubbles · top-100 · ~6m",
         help_title: "How to read / manual trade",

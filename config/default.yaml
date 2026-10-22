@@ -200,3 +200,4 @@ allowlist_hosts:
   - api.dexscreener.com
   - api.coingecko.com
   - api.frankfurter.app
+  - www.nbrb.by

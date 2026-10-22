@@ -34,6 +34,16 @@ def test_world_clock_integer_epoch():
     assert isinstance(data["utc_epoch_ms"], int)
     assert len(data["cities"]) >= 5
     assert all("hhmmss" in c for c in data["cities"])
+    ids = {c["id"] for c in data["cities"]}
+    assert "minsk" in ids
+    minsk = next(c for c in data["cities"] if c["id"] == "minsk")
+    assert minsk["utc_offset_min"] == 180
+
+
+def test_world_clock_minsk_ru_label():
+    data = world_clock(lang="ru")
+    minsk = next(c for c in data["cities"] if c["id"] == "minsk")
+    assert minsk["label"] == "Минск"
 
 
 def test_parse_amount_micros():
@@ -48,7 +58,25 @@ def test_parse_amount_micros():
 def test_fx_identity():
     out = convert(1_000_000, "USD", "USD")
     assert out["amount_out_micros"] == 1_000_000
-    assert out["rate_micros"] == 1_000_000
+
+
+def test_fx_byn_via_nbrb_mocked(monkeypatch):
+    import radar.ops.fx as fx
+
+    # 1 USD = 3 BYN; 1 RUB = 0.03 BYN (scale-normalized micros)
+    monkeypatch.setattr(
+        fx,
+        "get_nbrb_byn_book",
+        lambda: {"BYN": fx.FX_MICROS, "USD": 3_000_000, "RUB": 30_000},
+    )
+    # 3 BYN → 1 USD
+    out = convert(3_000_000, "BYN", "USD")
+    assert out["ok"] is True
+    assert out["amount_out_micros"] == 1_000_000
+    assert "nbrb" in out["source"]
+    # 1 USD → 3 BYN
+    out2 = convert(1_000_000, "USD", "BYN")
+    assert out2["amount_out_micros"] == 3_000_000
 
 
 def test_fx_convert_mocked(monkeypatch):

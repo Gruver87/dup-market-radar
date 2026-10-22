@@ -10,6 +10,8 @@ _CITIES: Tuple[Tuple[str, str, str, int], ...] = (
     ("utc", "UTC", "UTC", 0),
     ("london", "London", "Лондон", 0),
     ("berlin", "Berlin", "Берлин", 60),
+    # Belarus permanent UTC+3 (no DST); Moscow same offset for display.
+    ("minsk", "Minsk", "Минск", 180),
     ("moscow", "Moscow", "Москва", 180),
     ("dubai", "Dubai", "Дубай", 240),
     ("singapore", "Singapore", "Сингапур", 480),

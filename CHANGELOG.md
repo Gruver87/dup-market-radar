@@ -2,6 +2,7 @@
 
 ## 0.2.65
 
+- Ops: Minsk (UTC+3) on world clock; BYN (+ RUB) FX via NBRB official (ECB frankfurter has neither)
 - Pre-soak gate: `scripts/pre_soak_gate.ps1` (native + pytest + live smoke evidence + short soak)
 - Soak lab: prefer/fail_closed native when `radar_native` importable; soft only when missing
 - Native crate / pyproject version aligned to app pin `0.2.65`

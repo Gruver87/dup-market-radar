@@ -59,17 +59,22 @@ Open [http://127.0.0.1:8787/](http://127.0.0.1:8787/) — bind is loopback by de
 Phone panel (PWA): [`docs/PWA.md`](docs/PWA.md) — install dashboard on Android; radar stays on the host.
 
 ```powershell
+# Non-soak status board (HTTP / gate / ops_ready / live blockers / scrape):
+.\scripts\ops_board.ps1
 # Ops-ready (recommended once per host before daily use):
 .\scripts\go_ready.ps1
 # Unified operator gates:
 .\scripts\verify.ps1 -Profile List      # list profiles
 .\scripts\verify.ps1 -Profile Quick     # pytest + smoke offline
+.\scripts\verify.ps1 -Profile Full      # + warm/live — still NO soak
 .\scripts\verify.ps1 -Profile Lab       # + live smoke --evidence (default)
 .\scripts\verify.ps1 -Profile PreSoak   # + native + short soak (not 48h)
 .\scripts\verify.ps1 -Profile Soak48h   # PreSoak then 48h (claim only from pack)
+# Optional metrics UI:
+docker compose -f docker-compose.observability.yml up -d   # :9090 / :3000
 ```
 
-Ops-ready ≠ 48h claim. Definition: [`docs/OPS_READY.md`](docs/OPS_READY.md).
+Ops-ready ≠ 48h claim. Grafana green ≠ soak. Definition: [`docs/OPS_READY.md`](docs/OPS_READY.md).
 
 ### Docker (lab-python)
 

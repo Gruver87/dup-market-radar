@@ -1,0 +1,191 @@
+{
+  "product": "DUP Market Radar",
+  "pack_kind": "smoke_live",
+  "generated_at_utc": "20261117T150523Z",
+  "disclaimer": "Evidence only — not financial advice; author accepts no liability.",
+  "summary": {
+    "ok": true,
+    "mode": "live",
+    "schema_version": 2,
+    "score_backend": "radar_native",
+    "universe_size": 4506,
+    "elapsed_ms": 5269,
+    "ingest_ms": 2787,
+    "ensure_ms": 2423,
+    "score_ms": 54,
+    "venue_ms": {
+      "dexscreener": 250,
+      "coingecko": 261,
+      "mexc": 348,
+      "kucoin": 1768,
+      "bybit": 2182,
+      "binance": 2757
+    },
+    "errors": [],
+    "counts": {
+      "futures": 10,
+      "futures_long": 4,
+      "futures_short": 6,
+      "listings": 1,
+      "memes": 10,
+      "spot_alts": 10,
+      "stables": 7,
+      "whales": 10
+    },
+    "poll": {
+      "cex": {
+        "poll_sec": 45,
+        "age_ms": 0,
+        "due": false,
+        "sectors": [
+          "spot_alts",
+          "futures",
+          "listings"
+        ]
+      },
+      "memes": {
+        "poll_sec": 45,
+        "age_ms": 0,
+        "due": false,
+        "sectors": [
+          "memes"
+        ]
+      },
+      "stables": {
+        "poll_sec": 180,
+        "age_ms": 0,
+        "due": false,
+        "sectors": [
+          "stables"
+        ]
+      },
+      "whales_note": "bundled_with_cex"
+    },
+    "due_groups": [
+      "cex",
+      "memes",
+      "stables"
+    ],
+    "poll_skipped": [],
+    "circuit_skipped": [],
+    "http_stats": {
+      "gets": 139,
+      "retries": 0,
+      "cache_hits": 0,
+      "stale_ok_hits": 0,
+      "stale_error_fallback": 0,
+      "rate_limited": 0,
+      "response_too_large": 0,
+      "cache_evictions": 0,
+      "scheme_refused": 0,
+      "kline_gets": 91
+    },
+    "kline_gets": 91,
+    "dedupe": {
+      "spot": {
+        "before": 4588,
+        "after": 2801,
+        "dropped": 1787
+      },
+      "futures": {
+        "before": 3641,
+        "after": 1675,
+        "dropped": 1966
+      },
+      "venue_priority": {
+        "kucoin": 0,
+        "binance": 1,
+        "bybit": 2,
+        "mexc": 3
+      }
+    },
+    "spot_mtf": {
+      "change_bps_15m": 10,
+      "change_bps_1h": 10,
+      "change_bps_4h": 10,
+      "vol_vs_median_bps": 10
+    },
+    "fut_mtf": {
+      "change_bps_15m": 10,
+      "change_bps_1h": 10,
+      "change_bps_4h": 9
+    },
+    "meme_mtf": {
+      "change_bps": 10,
+      "change_bps_1h": 10,
+      "change_bps_5m": 6
+    },
+    "listings_mtf": {
+      "change_bps": 1,
+      "change_bps_15m": 1,
+      "change_bps_1h": 1,
+      "age_hours": 1
+    },
+    "listings_flags": {
+      "cross_venue_live": 0,
+      "no_live_volume": 0,
+      "n": 1
+    },
+    "short_window_ensure": {
+      "ensure_rank_n": 30,
+      "spot": {
+        "n_15m": 39,
+        "n_1h": 39,
+        "n_4h": 39,
+        "n_vol_vs": 39,
+        "n_binance": 15,
+        "n_bybit": 0
+      },
+      "futures": {
+        "n_15m": 31,
+        "n_1h": 31,
+        "n_4h": 30,
+        "n_binance": 0,
+        "n_bybit": 1,
+        "n_mexc": 9
+      },
+      "spot_targets": 6,
+      "fut_targets": 0,
+      "rounds": 2,
+      "waterfall_skipped": [
+        "bybit_spot",
+        "binance_fut",
+        "bybit_fut",
+        "mexc_fut"
+      ],
+      "stage_ms": {
+        "spot_kucoin_ms": 1093,
+        "spot_binance_ms": 936,
+        "fut_kucoin_ms": 705,
+        "fut_binance_ms": 0,
+        "fut_bybit_ms": 252,
+        "fut_mexc_ms": 345,
+        "spot_bybit_ms": 252
+      },
+      "kline_budget": {
+        "kline_gets": 91,
+        "kline_budget_left": 21
+      },
+      "mtf_cache_hydrate_spot": 0,
+      "mtf_cache_hydrate_fut": 0,
+      "mtf_cache_remember_spot": 75,
+      "mtf_cache_remember_fut": 62,
+      "spot_fill_ratio": 1.0,
+      "fut_fill_ratio": 1.0,
+      "list_spot_fill_ratio": null,
+      "list_fut_fill_ratio": 1.0,
+      "meme_cex_fill_ratio": 1.0,
+      "meme_cex_targets": 3,
+      "ensure_ms": 2423,
+      "display_pre_patched": 8,
+      "display_skipped_coverage": true,
+      "display_ensure_ms": 0,
+      "display_board_spot": 1.0,
+      "display_board_fut": 1.0
+    },
+    "elapsed_budget_ms": 25000,
+    "elapsed_ok": true
+  },
+  "mtf_ensure_ok": true,
+  "ok": true
+}

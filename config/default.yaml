@@ -139,6 +139,8 @@ auto_trade:
     - below_vol_floor
   # Lab-safe default: log-only until operator explicitly sets dry_run false + keys.
   dry_run: true
+  # Auto-trade sectors — NEVER add futures / futures_long / futures_short.
+  # Engine hard-blocks FUTURES_BLOCK even if listed; watchlist/TG futures stay warn-only.
   allowed_sectors:
     - spot_alts
     - memes   # CEX keyword memes (KuCoin…) are auto-eligible; DEX rows still skipped

@@ -1,0 +1,32 @@
+{
+  "product": "DUP Market Radar",
+  "run_id": "20261117T150950Z-smoke-0.2.89",
+  "created_at_utc": "20261117T150950Z",
+  "git_head": "9fec41b87ad6a9cabbfaf7645561e99a03401df6",
+  "status": "ok",
+  "files": [
+    {
+      "source": "C:/Users/vovun/Desktop/dup-market-radar/data/evidence/LATEST.json",
+      "name": "LATEST.json",
+      "sha256": "89803d64efb72181a6a4f70ceb85861e4ab6a30dd397aadf14f9f65571535e26",
+      "status": "present",
+      "bytes": 4372,
+      "ok": true,
+      "hard_fails": null,
+      "approx_48h_claim_ok": null,
+      "pack_kind": "smoke_live"
+    },
+    {
+      "source": "C:/Users/vovun/Desktop/dup-market-radar/data/evidence/LATEST_SOAK.json",
+      "name": "LATEST_SOAK.json",
+      "sha256": "4178121caa9fa6c053cbbf9acc3ca8e110d07a7d6613d866df9786b0dc8834d0",
+      "status": "present",
+      "bytes": 4191,
+      "ok": null,
+      "hard_fails": 0,
+      "approx_48h_claim_ok": false,
+      "pack_kind": "soak_lab"
+    }
+  ],
+  "honesty": "status=pass_48h only when a pack sets approx_48h_claim_ok=true and hard_fails=0; missing inputs never invent PASS"
+}

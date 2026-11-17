@@ -6,8 +6,10 @@
 - Paper: `PaperLedger.journal` + `GET /api/trade/journal`; Ops dashboard PnL card
 - Grafana: `docs/grafana/radar-ops.json` from Prometheus metrics
 - Metrics: price-alert counters/gauges in Prometheus export
+- Config: auto `allowed_sectors` documents futures hard-block (engine already refuses FUTURES_BLOCK)
+- Evidence: go_ready PASS 2026-11-17; pack `docs/evidence/runs/20261117T150950Z-smoke-0.2.89` (short soak hard_fails=0; 48h still not claimed)
 - Package / FastAPI / User-Agent / `__version__` / native pin `0.2.89`
-- Soak / 48h: **not** claimed this pin
+- Soak / 48h: **not** claimed this pin (Soak48h may be running wall-clock; claim only if pack says so)
 
 ## 0.2.88
 

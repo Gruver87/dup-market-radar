@@ -29,6 +29,8 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
-      - ./docs/grafana/radar-ops.json:/etc/grafana/provisioning/dashboards/radar-ops.json:ro
+      - ./docs/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./docs/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./docs/grafana/radar-ops.json:/var/lib/grafana/dashboards/radar-ops.json:ro
     depends_on:
       - prometheus

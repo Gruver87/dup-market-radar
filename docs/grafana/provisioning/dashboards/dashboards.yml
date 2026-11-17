@@ -1,0 +1,10 @@
+apiVersion: 1
+providers:
+  - name: dup-radar
+    orgId: 1
+    folder: DUP
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards

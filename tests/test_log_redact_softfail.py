@@ -39,6 +39,7 @@ def test_dotenv_read_failure_redacts(caplog, tmp_path, monkeypatch):
 
     from radar.trade import env_load
 
+    monkeypatch.delenv("RADAR_DISABLE_DOTENV", raising=False)
     env = tmp_path / ".env"
     env.write_text("A=1\n", encoding="utf-8")
     register_secrets(["sekrit-token-xyz"])

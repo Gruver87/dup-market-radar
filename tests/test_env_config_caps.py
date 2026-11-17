@@ -8,6 +8,7 @@ from radar.trade.env_load import load_dotenv
 
 
 def test_dotenv_refuses_huge_file(tmp_path, monkeypatch, caplog):
+    monkeypatch.delenv("RADAR_DISABLE_DOTENV", raising=False)
     env = tmp_path / ".env"
     env.write_bytes(b"A=1\n" * 20_000)  # >64 KiB
     load_dotenv(env)
@@ -16,6 +17,7 @@ def test_dotenv_refuses_huge_file(tmp_path, monkeypatch, caplog):
 
 
 def test_dotenv_loads_small(tmp_path, monkeypatch):
+    monkeypatch.delenv("RADAR_DISABLE_DOTENV", raising=False)
     monkeypatch.delenv("RADAR_TEST_SMALL_KEY", raising=False)
     env = tmp_path / ".env"
     env.write_text("RADAR_TEST_SMALL_KEY=hello_lab\n", encoding="utf-8")

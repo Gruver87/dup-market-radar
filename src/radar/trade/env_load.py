@@ -32,8 +32,8 @@ _CRED_MAX_LEN = 256
 def load_dotenv(path: Path | None = None) -> None:
     """Minimal .env loader (no dependency). Does not override existing env.
 
-    Skip when ``RADAR_DISABLE_DOTENV=1`` or under pytest (``PYTEST_CURRENT_TEST``)
-    so operator ``.env`` cannot poison unit/API tests after ``delenv``.
+    Skip when ``RADAR_DISABLE_DOTENV=1`` so operator ``.env`` cannot poison
+    unit/API tests after ``delenv``. Explicit dotenv unit tests clear that flag.
     """
     if (os.environ.get("RADAR_DISABLE_DOTENV") or "").strip().lower() in {
         "1",
@@ -41,9 +41,6 @@ def load_dotenv(path: Path | None = None) -> None:
         "yes",
         "on",
     }:
-        return
-    # Pytest sets this for the duration of each test call.
-    if os.environ.get("PYTEST_CURRENT_TEST"):
         return
     env_path = path or (ROOT / ".env")
     if not env_path.is_file():

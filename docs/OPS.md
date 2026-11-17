@@ -96,7 +96,8 @@ docker compose up --build
 .\scripts\verify.ps1 -Profile Soak48h    # PreSoak then 48h
 ```
 
-Wrappers (same gates): `go_ready.ps1`, `pre_soak_gate.ps1`, `radar_soak_48h.ps1`. See [`OPS_READY.md`](OPS_READY.md).
+Wrappers (same gates): `go_ready.ps1`, `pre_soak_gate.ps1`, `radar_soak_48h.ps1`. See [`OPS_READY.md`](OPS_READY.md).  
+Cursor Agent Skills companion: [`AGENT_SKILLS.md`](AGENT_SKILLS.md) · `.\scripts\link_agent_skills.ps1` (not a soak/gate substitute).
 
 | Profile | Starts 48h? | Claim soak? |
 |---------|-------------|-------------|

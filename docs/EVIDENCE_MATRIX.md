@@ -44,7 +44,7 @@ Claims require on-disk packs. Missing pack ⇒ **⏳** / do not invent PASS.
 | Label | Pack path | Notes |
 |-------|-----------|-------|
 | smoke-0.2.89 | [`evidence/runs/20261117T150950Z-smoke-0.2.89`](evidence/runs/20261117T150950Z-smoke-0.2.89/) | native 0.2.89; live ok; elapsed~5.3s; short soak hard_fails=0 via go_ready |
-| smoke-0.2.88 | [`evidence/runs/20261022T194443Z-smoke-0.2.88`](evidence/runs/20261022T194443Z-smoke-0.2.88/) | native; hydrate 46+35; kline 110→19; stale_ok=2 |
+| smoke-0.2.87 | [`evidence/runs/20261022T194443Z-smoke-0.2.87`](evidence/runs/20261022T194443Z-smoke-0.2.87/) | native; hydrate 46+35; kline 110→19; stale_ok=2 (pack id on disk; no phantom 0.2.88 folder) |
 | smoke-0.2.86 | [`evidence/runs/20261022T191118Z-smoke-0.2.86`](evidence/runs/20261022T191118Z-smoke-0.2.86/) | warm stale_ok=2; KuCoin ~2.2s |
 | smoke-0.2.85 | [`evidence/runs/20261022T184701Z-smoke-0.2.85`](evidence/runs/20261022T184701Z-smoke-0.2.85/) | display soft wall |
 | smoke-0.2.81 | [`evidence/runs/20261022T182004Z-smoke-0.2.81`](evidence/runs/20261022T182004Z-smoke-0.2.81/) | secondary soft wall |

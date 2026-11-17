@@ -2,7 +2,8 @@
 
 ## 0.2.89
 
-- DX: companion [`dup-agent-skills`](https://github.com/Gruver87/dup-agent-skills) — `docs/AGENT_SKILLS.md` + `scripts/link_agent_skills.ps1` (Cursor skills mirror; no pin bump)
+- DX: companion [`dup-agent-skills`](https://github.com/Gruver87/dup-agent-skills) — `docs/AGENT_SKILLS.md` + `scripts/link_agent_skills.ps1` + `radar_gate` needles; OPS pointer (no pin bump)
+- Honesty: EVIDENCE_MATRIX retarget phantom `smoke-0.2.88` → on-disk `smoke-0.2.87` pack
 - PWA: installable dashboard panel (`manifest.webmanifest` + `/sw.js`); Android remote UI — host remains server; API never cached
 - Docs: `docs/PWA.md`; mobile safe-area / touch targets on dashboard
 - Telegram: `/price` `/unprice` absolute/±% thresholds; `/digest` 1h movers; `/funding`; richer `/status`

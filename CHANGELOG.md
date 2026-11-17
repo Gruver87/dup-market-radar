@@ -3,6 +3,7 @@
 ## 0.2.89
 
 - DX: companion [`dup-agent-skills`](https://github.com/Gruver87/dup-agent-skills) — `docs/AGENT_SKILLS.md` + `scripts/link_agent_skills.ps1` + `radar_gate` needles; OPS pointer (no pin bump)
+- DX: AGENT_SKILLS lists MCP tools (≥0.1.6) + `verify Quick/Full` (explicit NO soak)
 - Honesty: EVIDENCE_MATRIX retarget phantom `smoke-0.2.88` → on-disk `smoke-0.2.87` pack
 - PWA: installable dashboard panel (`manifest.webmanifest` + `/sw.js`); Android remote UI — host remains server; API never cached
 - Docs: `docs/PWA.md`; mobile safe-area / touch targets on dashboard

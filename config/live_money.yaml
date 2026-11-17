@@ -1,0 +1,33 @@
+# Live-money overlay — activate: RADAR_PROFILE=live-money
+# Merged onto config/default.yaml. Requires .env keys (see docs/LIVE_MONEY.md).
+# Futures NEVER in auto_trade.allowed_sectors (engine also hard-blocks FUTURES_BLOCK).
+# Do NOT commit secrets. Lab default.yaml stays dry_run: true.
+
+deployment_mode: prod
+
+secrets:
+  backend: env
+
+native:
+  prefer: true
+  fail_closed: true
+
+# API key gate is env: RADAR_API_KEY + RADAR_REQUIRE_API_KEY=1 (see go_live_money.ps1)
+api:
+  snapshot_require_api_key: true
+  # Soft cap for manual + auto — keep small until soak/ops confidence
+  max_order_quote_usdt_micros: 25000000   # 25 USDT
+
+auto_trade:
+  dry_run: false
+  enabled_default: false                  # operator must flip Auto ON after dry cycle
+  quote_usdt_micros_per_buy: 5000000      # 5 USDT
+  max_open_positions: 2
+  max_buys_per_cycle: 1
+  max_sells_per_cycle: 3
+  min_score_centi: 6000                   # 60.00 — slightly stricter than lab
+  # Spot / CEX memes / listings only — never futures*
+  allowed_sectors:
+    - spot_alts
+    - memes
+    - listings

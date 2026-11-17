@@ -1,0 +1,34 @@
+# Optional Prometheus + Grafana for local radar metrics.
+# Radar process stays on the host (run_radar.ps1). Compose only scrapes/UI.
+#
+#   docker compose -f docker-compose.observability.yml up -d
+#   Grafana http://127.0.0.1:3000  (admin / admin — change on first login)
+#   Prometheus http://127.0.0.1:9090
+#
+# Import docs/grafana/radar-ops.json into Grafana.
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docs/grafana/prometheus-scrape.yml:/etc/prometheus/prometheus.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./docs/grafana/radar-ops.json:/etc/grafana/provisioning/dashboards/radar-ops.json:ro
+    depends_on:
+      - prometheus

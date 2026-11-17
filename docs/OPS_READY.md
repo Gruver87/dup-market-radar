@@ -50,7 +50,8 @@ Optional later:
 
 ## Related
 
-- [`LIVE_MONEY.md`](LIVE_MONEY.md) — before `dry_run: false`
+- [`LIVE_MONEY.md`](LIVE_MONEY.md) — before `dry_run: false` / `.\scripts\go_live_money.ps1`
+- [`grafana/README.md`](grafana/README.md) — Prometheus scrape + dashboard import
 - [`OPS.md`](OPS.md) — profiles / Docker
 - [`EVIDENCE_MATRIX.md`](EVIDENCE_MATRIX.md) — claim → pack
 - [`TRADE.md`](TRADE.md) — auto / Telegram

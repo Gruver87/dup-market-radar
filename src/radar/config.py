@@ -90,17 +90,19 @@ def resolve_config_path(path: Path | None = None) -> Path:
 def load_config(path: Path | None = None) -> Dict[str, Any]:
     cfg_path = resolve_config_path(path)
     data = _read_yaml_mapping(cfg_path)
-    # Named light overlay — only when loading default (not a full RADAR_CONFIG).
+    # Named overlays — only when loading default (not a full RADAR_CONFIG).
     profile = (os.environ.get("RADAR_PROFILE") or "").strip().lower()
     if (
         path is None
         and not (os.environ.get("RADAR_CONFIG") or os.environ.get("RADAR_CONFIG_PATH") or "").strip()
-        and profile == "light"
+        and profile in {"light", "live-money", "live_money"}
     ):
-        light_path = ROOT / "config" / "light.yaml"
-        overlay = _read_yaml_mapping(light_path)
+        # live-money / live_money → config/live_money.yaml
+        name = "live_money" if profile in {"live-money", "live_money"} else profile
+        overlay_path = ROOT / "config" / f"{name}.yaml"
+        overlay = _read_yaml_mapping(overlay_path)
         data = _deep_merge(data, overlay)
-        data["_radar_profile"] = "light"
+        data["_radar_profile"] = "live-money" if name == "live_money" else name
     data = apply_env_overrides(data)
     validate_config(data)
     return data

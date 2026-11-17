@@ -1,0 +1,18 @@
+# Full Prometheus config for docker-compose.observability.yml
+# Also usable as a scrape_configs fragment reference.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: dup-market-radar
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: /api/metrics/prometheus
+    static_configs:
+      - targets:
+          - host.docker.internal:8787
+        labels:
+          product: dup-market-radar
+          pin: "0.2.89"

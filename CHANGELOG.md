@@ -4,12 +4,13 @@
 
 - Telegram: `/price` `/unprice` absolute/±% thresholds; `/digest` 1h movers; `/funding`; richer `/status`
 - Paper: `PaperLedger.journal` + `GET /api/trade/journal`; Ops dashboard PnL card
-- Grafana: `docs/grafana/radar-ops.json` from Prometheus metrics
+- Grafana: `docs/grafana/radar-ops.json` + `prometheus-scrape.yml` + `docker-compose.observability.yml`
+- Live-money: `RADAR_PROFILE=live-money` → `config/live_money.yaml`; `scripts/go_live_money.ps1` (fail-closed; futures auto OFF)
 - Metrics: price-alert counters/gauges in Prometheus export
 - Config: auto `allowed_sectors` documents futures hard-block (engine already refuses FUTURES_BLOCK)
 - Evidence: go_ready PASS 2026-11-17; pack `docs/evidence/runs/20261117T150950Z-smoke-0.2.89` (short soak hard_fails=0; 48h still not claimed)
 - Package / FastAPI / User-Agent / `__version__` / native pin `0.2.89`
-- Soak / 48h: **not** claimed this pin (Soak48h may be running wall-clock; claim only if pack says so)
+- Soak / 48h: **not** claimed this pin (start only after operator approval)
 
 ## 0.2.88
 

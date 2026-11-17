@@ -36,6 +36,7 @@ Do **not** claim “CI = full native prod” from ci-native alone (parity subset
 - `/api/ready` — warm + persist OK  
 - `/api/health` — scan / native / circuit honesty  
 - `/api/metrics` — JSON; Prometheus text at `/api/metrics/prometheus`
+- Grafana: [`grafana/README.md`](grafana/README.md) · `docker compose -f docker-compose.observability.yml up -d`
 
 Dashboard Watchlist status line surfaces `СБОЙ ДАННЫХ`, `mtf=OK|FAIL`, and ensure fill ratios when present.
 

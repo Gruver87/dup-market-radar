@@ -9,7 +9,7 @@ ADR 0016 spirit for a **companion** product (not L1 FEATURE sprouts).
 | **ci-native** | `.github/workflows/ci-native.yml` | prefer+fail_closed | env | Maturin + score parity (not full suite) |
 | **native** | `build_native.ps1` or `docker-compose.native.yml` | prefer+fail_closed | env | Local / compose honest scoring |
 | **light** | `RADAR_PROFILE=light` → overlay `config/light.yaml` | inherits default | env | KuCoin-primary fast refresh (0.2.88) |
-| **live-money** | Operator overlay + keys | prefer+fail_closed | **env only** (`deployment_mode=prod` refuses file) | Real capital — see [`LIVE_MONEY.md`](LIVE_MONEY.md) |
+| **live-money** | `RADAR_PROFILE=live-money` → `config/live_money.yaml` + keys | prefer+fail_closed | **env only** (`deployment_mode=prod` refuses file) | Real capital — [`LIVE_MONEY.md`](LIVE_MONEY.md) / `go_live_money.ps1` |
 
 ## Rules
 
@@ -25,7 +25,8 @@ Env overlays:
 - `RADAR_SECRET_BACKEND=env|file`
 - `RADAR_NATIVE_PREFER` / `RADAR_NATIVE_FAIL_CLOSED`
 - `RADAR_PROFILE=light` — merge `config/light.yaml` onto default
-- `RADAR_CONFIG` / `RADAR_CONFIG_PATH` — full alternate YAML (skips light overlay)
+- `RADAR_PROFILE=live-money` — merge `config/live_money.yaml` (prod + dry_run false; futures still blocked)
+- `RADAR_CONFIG` / `RADAR_CONFIG_PATH` — full alternate YAML (skips named overlays)
 - `RADAR_LOG_JSON=1` — structured JSON logs
 
 ## Related

@@ -7,7 +7,13 @@
 - Snippet: [`prometheus-scrape.yml`](prometheus-scrape.yml)
 - Or compose: repo root `docker-compose.observability.yml` (Prometheus + Grafana)
 
-Radar must be up (`.\scripts\run_radar.ps1`, default `http://127.0.0.1:8787`).
+```powershell
+docker compose -f docker-compose.observability.yml up -d
+# Prometheus http://127.0.0.1:9090 · Grafana http://127.0.0.1:3000 (admin/admin — change)
+```
+
+Radar must be up (`.\scripts\run_radar.ps1`, default `http://127.0.0.1:8787`).  
+Green Grafana panels ≠ 48h soak. Non-soak board: `.\scripts\ops_board.ps1`.
 
 ## 2. Dashboard
 

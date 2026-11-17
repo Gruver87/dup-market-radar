@@ -97,7 +97,8 @@ docker compose up --build
 ```
 
 Wrappers (same gates): `go_ready.ps1`, `pre_soak_gate.ps1`, `radar_soak_48h.ps1`. See [`OPS_READY.md`](OPS_READY.md).  
-Cursor Agent Skills companion: [`AGENT_SKILLS.md`](AGENT_SKILLS.md) · `.\scripts\link_agent_skills.ps1` (not a soak/gate substitute).
+Cursor Agent Skills companion: [`AGENT_SKILLS.md`](AGENT_SKILLS.md) · `.\scripts\link_agent_skills.ps1` (not a soak/gate substitute).  
+Non-soak status board: `.\scripts\ops_board.ps1` (HTTP / gate / ops_ready / live-money blockers — never starts soak).
 
 | Profile | Starts 48h? | Claim soak? |
 |---------|-------------|-------------|

@@ -18,6 +18,10 @@ def _clear_profile(monkeypatch):
 
 def test_live_money_overlay_spot_only_small_size(monkeypatch):
     monkeypatch.setenv("RADAR_PROFILE", "live-money")
+    # Isolate from CI python-lab (RADAR_NATIVE_*=0) — live-money YAML sets prefer/fail_closed.
+    monkeypatch.delenv("RADAR_NATIVE_PREFER", raising=False)
+    monkeypatch.delenv("RADAR_NATIVE_FAIL_CLOSED", raising=False)
+    monkeypatch.delenv("RADAR_DEPLOYMENT_MODE", raising=False)
     cfg = load_config()
     assert cfg.get("_radar_profile") == "live-money"
     assert str(cfg.get("deployment_mode")).lower() == "prod"
@@ -34,7 +38,8 @@ def test_live_money_overlay_spot_only_small_size(monkeypatch):
     assert native.get("fail_closed") is True
 
 
-def test_default_stays_dry_run_lab():
+def test_default_stays_dry_run_lab(monkeypatch):
+    monkeypatch.delenv("RADAR_DEPLOYMENT_MODE", raising=False)
     cfg = load_config()
     assert cfg.get("_radar_profile") in (None, "")
     assert (cfg.get("auto_trade") or {}).get("dry_run") is True

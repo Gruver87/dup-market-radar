@@ -1,0 +1,194 @@
+{
+  "product": "DUP Market Radar",
+  "pack_kind": "smoke_live",
+  "generated_at_utc": "20261117T184923Z",
+  "disclaimer": "Evidence only — not financial advice; author accepts no liability.",
+  "summary": {
+    "ok": true,
+    "mode": "live",
+    "schema_version": 2,
+    "score_backend": "radar_native",
+    "universe_size": 4506,
+    "elapsed_ms": 5184,
+    "ingest_ms": 1889,
+    "ensure_ms": 3229,
+    "score_ms": 61,
+    "venue_ms": {
+      "dexscreener": 101,
+      "coingecko": 239,
+      "bybit": 480,
+      "mexc": 572,
+      "kucoin": 1224,
+      "binance": 1829
+    },
+    "errors": [],
+    "counts": {
+      "futures": 10,
+      "futures_long": 2,
+      "futures_short": 8,
+      "listings": 2,
+      "memes": 10,
+      "spot_alts": 10,
+      "stables": 7,
+      "whales": 10
+    },
+    "poll": {
+      "cex": {
+        "poll_sec": 45,
+        "age_ms": 0,
+        "due": false,
+        "sectors": [
+          "spot_alts",
+          "futures",
+          "listings"
+        ]
+      },
+      "memes": {
+        "poll_sec": 45,
+        "age_ms": 0,
+        "due": false,
+        "sectors": [
+          "memes"
+        ]
+      },
+      "stables": {
+        "poll_sec": 180,
+        "age_ms": 0,
+        "due": false,
+        "sectors": [
+          "stables"
+        ]
+      },
+      "whales_note": "bundled_with_cex"
+    },
+    "due_groups": [
+      "cex",
+      "memes",
+      "stables"
+    ],
+    "poll_skipped": [],
+    "circuit_skipped": [],
+    "http_stats": {
+      "gets": 150,
+      "retries": 0,
+      "cache_hits": 0,
+      "stale_ok_hits": 0,
+      "stale_error_fallback": 0,
+      "rate_limited": 0,
+      "response_too_large": 0,
+      "cache_evictions": 0,
+      "scheme_refused": 0,
+      "kline_gets": 102
+    },
+    "kline_gets": 102,
+    "dedupe": {
+      "spot": {
+        "before": 4588,
+        "after": 2801,
+        "dropped": 1787
+      },
+      "futures": {
+        "before": 3641,
+        "after": 1675,
+        "dropped": 1966
+      },
+      "venue_priority": {
+        "kucoin": 0,
+        "binance": 1,
+        "bybit": 2,
+        "mexc": 3
+      }
+    },
+    "spot_mtf": {
+      "change_bps_15m": 10,
+      "change_bps_1h": 10,
+      "change_bps_4h": 9,
+      "vol_vs_median_bps": 10
+    },
+    "fut_mtf": {
+      "change_bps_15m": 10,
+      "change_bps_1h": 10,
+      "change_bps_4h": 10
+    },
+    "meme_mtf": {
+      "change_bps": 10,
+      "change_bps_1h": 10,
+      "change_bps_5m": 8
+    },
+    "listings_mtf": {
+      "change_bps": 2,
+      "change_bps_15m": 2,
+      "change_bps_1h": 2,
+      "age_hours": 2
+    },
+    "listings_flags": {
+      "cross_venue_live": 0,
+      "no_live_volume": 0,
+      "n": 2
+    },
+    "short_window_ensure": {
+      "ensure_rank_n": 30,
+      "spot": {
+        "n_15m": 39,
+        "n_1h": 39,
+        "n_4h": 38,
+        "n_vol_vs": 39,
+        "n_binance": 15,
+        "n_bybit": 0
+      },
+      "futures": {
+        "n_15m": 31,
+        "n_1h": 31,
+        "n_4h": 31,
+        "n_binance": 0,
+        "n_bybit": 1,
+        "n_mexc": 6
+      },
+      "spot_targets": 7,
+      "fut_targets": 0,
+      "rounds": 2,
+      "waterfall_skipped": [
+        "binance_fut",
+        "bybit_fut",
+        "mexc_fut"
+      ],
+      "stage_ms": {
+        "spot_kucoin_ms": 1612,
+        "spot_binance_ms": 963,
+        "spot_bybit_ms": 498,
+        "fut_kucoin_ms": 740,
+        "fut_binance_ms": 0,
+        "fut_bybit_ms": 290,
+        "fut_mexc_ms": 321
+      },
+      "kline_budget": {
+        "kline_gets": 102,
+        "kline_budget_left": 10
+      },
+      "mtf_cache_hydrate_spot": 0,
+      "mtf_cache_hydrate_fut": 0,
+      "mtf_cache_remember_spot": 74,
+      "mtf_cache_remember_fut": 62,
+      "spot_fill_ratio": 1.0,
+      "fut_fill_ratio": 1.0,
+      "list_spot_fill_ratio": 1.0,
+      "list_fut_fill_ratio": 1.0,
+      "meme_cex_fill_ratio": 1.0,
+      "meme_cex_targets": 2,
+      "ensure_ms": 3229,
+      "display_pre_patched": 6,
+      "display_ensure_ms": 577,
+      "display_spot_targets": 4,
+      "display_fut_targets": 0,
+      "display_board_spot": 0.6,
+      "display_board_fut": 1.0,
+      "display_ensure_wall_ms": 1500,
+      "display_ensure_wall_reason": "base",
+      "display_patched": 10
+    },
+    "elapsed_budget_ms": 25000,
+    "elapsed_ok": true
+  },
+  "mtf_ensure_ok": true,
+  "ok": true
+}

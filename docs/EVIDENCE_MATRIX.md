@@ -7,6 +7,8 @@ Claims require on-disk packs. Missing pack ⇒ **⏳** / do not invent PASS.
 | Claim | Gate / artifact | Status rule |
 |-------|-----------------|-------------|
 | Unit suite green | `pytest` | CI / local; not soak |
+| Verify Quick | `verify.ps1 -Profile Quick` | gate + pytest + offline smoke; **not** soak |
+| Verify Full | `verify.ps1 -Profile Full` | Quick + ruff + warm + live evidence; **not** soak |
 | Live smoke | `radar_smoke_lab.py --live --evidence` → `data/evidence/smoke_live_*.json` | `ok=true` in pack |
 | Pre-soak | `verify.ps1 -Profile PreSoak` | exit 0; short soak `hard_fails=0` |
 | Ops-ready | `go_ready.ps1` → `READY_OPS.json` | `ops_ready=true`; **not** 48h claim |
@@ -43,6 +45,7 @@ Claims require on-disk packs. Missing pack ⇒ **⏳** / do not invent PASS.
 
 | Label | Pack path | Notes |
 |-------|-----------|-------|
+| verify-full-0.2.89 | [`evidence/runs/20261117T184941Z-verify-full-0.2.89`](evidence/runs/20261117T184941Z-verify-full-0.2.89/) | `verify Full` PASS 2026-11-17; native; live ok; elapsed~5.2s; **soak not run** |
 | smoke-0.2.89 | [`evidence/runs/20261117T150950Z-smoke-0.2.89`](evidence/runs/20261117T150950Z-smoke-0.2.89/) | native 0.2.89; live ok; elapsed~5.3s; short soak hard_fails=0 via go_ready |
 | smoke-0.2.87 | [`evidence/runs/20261022T194443Z-smoke-0.2.87`](evidence/runs/20261022T194443Z-smoke-0.2.87/) | native; hydrate 46+35; kline 110→19; stale_ok=2 (pack id on disk; no phantom 0.2.88 folder) |
 | smoke-0.2.86 | [`evidence/runs/20261022T191118Z-smoke-0.2.86`](evidence/runs/20261022T191118Z-smoke-0.2.86/) | warm stale_ok=2; KuCoin ~2.2s |

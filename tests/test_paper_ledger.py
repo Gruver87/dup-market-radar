@@ -45,3 +45,33 @@ def test_paper_ignores_live(tmp_path):
         }
     )
     assert led.status()["open_count"] == 0
+
+
+def test_paper_journal_by_day(tmp_path):
+    led = PaperLedger(tmp_path / "paper3.json")
+    led.record_event(
+        {
+            "ok": True,
+            "dry_run": True,
+            "side": "buy",
+            "symbol": "SOLUSDT",
+            "entry_price_i": 100_000_000_000,
+            "base_size_i": 1_000_000_00,
+            "quote_usdt_micros": 100_000_000,
+        }
+    )
+    led.record_event(
+        {
+            "ok": True,
+            "dry_run": True,
+            "side": "sell",
+            "symbol": "SOLUSDT",
+            "exit_price_i": 110_000_000_000,
+        }
+    )
+    j = led.journal(days=7)
+    assert j["integer_money"] is True
+    assert j["closed_count"] == 1
+    assert j["by_day"]
+    assert j["by_day"][-1]["closed_count"] >= 1
+    assert j["realized_pnl_usdt_micros"] > 0

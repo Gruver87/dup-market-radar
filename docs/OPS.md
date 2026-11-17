@@ -133,7 +133,7 @@ python scripts/radar_smoke_lab.py --live --evidence
 
 See [`EVIDENCE.md`](EVIDENCE.md) and [`EVIDENCE_MATRIX.md`](EVIDENCE_MATRIX.md).
 
-## Performance notes (pin 0.2.88)
+## Performance notes (pin 0.2.89)
 
 Honesty only — **not** a soak gate. Live RTT dominates.
 

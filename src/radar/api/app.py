@@ -750,7 +750,7 @@ def _openapi_enabled() -> bool:
 _OPENAPI_ON = _openapi_enabled()
 app = FastAPI(
     title="DUP Market Radar",
-    version="0.2.88",
+    version="0.2.89",
     lifespan=_lifespan,
     docs_url="/docs" if _OPENAPI_ON else None,
     redoc_url="/redoc" if _OPENAPI_ON else None,
@@ -1248,10 +1248,7 @@ def trade_order(request: Request, body: ManualOrderBody) -> Dict[str, Any]:
     raise HTTPException(400, detail=payload)
 
 
-@app.get("/api/trade/paper")
-def trade_paper(request: Request) -> Dict[str, Any]:
-    """Paper / dry-run P&L ledger (USDT micros). API-key gated like trade ops."""
-    _check_api_key(request)
+def _paper_marks() -> Dict[str, int]:
     marks: Dict[str, int] = {}
     try:
         st = _paper.status()
@@ -1267,7 +1264,25 @@ def trade_paper(request: Request) -> Dict[str, Any]:
                 marks[sym] = int(m)
     except Exception as exc:  # noqa: BLE001
         logger.warning("paper marks: %s", redact_exc(exc, max_len=128))
+    return marks
+
+
+@app.get("/api/trade/paper")
+def trade_paper(request: Request) -> Dict[str, Any]:
+    """Paper / dry-run P&L ledger (USDT micros). API-key gated like trade ops."""
+    _check_api_key(request)
+    marks = _paper_marks()
     return {"ok": True, **_redact_fs_paths(_paper.status(marks=marks or None))}
+
+
+@app.get("/api/trade/journal")
+def trade_journal(request: Request, days: int = 14) -> Dict[str, Any]:
+    """Paper PnL journal by UTC day (ops dashboard). Integer USDT micros."""
+    _check_api_key(request)
+    days_n = max(1, min(90, int(days or 14)))
+    marks = _paper_marks()
+    body = _paper.journal(days=days_n, marks=marks or None)
+    return {"ok": True, **_redact_fs_paths(body)}
 
 
 @app.get("/api/notify/webhook")

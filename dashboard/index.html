@@ -412,6 +412,13 @@
           </div>
           <div class="fx-out" id="fxOut"></div>
         </div>
+        <div class="ops-card">
+          <h2 data-i18n="pnl_title">Paper PnL journal</h2>
+          <div class="fx-row">
+            <button class="ghost" type="button" id="pnlRefresh" data-i18n="pnl_refresh">Обновить</button>
+          </div>
+          <div class="fx-out" id="pnlOut">…</div>
+        </div>
       </div>
     </section>
 
@@ -462,6 +469,8 @@
         clock_note: "фиксированные UTC-смещения (без DST)",
         fx_title: "Обмен валют (ECB + НБРБ)",
         fx_go: "Конвертировать",
+        pnl_title: "Paper PnL journal",
+        pnl_refresh: "Обновить",
         nav_watchlist: "Watchlist",
         nav_markets: "Markets ~6m",
         nav_ops: "Ops",
@@ -491,6 +500,8 @@
         clock_note: "fixed UTC offsets (no DST)",
         fx_title: "FX (ECB + NBRB)",
         fx_go: "Convert",
+        pnl_title: "Paper PnL journal",
+        pnl_refresh: "Refresh",
         nav_watchlist: "Watchlist",
         nav_markets: "Markets ~6m",
         nav_ops: "Ops",
@@ -586,6 +597,47 @@
           fmt(data.amount_in_micros) + " " + data.from + " → " +
           fmt(data.amount_out_micros) + " " + data.to +
           "\nrate=" + fmt(data.rate_micros) + " · " + (data.source || "");
+      } catch (e) {
+        out.textContent = String(e);
+      }
+    }
+
+    function fmtUsdtMicros(m, scale) {
+      const s = scale || 1000000;
+      const n = Number(m || 0);
+      const whole = Math.trunc(n / s);
+      const frac = String(Math.abs(n % s)).padStart(6, "0").replace(/0+$/, "");
+      const core = frac ? whole + "." + frac : String(whole);
+      return n < 0 && whole >= 0 ? "-" + core.replace(/^-/, "") : core;
+    }
+
+    async function loadPnlJournal() {
+      const out = document.getElementById("pnlOut");
+      if (!out) return;
+      out.textContent = "…";
+      try {
+        const res = await fetchTimeout("/api/trade/journal?days=14", { headers: apiHeaders(false) }, 15000);
+        const data = await res.json();
+        if (!res.ok) {
+          out.textContent = typeof data.detail === "string" ? data.detail : JSON.stringify(data);
+          return;
+        }
+        const scale = data.quote_scale || 1000000;
+        const days = data.by_day || [];
+        let body = "realized=" + fmtUsdtMicros(data.realized_pnl_usdt_micros, scale) +
+          " · unrealized=" + fmtUsdtMicros(data.unrealized_pnl_usdt_micros, scale) +
+          " · total=" + fmtUsdtMicros(data.total_pnl_usdt_micros, scale) +
+          "\nopen=" + (data.open_count || 0) + " · closed=" + (data.closed_count || 0) +
+          " · persist=" + data.persist_ok;
+        if (!days.length) {
+          body += "\n(no closed trades in window)";
+        } else {
+          body += "\n" + days.slice(-14).map((d) =>
+            d.day + "  " + fmtUsdtMicros(d.realized_pnl_usdt_micros, scale) +
+            "  n=" + d.closed_count + "  W/L=" + d.wins + "/" + d.losses
+          ).join("\n");
+        }
+        out.textContent = body;
       } catch (e) {
         out.textContent = String(e);
       }
@@ -694,7 +746,10 @@
         }
       } catch (_) { /* soft */ }
       if (name === "markets") loadMarkets(false);
-      if (name === "ops") loadWorldClock();
+      if (name === "ops") {
+        loadWorldClock();
+        loadPnlJournal();
+      }
     }
 
     const SECTORS = sectorList();
@@ -1279,6 +1334,8 @@
     document.getElementById("langRu").onclick = () => setLang("ru");
     document.getElementById("langEn").onclick = () => setLang("en");
     document.getElementById("fxGo").onclick = () => runFx();
+    const pnlBtn = document.getElementById("pnlRefresh");
+    if (pnlBtn) pnlBtn.onclick = () => loadPnlJournal();
     document.querySelectorAll(".nav-btn").forEach((b) => {
       b.onclick = () => setView(b.dataset.view || "watchlist");
     });

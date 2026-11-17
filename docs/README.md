@@ -1,6 +1,6 @@
 # DUP Market Radar — documentation index
 
-**Product:** DUP Market Radar · **Org:** DUP Labs · **Pin:** `0.2.88`  
+**Product:** DUP Market Radar · **Org:** DUP Labs · **Pin:** `0.2.89`  
 **Repo:** https://github.com/Gruver87/dup-market-radar
 
 Read order for operators:
@@ -37,7 +37,7 @@ Root:
 
 Companion L1 repos (separate): [`dup-protocol`](https://github.com/Gruver87/dup-protocol), [`dup-protocol-experimental`](https://github.com/Gruver87/dup-protocol-experimental).
 
-## Current pin snapshot (0.2.88)
+## Current pin snapshot (0.2.89)
 
 | Area | State |
 |------|--------|

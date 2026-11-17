@@ -117,7 +117,7 @@ class AllowlistHttp:
             limits=limits,
             verify=True,
             follow_redirects=False,
-            headers={"User-Agent": "DUP-Market-Radar/0.2.88"},
+            headers={"User-Agent": "DUP-Market-Radar/0.2.89"},
         )
         self.errors: list[str] = []
         self.stats: Dict[str, int] = {

@@ -1,0 +1,104 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Scan health",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "targets": [
+        { "expr": "radar_last_scan_ok", "legendFormat": "scan_ok", "refId": "A" },
+        { "expr": "radar_up", "legendFormat": "up", "refId": "B" },
+        { "expr": "radar_native_available", "legendFormat": "native", "refId": "C" }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "title": "Scan latency (ms)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 6, "y": 0 },
+      "id": 2,
+      "targets": [
+        { "expr": "radar_scan_elapsed_ms", "legendFormat": "elapsed", "refId": "A" },
+        { "expr": "radar_ingest_ms", "legendFormat": "ingest", "refId": "B" },
+        { "expr": "radar_ensure_ms", "legendFormat": "ensure", "refId": "C" },
+        { "expr": "radar_score_ms", "legendFormat": "score", "refId": "D" }
+      ]
+    },
+    {
+      "title": "Universe / cache age",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 },
+      "id": 3,
+      "targets": [
+        { "expr": "radar_universe_size", "legendFormat": "universe", "refId": "A" },
+        { "expr": "radar_cache_age_ms", "legendFormat": "cache_age_ms", "refId": "B" }
+      ]
+    },
+    {
+      "title": "HTTP / circuit",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 4,
+      "targets": [
+        { "expr": "radar_http_gets_total", "legendFormat": "gets", "refId": "A" },
+        { "expr": "radar_http_retries_total", "legendFormat": "retries", "refId": "B" },
+        { "expr": "radar_http_rate_limited_total", "legendFormat": "rate_limited", "refId": "C" },
+        { "expr": "radar_circuit_open_venues", "legendFormat": "circuit_open", "refId": "D" }
+      ]
+    },
+    {
+      "title": "Telegram",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 5,
+      "targets": [
+        { "expr": "radar_telegram_running", "legendFormat": "running", "refId": "A" },
+        { "expr": "radar_telegram_watches", "legendFormat": "watches", "refId": "B" },
+        { "expr": "radar_telegram_price_alerts", "legendFormat": "price_alerts", "refId": "C" },
+        { "expr": "radar_telegram_alerts_sent_total", "legendFormat": "alerts_sent", "refId": "D" },
+        { "expr": "radar_telegram_price_alerts_sent_total", "legendFormat": "price_sent", "refId": "E" },
+        { "expr": "radar_telegram_alerts_skipped_stale_total", "legendFormat": "skip_stale", "refId": "F" }
+      ]
+    },
+    {
+      "title": "Auto / trade",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "id": 6,
+      "targets": [
+        { "expr": "radar_auto_enabled", "legendFormat": "auto_on", "refId": "A" },
+        { "expr": "radar_auto_open_positions", "legendFormat": "open_pos", "refId": "B" },
+        { "expr": "radar_trade_place_ok_total", "legendFormat": "place_ok", "refId": "C" },
+        { "expr": "radar_trade_place_fail_total", "legendFormat": "place_fail", "refId": "D" },
+        { "expr": "radar_trade_rate_refused_total", "legendFormat": "rate_refuse", "refId": "E" }
+      ]
+    },
+    {
+      "title": "Recovery / auth",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "id": 7,
+      "targets": [
+        { "expr": "radar_recovery_consecutive_scan_fails", "legendFormat": "scan_fails", "refId": "A" },
+        { "expr": "radar_recovery_network_recoveries_total", "legendFormat": "net_recover", "refId": "B" },
+        { "expr": "radar_recovery_telegram_restarts_total", "legendFormat": "tg_restart", "refId": "C" },
+        { "expr": "radar_auth_fail_total", "legendFormat": "auth_fail", "refId": "D" }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["dup-market-radar", "ops"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "title": "DUP Market Radar · Ops",
+  "uid": "dup-radar-ops",
+  "version": 1,
+  "description": "Import into Grafana. Scrape GET /api/metrics/prometheus (rate-limited). Pin metrics from radar MetricsExporterPort."
+}

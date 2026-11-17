@@ -79,6 +79,10 @@ def build_metrics_payload(
             "alerts_skipped_empty": int(tg_stats.get("alerts_skipped_empty") or 0),
             "alerts_skipped_degraded": int(tg_stats.get("alerts_skipped_degraded") or 0),
             "alerts_mark_miss": int(tg_stats.get("alerts_mark_miss") or 0),
+            "price_alerts_sent": int(tg_stats.get("price_alerts_sent") or 0),
+            "price_alert_add_fail": int(tg_stats.get("price_alert_add_fail") or 0),
+            "price_alerts": (tg.get("price_alerts") or {}).get("count"),
+            "price_alerts_persist_ok": (tg.get("price_alerts") or {}).get("persist_ok"),
             "watch_add_fail": int(tg_stats.get("watch_add_fail") or 0),
             "cmd_rate_refused": int(tg_stats.get("cmd_rate_refused") or 0),
         },
@@ -250,6 +254,13 @@ def _render_prometheus(payload: Dict[str, Any]) -> str:
     gauge("radar_telegram_alerts_skipped_empty_total", tg.get("alerts_skipped_empty"))
     gauge("radar_telegram_alerts_skipped_degraded_total", tg.get("alerts_skipped_degraded"))
     gauge("radar_telegram_alerts_mark_miss_total", tg.get("alerts_mark_miss"))
+    gauge("radar_telegram_price_alerts_sent_total", tg.get("price_alerts_sent"))
+    gauge("radar_telegram_price_alert_add_fail_total", tg.get("price_alert_add_fail"))
+    gauge("radar_telegram_price_alerts", tg.get("price_alerts"))
+    gauge(
+        "radar_telegram_price_alerts_persist_ok",
+        1 if tg.get("price_alerts_persist_ok", True) else 0,
+    )
     gauge("radar_telegram_watch_add_fail_total", tg.get("watch_add_fail"))
     gauge("radar_telegram_cmd_rate_refused_total", tg.get("cmd_rate_refused"))
 

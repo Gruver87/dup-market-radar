@@ -18,12 +18,24 @@ from radar.rate_limit import RateLimiter
 from radar.secrets_redact import redact_exc
 from radar.telegram.alerts import find_row_public, format_alert, scan_all
 from radar.telegram.client import TelegramClient, TelegramError
+from radar.telegram.digest import (
+    collect_1h_movers,
+    collect_extreme_funding,
+    format_1h_digest_html,
+    format_funding_html,
+)
 from radar.telegram.env import (
     telegram_allowed_chat_ids,
     telegram_bot_token,
     telegram_enabled_env,
 )
 from radar.telegram.nearest import nearest_for_action
+from radar.telegram.price_alerts import (
+    PriceAlertBook,
+    PriceAlertBookFull,
+    parse_price_target,
+    scan_price_alerts,
+)
 from radar.telegram.stats import TG_STATS
 from radar.telegram.watches import WatchBook, WatchBookFull, norm_symbol
 from radar.trade.symbol_validate import (
@@ -62,6 +74,11 @@ class TelegramBot:
             ROOT / "data" / "telegram_watches.json",
             max_watches=max_watches,
         )
+        max_price = int(tg_cfg.get("max_price_alerts") or 500)
+        self._price_book = PriceAlertBook(
+            ROOT / "data" / "telegram_price_alerts.json",
+            max_alerts=max_price,
+        )
         self._prefs = PrefsStore(ROOT / "data" / "tg_prefs.json")
         self._allowed: List[int] = []
 
@@ -79,6 +96,7 @@ class TelegramBot:
             "threads_alive": self.threads_alive(),
             "allowed_chats": len(self._allowed),
             "watches": self._book.status(),
+            "price_alerts": self._price_book.status(),
             "prefs": self._prefs.status(),
         }
         if self._client is not None:
@@ -395,6 +413,24 @@ class TelegramBot:
             except Exception as exc:  # noqa: BLE001
                 logger.debug("ws alert publish: %s", redact_exc(exc, max_len=64))
 
+        # Absolute / ±% price thresholds (operator book)
+        try:
+            price_hits = scan_price_alerts(
+                self._price_book,
+                mark_fn=self._mark_price_fn,
+                cooldown_ms=int(cfg.get("alert_cooldown_ms") or 300_000),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.error("price alert scan failed: %s", redact_exc(exc, max_len=256))
+            price_hits = []
+        for alert in price_hits:
+            chat_id = int(alert.get("chat_id") or 0)
+            if not self._authorized(chat_id):
+                continue
+            self._send(chat_id, str(alert.get("message") or ""))
+            TG_STATS.inc("alerts_sent")
+            TG_STATS.inc("price_alerts_sent")
+
     def _lang(self, chat_id: int):
         return self._prefs.lang_for(chat_id)
 
@@ -429,6 +465,18 @@ class TelegramBot:
             return
         if cmd == "/top":
             self._cmd_top(chat_id, args)
+            return
+        if cmd == "/digest":
+            self._cmd_digest(chat_id)
+            return
+        if cmd == "/funding":
+            self._cmd_funding(chat_id, args)
+            return
+        if cmd == "/price":
+            self._cmd_price(chat_id, args)
+            return
+        if cmd == "/unprice":
+            self._cmd_unprice(chat_id, args)
             return
         if cmd == "/watch":
             self._cmd_watch(chat_id, args)
@@ -532,15 +580,138 @@ class TelegramBot:
     def _cmd_status(self, chat_id: int) -> None:
         snap = self._snapshot_fn() or {}
         auto = self._auto_status_fn() if self._auto_status_fn else {}
+        lang = self._lang(chat_id)
+        age_ms = None
+        gen = snap.get("generated_at_ms")
+        if gen is None and snap.get("generated_at") is not None:
+            try:
+                raw = float(snap["generated_at"])
+                gen = int(raw) if raw > 1e12 else int(raw * 1000)
+            except (TypeError, ValueError):
+                gen = None
+        if gen is not None:
+            age_ms = int(time.time() * 1000) - int(gen)
+        pa = self._price_book.status()
+        title = "Radar status" if lang == "en" else "Статус Radar"
         lines = [
-            "<b>Radar status</b>",
-            f"scan_ok={snap.get('ok')} · backend=<code>{snap.get('score_backend')}</code>",
-            f"universe={snap.get('universe_size')} · elapsed_ms={snap.get('elapsed_ms')}",
-            f"auto_enabled={auto.get('enabled')} · positions={auto.get('open_positions')} "
-            f"· persist={auto.get('persistence_ok')}",
+            f"<b>{title}</b>",
+            f"scan_ok={snap.get('ok')} · backend=<code>{escape_html(snap.get('score_backend'))}</code>",
+            f"universe={escape_html(snap.get('universe_size'))} · elapsed_ms={escape_html(snap.get('elapsed_ms'))}",
+            f"ingest_ms={escape_html(snap.get('ingest_ms'))} · ensure_ms={escape_html(snap.get('ensure_ms'))} "
+            f"· score_ms={escape_html(snap.get('score_ms'))}",
+            f"age_ms={escape_html(age_ms)} · schema={escape_html(snap.get('schema_version'))}",
+            f"auto_enabled={escape_html(auto.get('enabled'))} · positions={escape_html(auto.get('open_positions'))} "
+            f"· persist={escape_html(auto.get('persistence_ok'))}",
             f"tg_watches={self._book.status().get('count')} · persist={self._book.persist_ok}",
+            f"price_alerts={pa.get('count')} · persist={pa.get('persist_ok')}",
         ]
+        if self._client is not None:
+            circ = self._client.circuit_status()
+            open_n = len((circ.get("open_remaining_ms") or {}))
+            lines.append(f"tg_circuit_open={open_n}")
         self._send(chat_id, "\n".join(lines))
+
+    def _cmd_digest(self, chat_id: int) -> None:
+        lang = self._lang(chat_id)
+        snap = self._snapshot_fn() or {}
+        if snap.get("ok") is False:
+            msg = (
+                "snapshot degraded (ok=false) — digest refused"
+                if lang == "en"
+                else "снимок degraded (ok=false) — дайджест отказ"
+            )
+            self._send(chat_id, msg)
+            return
+        data = collect_1h_movers(snap, top_n=5)
+        self._send(chat_id, format_1h_digest_html(data, lang=lang))
+
+    def _cmd_funding(self, chat_id: int, args: List[str]) -> None:
+        lang = self._lang(chat_id)
+        top_n = 8
+        if args:
+            try:
+                top_n = max(1, min(20, int(args[0])))
+            except (TypeError, ValueError):
+                top_n = 8
+        snap = self._snapshot_fn() or {}
+        if snap.get("ok") is False:
+            msg = (
+                "snapshot degraded — funding refused"
+                if lang == "en"
+                else "снимок degraded — funding отказ"
+            )
+            self._send(chat_id, msg)
+            return
+        rows = collect_extreme_funding(snap, top_n=top_n)
+        self._send(chat_id, format_funding_html(rows, lang=lang))
+
+    def _cmd_price(self, chat_id: int, args: List[str]) -> None:
+        lang = self._lang(chat_id)
+        if not args:
+            rows = self._price_book.list_for_chat(chat_id)
+            if not rows:
+                self._send(
+                    chat_id,
+                    "usage: /price BTCUSDT 95000 | /price ETHUSDT +5% | /price ETHUSDT -3%",
+                )
+                return
+            lines = ["<b>Price alerts</b>" if lang == "en" else "<b>Ценовые алерты</b>"]
+            for r in rows[:40]:
+                lines.append(
+                    f"<code>{escape_html(r.get('symbol'))}</code> "
+                    f"{escape_html(r.get('direction'))} "
+                    f"{escape_html(display_price(r.get('target_price_i')))} "
+                    f"({escape_html(r.get('kind'))})"
+                )
+            self._send(chat_id, "\n".join(lines))
+            return
+        if len(args) < 2:
+            self._send(
+                chat_id,
+                "usage: /price BTCUSDT 95000 | /price ETHUSDT +5%",
+            )
+            return
+        symbol = args[0]
+        target_raw = args[1]
+        mark = None
+        if self._mark_price_fn:
+            try:
+                mark = self._mark_price_fn(norm_symbol(symbol))
+            except Exception:  # noqa: BLE001
+                mark = None
+        try:
+            kind, target_i, direction = parse_price_target(
+                target_raw, baseline_price_i=mark
+            )
+            row = self._price_book.add(
+                chat_id,
+                symbol,
+                target_price_i=target_i,
+                kind=kind,
+                direction=direction,
+                baseline_price_i=mark,
+            )
+        except PriceAlertBookFull:
+            self._send(chat_id, "price alert book full — soft refuse")
+            TG_STATS.inc("price_alert_add_fail")
+            return
+        except ValueError as exc:
+            self._send(chat_id, escape_html(str(exc)[:128]))
+            TG_STATS.inc("price_alert_add_fail")
+            return
+        self._send(
+            chat_id,
+            f"price alert OK · <code>{escape_html(row.get('symbol'))}</code> "
+            f"{escape_html(direction)} {escape_html(display_price(target_i))} "
+            f"· mark={escape_html(display_price(mark))}",
+        )
+
+    def _cmd_unprice(self, chat_id: int, args: List[str]) -> None:
+        if not args:
+            self._send(chat_id, "usage: /unprice BTCUSDT")
+            return
+        n = self._price_book.remove(chat_id, args[0])
+        self._send(chat_id, f"removed price alerts: {n}")
 
     def _cmd_top(self, chat_id: int, args: List[str]) -> None:
         sector = (args[0] if args else "spot_alts").lower()

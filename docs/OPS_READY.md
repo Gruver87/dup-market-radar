@@ -1,6 +1,6 @@
 # Ops-ready definition — DUP Market Radar
 
-**Pin:** `0.2.88` · see root `pyproject.toml` / `src/radar/__init__.py`  
+**Pin:** `0.2.89` · see root `pyproject.toml` / `src/radar/__init__.py`  
 **Not** a 48h soak claim. **Not** financial advice — [`DISCLAIMER.md`](DISCLAIMER.md).
 
 ## What “fully ready to work” means here

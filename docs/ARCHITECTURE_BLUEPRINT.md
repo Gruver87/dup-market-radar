@@ -1,6 +1,6 @@
 # Architecture blueprint — DUP Market Radar
 
-**Pin:** 0.2.88 · **Kind:** constructor template (columns) · **Not** L1 mesh.
+**Pin:** 0.2.89 · **Kind:** constructor template (columns) · **Not** L1 mesh.
 
 Scan basis: repo tree `src/radar/*`, `native/radar_native`, `config/`, `dashboard/`, `scripts/`, `.github/workflows/` (2026-10-22).
 
@@ -60,7 +60,7 @@ Use this as a **module map / assembly drawing**. Narrative detail stays in [`ARC
 
 ---
 
-## 2. Scan pipeline (horizontal strip — pin 0.2.88)
+## 2. Scan pipeline (horizontal strip — pin 0.2.89)
 
 ```text
   force/poll

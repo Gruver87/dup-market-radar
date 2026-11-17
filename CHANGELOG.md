@@ -1,5 +1,14 @@
 # Changelog - DUP Market Radar
 
+## 0.2.89
+
+- Telegram: `/price` `/unprice` absolute/±% thresholds; `/digest` 1h movers; `/funding`; richer `/status`
+- Paper: `PaperLedger.journal` + `GET /api/trade/journal`; Ops dashboard PnL card
+- Grafana: `docs/grafana/radar-ops.json` from Prometheus metrics
+- Metrics: price-alert counters/gauges in Prometheus export
+- Package / FastAPI / User-Agent / `__version__` / native pin `0.2.89`
+- Soak / 48h: **not** claimed this pin
+
 ## 0.2.88
 
 - Ops-ready: `scripts/go_ready.ps1` + `docs/OPS_READY.md` + `data/evidence/READY_OPS.json` (PreSoak PASS; not a 48h claim)

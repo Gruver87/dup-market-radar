@@ -110,7 +110,7 @@ def main() -> int:
         "product": "DUP Market Radar",
         "pack_kind": "smoke_live_warm",
         "generated_at_utc": ts,
-        "pin": "0.2.88",
+        "pin": "0.2.89",
         "native": st,
         "radar_profile": cfg.get("_radar_profile"),
         "disclaimer": (

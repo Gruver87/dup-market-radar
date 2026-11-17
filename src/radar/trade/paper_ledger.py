@@ -119,6 +119,61 @@ class PaperLedger:
                 "integer_money": True,
             }
 
+    def journal(self, *, days: int = 14, marks: Optional[Dict[str, int]] = None) -> Dict[str, Any]:
+        """UTC day buckets of realized PnL + open MTM summary (ops / Grafana-adjacent)."""
+        days = max(1, min(90, int(days)))
+        now_ms = int(time.time() * 1000)
+        cutoff_ms = now_ms - days * 86_400_000
+        with self._lock:
+            by_day: Dict[str, Dict[str, Any]] = {}
+            for row in self._closed:
+                closed_at = int(row.get("closed_at_ms") or 0)
+                if closed_at and closed_at < cutoff_ms:
+                    continue
+                day = time.strftime(
+                    "%Y-%m-%d", time.gmtime((closed_at or now_ms) / 1000.0)
+                )
+                bucket = by_day.setdefault(
+                    day,
+                    {
+                        "day": day,
+                        "closed_count": 0,
+                        "realized_pnl_usdt_micros": 0,
+                        "wins": 0,
+                        "losses": 0,
+                    },
+                )
+                pnl = int(row.get("realized_pnl_usdt_micros") or 0)
+                bucket["closed_count"] += 1
+                bucket["realized_pnl_usdt_micros"] += pnl
+                if pnl > 0:
+                    bucket["wins"] += 1
+                elif pnl < 0:
+                    bucket["losses"] += 1
+            days_out = [by_day[k] for k in sorted(by_day.keys())]
+            unrealized = 0
+            open_count = len(self._open)
+            if marks:
+                for sym, pos in self._open.items():
+                    entry = int(pos.get("entry_price_i") or 0)
+                    size = int(pos.get("base_size_i") or 0)
+                    mark = marks.get(sym)
+                    if mark and entry > 0 and size > 0:
+                        unrealized += notional_i_from_price_qty(int(mark) - entry, size)
+            return {
+                "persist_ok": self._persist_ok,
+                "persist_error": self._persist_error,
+                "days": days,
+                "by_day": days_out,
+                "open_count": open_count,
+                "closed_count": len(self._closed),
+                "realized_pnl_usdt_micros": int(self._realized_micros),
+                "unrealized_pnl_usdt_micros": int(unrealized),
+                "total_pnl_usdt_micros": int(self._realized_micros) + int(unrealized),
+                "integer_money": True,
+                "quote_scale": QUOTE_SCALE,
+            }
+
     def record_event(self, event: Dict[str, Any]) -> None:
         """Apply dry_run (or explicit paper) buy/sell into the ledger."""
         if not event.get("ok"):

@@ -8,7 +8,7 @@ ADR 0016 spirit for a **companion** product (not L1 FEATURE sprouts).
 | **python-lab** | Docker `docker-compose.yml` / `ci.yml` | `RADAR_NATIVE_*=0` | env | Full unit suite, no maturin wheel |
 | **ci-native** | `.github/workflows/ci-native.yml` | prefer+fail_closed | env | Maturin + score parity (not full suite) |
 | **native** | `build_native.ps1` or `docker-compose.native.yml` | prefer+fail_closed | env | Local / compose honest scoring |
-| **light** | `RADAR_PROFILE=light` → overlay `config/light.yaml` | inherits default | env | KuCoin-primary fast refresh (0.2.87) |
+| **light** | `RADAR_PROFILE=light` → overlay `config/light.yaml` | inherits default | env | KuCoin-primary fast refresh (0.2.88) |
 | **live-money** | Operator overlay + keys | prefer+fail_closed | **env only** (`deployment_mode=prod` refuses file) | Real capital — see [`LIVE_MONEY.md`](LIVE_MONEY.md) |
 
 ## Rules

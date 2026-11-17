@@ -1,6 +1,6 @@
 # DUP Market Radar — documentation index
 
-**Product:** DUP Market Radar · **Org:** DUP Labs · **Pin:** `0.2.87`  
+**Product:** DUP Market Radar · **Org:** DUP Labs · **Pin:** `0.2.88`  
 **Repo:** https://github.com/Gruver87/dup-market-radar
 
 Read order for operators:
@@ -9,6 +9,7 @@ Read order for operators:
 2. [`LIVE_MONEY.md`](LIVE_MONEY.md) — before any live capital  
 3. [`PROFILES.md`](PROFILES.md) — lab / python-lab / ci-native / native / live-money  
 4. [`OPS.md`](OPS.md) — run / verify / Docker  
+4b. [`OPS_READY.md`](OPS_READY.md) — ops-ready gate (`go_ready.ps1`) vs 48h claim  
 5. [`RECOVERY.md`](RECOVERY.md) — self-heal after network / worker death  
 6. [`EVIDENCE_MATRIX.md`](EVIDENCE_MATRIX.md) — claim → pack honesty  
 7. [`DASHBOARD.md`](DASHBOARD.md) — UI pages  
@@ -36,7 +37,7 @@ Root:
 
 Companion L1 repos (separate): [`dup-protocol`](https://github.com/Gruver87/dup-protocol), [`dup-protocol-experimental`](https://github.com/Gruver87/dup-protocol-experimental).
 
-## Current pin snapshot (0.2.87)
+## Current pin snapshot (0.2.88)
 
 | Area | State |
 |------|--------|
@@ -44,6 +45,7 @@ Companion L1 repos (separate): [`dup-protocol`](https://github.com/Gruver87/dup-
 | Ingest | Parallel CEX bootstraps; Dex/CG per-GET + total venue wall; KuCoin warm stale-OK |
 | MTF | Ensure gate = `ensure_cap`; display patch-first; low-board wall 4000 / base 1500 |
 | Evidence | Live smoke packs under `docs/evidence/runs/`; **no 48h soak claim** |
+| Ops-ready | `.\scripts\go_ready.ps1` → `READY_OPS.json` (PreSoak + short soak); see [`OPS_READY.md`](OPS_READY.md) |
 | Trade | Auto default OFF; never futures; fail-closed on `ok=false` / ensure fail |
 
 Pipeline detail: [`ARCHITECTURE.md`](ARCHITECTURE.md). Ops / perf: [`OPS.md`](OPS.md).

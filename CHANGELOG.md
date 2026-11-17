@@ -1,4 +1,12 @@
-﻿# Changelog - DUP Market Radar
+# Changelog - DUP Market Radar
+
+## 0.2.88
+
+- Ops-ready: `scripts/go_ready.ps1` + `docs/OPS_READY.md` + `data/evidence/READY_OPS.json` (PreSoak PASS; not a 48h claim)
+- Gate needles: OPS_READY / LIVE_MONEY / go_ready in `radar_gate.py`
+- Docs: README / OPS / EVIDENCE_MATRIX / docs index — ops-ready vs 48h honesty
+- Package / FastAPI / User-Agent / `__version__` / native pin `0.2.88`
+- Soak / 48h: **not** claimed this pin (prior DNS hard_fail pack stays non-claim)
 
 ## 0.2.87
 

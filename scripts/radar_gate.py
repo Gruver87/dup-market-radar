@@ -52,6 +52,9 @@ def main() -> int:
     need(ROOT / "docs" / "PROFILES.md", "python-lab", "profiles")
     need(ROOT / "docs" / "PROFILES.md", "ci-native", "profiles_ci_native")
     need(ROOT / "docs" / "DISCLAIMER.md", "Not financial advice", "disclaimer")
+    need(ROOT / "docs" / "OPS_READY.md", "ops_ready", "ops_ready_doc")
+    need(ROOT / "docs" / "LIVE_MONEY.md", "dry_run: false", "live_money")
+    need(ROOT / "scripts" / "go_ready.ps1", "GO_READY", "go_ready_script")
     # CI honesty: both workflows must exist; README must not deny ci-native.
     need(ROOT / ".github" / "workflows" / "ci.yml", "python-lab-only", "ci_python_lab")
     need(ROOT / ".github" / "workflows" / "ci-native.yml", "maturin", "ci_native_workflow")

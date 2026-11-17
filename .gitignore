@@ -24,3 +24,6 @@ data/evidence/*.json
 data/evidence/*.log
 data/evidence/*.err
 !data/evidence/.gitkeep
+
+*.egg-info/
+

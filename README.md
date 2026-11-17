@@ -1,6 +1,6 @@
 # DUP Market Radar
 
-**Version:** 0.2.87 · **Org:** [DUP Labs](https://github.com/Gruver87) · **Author:** Uladzimir Dabranski
+**Version:** 0.2.88 · **Org:** [DUP Labs](https://github.com/Gruver87) · **Author:** Uladzimir Dabranski
 
 Hybrid **Python + Rust** market watchlist for crypto spot, USDT-M futures (watch-only), memes, stables, listings, and large prints — with optional **KuCoin spot** manual orders and **opt-in auto-trade** (spot_alts / CEX memes / listings; **never futures**; DEX memes watchlist-only).
 
@@ -31,7 +31,7 @@ Companion to industrial L1 work ([`dup-protocol`](https://github.com/Gruver87/du
 - **Security posture:** HTTPS allowlist, TLS verify on, CORS deny `*`, API key gate for trade mutations, secret redaction in logs.
 - **Hybrid score:** Rust `radar_native` (PyO3) when built; Docker compose default = **python-lab** (prefer off). GitHub runs **both** `ci.yml` (python-lab full suite) and `ci-native.yml` (maturin + score parity) — see honesty below.
 - **Auto fail-closed:** refuses buys on `ok=false` / `mtf_ensure_ok=false` / native-prefer + python backend; with open positions runs **stop-only** via KuCoin mark.
-- **Ingest speed (0.2.73–0.2.87):** parallel venue bootstraps; Dex/CG walls; KuCoin warm stale-OK; process MTF reuse cache; optional `RADAR_PROFILE=light` (KuCoin-primary); display wall scales with board fill.
+- **Ingest speed (0.2.73–0.2.88):** parallel venue bootstraps; Dex/CG walls; KuCoin warm stale-OK; process MTF reuse cache; optional `RADAR_PROFILE=light` (KuCoin-primary); display wall scales with board fill.
 - **Dashboard pages** (like DUP Console): Watchlist · Markets ~6m table · Ops (clock/FX) · Help · hash routes `#watchlist` / `#markets` / `#ops` / `#help`.
 - **Live ticks:** WebSocket `/ws` nudges refresh (reconnect with backoff); HTTP poll remains source of truth.
 - **Self-recovery:** background scan + worker watchdog after network/thread death — see [`docs/RECOVERY.md`](docs/RECOVERY.md) (does **not** auto-enable trade).
@@ -56,6 +56,8 @@ copy .env.example .env   # fill keys only if you trade
 Open [http://127.0.0.1:8787/](http://127.0.0.1:8787/) — bind is loopback by default in Docker compose.
 
 ```powershell
+# Ops-ready (recommended once per host before daily use):
+.\scripts\go_ready.ps1
 # Unified operator gates:
 .\scripts\verify.ps1 -Profile List      # list profiles
 .\scripts\verify.ps1 -Profile Quick     # pytest + smoke offline
@@ -63,6 +65,8 @@ Open [http://127.0.0.1:8787/](http://127.0.0.1:8787/) — bind is loopback by de
 .\scripts\verify.ps1 -Profile PreSoak   # + native + short soak (not 48h)
 .\scripts\verify.ps1 -Profile Soak48h   # PreSoak then 48h (claim only from pack)
 ```
+
+Ops-ready ≠ 48h claim. Definition: [`docs/OPS_READY.md`](docs/OPS_READY.md).
 
 ### Docker (lab-python)
 

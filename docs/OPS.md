@@ -1,4 +1,4 @@
-﻿# Operations
+# Operations
 
 ## Local process
 
@@ -90,15 +90,16 @@ docker compose up --build
 .\scripts\verify.ps1 -Profile List
 .\scripts\verify.ps1 -Profile Quick      # pytest + smoke offline
 .\scripts\verify.ps1 -Profile Lab        # + live evidence (default)
+.\scripts\go_ready.ps1                   # ops-ready = PreSoak + READY_OPS.json
 .\scripts\verify.ps1 -Profile PreSoak    # + native + short soak
 .\scripts\verify.ps1 -Profile Soak48h    # PreSoak then 48h
 ```
 
-Wrappers (same gates): `pre_soak_gate.ps1`, `radar_soak_48h.ps1`.
+Wrappers (same gates): `go_ready.ps1`, `pre_soak_gate.ps1`, `radar_soak_48h.ps1`. See [`OPS_READY.md`](OPS_READY.md).
 
 | Profile | Starts 48h? | Claim soak? |
 |---------|-------------|-------------|
-| Quick / Lab / PreSoak | No | No |
+| Quick / Lab / PreSoak / go_ready | No | No |
 | Soak48h | Yes (after PreSoak) | Only if pack `approx_48h_claim_ok=true` and `hard_fails=0` |
 
 ## No soak claim
@@ -132,14 +133,14 @@ python scripts/radar_smoke_lab.py --live --evidence
 
 See [`EVIDENCE.md`](EVIDENCE.md) and [`EVIDENCE_MATRIX.md`](EVIDENCE_MATRIX.md).
 
-## Performance notes (pin 0.2.87)
+## Performance notes (pin 0.2.88)
 
 Honesty only — **not** a soak gate. Live RTT dominates.
 
 | Phase | What to read | Typical levers |
 |-------|----------------|----------------|
 | Ingest | `ingest_ms`, `venue_ms.*` | Parallel venue bootstraps; Dex/CG walls; KuCoin stale-OK; optional `RADAR_PROFILE=light` |
-| Ensure | `ensure_ms`, `short_window_ensure.stage_ms`, `display_ensure_ms` | MTF process cache (0.2.87); skip ≥0.85; low-board / base display walls |
+| Ensure | `ensure_ms`, `short_window_ensure.stage_ms`, `display_ensure_ms` | MTF process cache (0.2.88); skip ≥0.85; low-board / base display walls |
 | Score | `score_ms` | Native prefer; display time must **not** inflate `score_ms` |
 
 Best recent live smoke in this series: packaged `smoke-0.2.79` (~6.5s elapsed). Later pins trade coverage / honesty vs wall-clock; KuCoin `allTickers` remains the usual ingest ceiling. **48h soak not claimed.**

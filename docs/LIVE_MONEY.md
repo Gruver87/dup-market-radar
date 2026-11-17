@@ -6,7 +6,8 @@ Default config is **lab-safe**: `auto_trade.dry_run: true`, auto **OFF**.
 
 ## Before `dry_run: false`
 
-1. Build native (recommended): `.\scripts\build_native.ps1`
+0. Host ops-ready: `.\scripts\go_ready.ps1` → `data/evidence/READY_OPS.json` with `ops_ready=true` (see [`OPS_READY.md`](OPS_READY.md))
+1. Build native (recommended): `.\scripts\build_native.ps1` (included in `go_ready`)
 2. Keys in `.env` (Spot Trade + IP whitelist); never commit `.env`
 3. Set `RADAR_API_KEY` and keep `RADAR_REQUIRE_API_KEY=1`
 4. Prefer native compose or local prefer+fail_closed — not lab-python Docker for live capital

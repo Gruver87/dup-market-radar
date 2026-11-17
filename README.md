@@ -18,6 +18,8 @@ Hybrid **Python + Rust** market watchlist for crypto spot, USDT-M futures (watch
 
 Companion to industrial L1 work ([`dup-protocol`](https://github.com/Gruver87/dup-protocol) / [`dup-protocol-experimental`](https://github.com/Gruver87/dup-protocol-experimental)) — **standalone**; not the L1 pin and not a "mainnet trading stack."
 
+**Agent skills (Cursor):** [`dup-agent-skills`](https://github.com/Gruver87/dup-agent-skills) — honest ops language, live-money gate, no futures auto, optional read-only MCP. Link into this checkout: `.\scripts\link_agent_skills.ps1` · docs: [`docs/AGENT_SKILLS.md`](docs/AGENT_SKILLS.md).
+
 **Repo:** https://github.com/Gruver87/dup-market-radar
 
 ---
@@ -98,6 +100,7 @@ Full index: [`docs/README.md`](docs/README.md).
 | [`docs/LIVE_MONEY.md`](docs/LIVE_MONEY.md) | Checklist before `dry_run: false` |
 | [`docs/EVIDENCE.md`](docs/EVIDENCE.md) | Smoke / pre-soak / soak packs |
 | [`docs/BRAND.md`](docs/BRAND.md) | DUP Labs naming & GitHub URLs |
+| [`docs/AGENT_SKILLS.md`](docs/AGENT_SKILLS.md) | Cursor Agent Skills + MCP companion |
 | [`CHANGELOG.md`](CHANGELOG.md) | Release notes |
 
 ---

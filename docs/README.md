@@ -11,6 +11,7 @@ Read order for operators:
 4. [`OPS.md`](OPS.md) — run / verify / Docker  
 4b. [`OPS_READY.md`](OPS_READY.md) — ops-ready gate (`go_ready.ps1`) vs 48h claim  
 4c. [`PWA.md`](PWA.md) — Android PWA panel (host remains the server)  
+4d. [`AGENT_SKILLS.md`](AGENT_SKILLS.md) — Cursor skills + read-only MCP companion  
 5. [`RECOVERY.md`](RECOVERY.md) — self-heal after network / worker death  
 6. [`EVIDENCE_MATRIX.md`](EVIDENCE_MATRIX.md) — claim → pack honesty  
 7. [`DASHBOARD.md`](DASHBOARD.md) — UI pages  
@@ -36,7 +37,8 @@ Root:
 | Heuristic rankings + fail-closed auto gates | Guaranteed alpha / broker |
 | Lab + operator evidence packs | Automatic 48h soak claim |
 
-Companion L1 repos (separate): [`dup-protocol`](https://github.com/Gruver87/dup-protocol), [`dup-protocol-experimental`](https://github.com/Gruver87/dup-protocol-experimental).
+Companion L1 repos (separate): [`dup-protocol`](https://github.com/Gruver87/dup-protocol), [`dup-protocol-experimental`](https://github.com/Gruver87/dup-protocol-experimental).  
+Agent skills: [`dup-agent-skills`](https://github.com/Gruver87/dup-agent-skills) — [`AGENT_SKILLS.md`](AGENT_SKILLS.md).
 
 ## Current pin snapshot (0.2.89)
 

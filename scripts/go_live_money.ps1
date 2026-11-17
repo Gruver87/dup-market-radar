@@ -6,7 +6,9 @@
 #
 # Not financial advice — docs/DISCLAIMER.md / docs/LIVE_MONEY.md
 param(
-    [switch]$SkipOpsReadyCheck
+    [switch]$SkipOpsReadyCheck,
+    # Report blockers and exit 0 even when FAIL — for DX status (never claims live PASS).
+    [switch]$Status
 )
 
 $ErrorActionPreference = "Stop"
@@ -99,6 +101,11 @@ if ($fail.Count -gt 0) {
     $fail | ForEach-Object { Write-Host " - $_" }
     Write-Host ""
     Write-Host "Fix .env / go_ready, then re-run. Default lab config stays dry_run:true."
+    Write-Host "48h soak: not this script."
+    if ($Status) {
+        Write-Host "STATUS mode: exit 0 with blockers listed (not a live PASS)."
+        exit 0
+    }
     exit 1
 }
 

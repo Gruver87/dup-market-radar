@@ -49,7 +49,8 @@ Against `http://127.0.0.1:8787` — detail [`docs/MCP.md`](https://github.com/Gr
 | `radar_telegram_status` | GET `/api/telegram/status` |
 | `radar_recovery_status` | GET `/api/ops/recovery` |
 
-Never place-order / enable auto / futures. Lab: `python scripts/radar_mcp_lab.py` in skills repo (SKIP if radar down).
+Never place-order / enable auto / futures.  
+Lab (skills repo): `.\scripts\load_radar_env.ps1` then `python scripts/radar_mcp_lab.py` (SKIP if radar down; keyed tools need `RADAR_API_KEY` in `.env`).
 
 ## Operator gates (this repo)
 

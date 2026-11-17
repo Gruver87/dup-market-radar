@@ -9,6 +9,7 @@ Default config is **lab-safe**: `auto_trade.dry_run: true`, auto **OFF**.
 
 ```powershell
 .\scripts\go_live_money.ps1
+.\scripts\go_live_money.ps1 -Status   # list blockers; exit 0 (not a live PASS)
 ```
 
 Fail-closed without `.env` KuCoin Spot keys + `RADAR_API_KEY`, `READY_OPS.json` (`ops_ready=true`), and `radar_native`.  

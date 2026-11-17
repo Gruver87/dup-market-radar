@@ -64,6 +64,8 @@ def main() -> int:
     need(ROOT / "docs" / "LIVE_MONEY.md", "go_live_money.ps1", "live_money_script_doc")
     need(ROOT / "scripts" / "go_ready.ps1", "GO_READY", "go_ready_script")
     need(ROOT / "scripts" / "go_live_money.ps1", "GO_LIVE_MONEY", "go_live_money_script")
+    need(ROOT / "scripts" / "go_live_money.ps1", "Status", "go_live_money_status")
+    need(ROOT / "docs" / "LIVE_MONEY.md", "-Status", "live_money_status_doc")
     need(ROOT / "config" / "live_money.yaml", "dry_run: false", "live_money_overlay")
     need(ROOT / "config" / "live_money.yaml", "spot_alts", "live_money_spot_only")
     need(ROOT / "docs" / "grafana" / "prometheus-scrape.yml", "metrics_path", "grafana_scrape")

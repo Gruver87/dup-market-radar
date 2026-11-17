@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import os
-
 import pytest
 
 from radar.config import load_config
 from radar.trade.auto_engine import FUTURES_BLOCK
+
 
 
 @pytest.fixture(autouse=True)

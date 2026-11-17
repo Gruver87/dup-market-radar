@@ -1,7 +1,5 @@
 """PWA shell assets — installable panel; API must not be SW-cached."""
 
-from pathlib import Path
-
 from fastapi.testclient import TestClient
 
 from radar.api.app import DASHBOARD, app

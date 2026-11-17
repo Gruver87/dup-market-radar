@@ -53,7 +53,8 @@ copy .env.example .env   # fill keys only if you trade
 .\scripts\run_radar.ps1
 ```
 
-Open [http://127.0.0.1:8787/](http://127.0.0.1:8787/) — bind is loopback by default in Docker compose.
+Open [http://127.0.0.1:8787/](http://127.0.0.1:8787/) — bind is loopback by default in Docker compose.  
+Phone panel (PWA): [`docs/PWA.md`](docs/PWA.md) — install dashboard on Android; radar stays on the host.
 
 ```powershell
 # Ops-ready (recommended once per host before daily use):
@@ -127,6 +128,10 @@ Copy [`.env.example`](.env.example) → `.env`. **Never commit `.env`.**
 | `WS /ws` | Live nudge (snapshot / alert / trade) |
 
 ---
+
+## PWA / Android panel (optional)
+
+Install the dashboard from Chrome (Add to Home / Install). The phone is a **remote panel** — see [`docs/PWA.md`](docs/PWA.md). For off-LAN access use HTTPS reverse-proxy; do not expose `:8787` raw.
 
 ## Telegram (optional)
 

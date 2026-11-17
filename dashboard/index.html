@@ -2,8 +2,17 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="google" content="notranslate" />
+  <meta name="theme-color" content="#0e1116" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Radar" />
+  <meta name="description" content="DUP Market Radar — phone panel for your host radar. Not financial advice." />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png" />
   <title>DUP Market Radar</title>
   <style>
     :root {
@@ -335,6 +344,53 @@
       margin-left: 8px;
       max-width: 80px;
     }
+    /* PWA / Android panel */
+    body {
+      padding-bottom: env(safe-area-inset-bottom, 0);
+      padding-left: env(safe-area-inset-left, 0);
+      padding-right: env(safe-area-inset-right, 0);
+    }
+    header { padding-top: max(12px, env(safe-area-inset-top, 0px)); }
+    .pwa-banner {
+      display: none;
+      padding: 8px 24px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      background: #0c1016;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .pwa-banner.show { display: flex; }
+    .pwa-banner button {
+      background: #152030;
+      border: 1px solid var(--accent);
+      color: var(--text);
+      padding: 8px 12px;
+      font: inherit;
+      font-size: 0.8rem;
+      min-height: 40px;
+      cursor: pointer;
+    }
+    @media (max-width: 720px) {
+      header { padding: 12px 14px 10px; gap: 8px; }
+      h1 { font-size: 1.15rem; }
+      .disclaimer, .pwa-banner, nav.pages, nav.sectors { padding-left: 14px; padding-right: 14px; }
+      button.nav-btn, button.tab, .toolbar button, .auto-off, .refresh {
+        min-height: 44px;
+        padding: 10px 14px;
+      }
+      .toolbar { width: 100%; justify-content: flex-start; }
+      main { padding: 12px 14px 28px; }
+      .modal { width: min(100%, 420px); margin: 12px; max-height: calc(100vh - 24px); overflow: auto; }
+      table { font-size: 0.78rem; }
+      td .actions button { min-height: 40px; }
+    }
+    @media (display-mode: standalone) {
+      .pwa-banner { display: none !important; }
+    }
   </style>
 </head>
 <body>
@@ -352,6 +408,10 @@
       <button class="refresh" id="refresh" type="button" data-i18n="refresh">Обновить</button>
     </div>
   </header>
+  <div class="pwa-banner" id="pwaBanner" role="status">
+    <span id="pwaBannerText" data-i18n="pwa_hint">Можно установить как приложение (пульт к радару на компе).</span>
+    <button type="button" id="pwaInstall" data-i18n="pwa_install">Установить</button>
+  </div>
   <div class="disclaimer" id="disclaimer" data-i18n="disclaimer">
     Watchlist · ручные Купить/Продать · авто ON/OFF (спот/мемы/листинги, без фьючерсов). Не финансовый совет.
   </div>
@@ -434,6 +494,7 @@
           <li data-i18n="help_6">Авто-покупка: setup «лонг/откат» или новый листинг, score ≥ порога, без риск-флагов. Авто-продажа: fade-watch или стоп-лосс % от входа (см. config).</li>
           <li data-i18n="help_7">Нужен <span class="key">.env</span> с ключами KuCoin. Можно включить <span class="key">auto_trade.dry_run: true</span> для лога без ордеров.</li>
           <li data-i18n="help_8"><span class="key">Telegram</span> — алерты + /time /fx /lang. Токен и chat id в <span class="key">.env</span>.</li>
+          <li data-i18n="help_9"><span class="key">PWA / Android</span> — установи дашборд как приложение (Chrome → «На экран»). Это пульт к радару на хосте, не сервер в телефоне.</li>
         </ul>
       </div>
     </section>
@@ -485,6 +546,9 @@
         help_6: "Авто-покупка: лонг/откат или листинг; авто-продажа: fade или стоп-лосс.",
         help_7: "Нужен <span class=\"key\">.env</span> с ключами KuCoin. <span class=\"key\">auto_trade.dry_run: true</span> = лог без ордеров.",
         help_8: "<span class=\"key\">Telegram</span> — алерты + /time /fx /lang. Токен в <span class=\"key\">.env</span>.",
+        help_9: "<span class=\"key\">PWA / Android</span> — установи дашборд как приложение (Chrome → «На экран»). Это пульт к радару на хосте, не сервер в телефоне. Автоторговля на телефоне не переносится.",
+        pwa_hint: "Можно установить как приложение (пульт к радару на компе).",
+        pwa_install: "Установить",
         sectors: {
           spot_alts: "Спот альты", futures: "Фьючерсы", futures_long: "Фьючерсы лонг",
           futures_short: "Фьючерсы шорт", memes: "Мемы", stables: "Стейблы",
@@ -516,6 +580,9 @@
         help_6: "Auto-buy: pullback or listing; auto-sell: fade or stop-loss.",
         help_7: "Needs KuCoin keys in <span class=\"key\">.env</span>. <span class=\"key\">auto_trade.dry_run: true</span> = log only.",
         help_8: "<span class=\"key\">Telegram</span> — alerts + /time /fx /lang. Token in <span class=\"key\">.env</span>.",
+        help_9: "<span class=\"key\">PWA / Android</span> — install the dashboard (Chrome → Add to Home). Phone is a remote panel; radar stays on your host. Auto-trade is not moved to the phone.",
+        pwa_hint: "Install as an app (remote panel to your host radar).",
+        pwa_install: "Install",
         sectors: {
           spot_alts: "Spot alts", futures: "Futures", futures_long: "Futures long",
           futures_short: "Futures short", memes: "Memes", stables: "Stables",
@@ -1356,6 +1423,35 @@
       const initial = (location.hash || "").replace(/^#/, "");
       setView(VIEWS.includes(initial) ? initial : "watchlist");
     }
+
+    // PWA install prompt (Android Chrome). Radar stays on host — phone is a panel only.
+    (function bindPwa() {
+      let deferred = null;
+      const banner = document.getElementById("pwaBanner");
+      const btn = document.getElementById("pwaInstall");
+      if (!banner || !btn) return;
+      window.addEventListener("beforeinstallprompt", (e) => {
+        e.preventDefault();
+        deferred = e;
+        banner.classList.add("show");
+      });
+      btn.onclick = async () => {
+        if (!deferred) return;
+        banner.classList.remove("show");
+        try {
+          deferred.prompt();
+          await deferred.userChoice;
+        } catch (_) { /* soft */ }
+        deferred = null;
+      };
+      window.addEventListener("appinstalled", () => {
+        banner.classList.remove("show");
+        deferred = null;
+      });
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
+      }
+    })();
 
     // Optional live ticks — HTTP poll remains source of truth; WS only nudges refresh.
     // Self-reconnect with exponential backoff after network drop (does not replace poll).

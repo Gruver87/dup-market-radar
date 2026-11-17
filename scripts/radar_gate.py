@@ -25,6 +25,11 @@ def need(path: Path, needle: str, label: str) -> None:
         FAILURES.append(f"missing_needle:{label}:{needle[:64]}")
 
 
+def need_exists(path: Path, label: str) -> None:
+    if not path.is_file() or path.stat().st_size <= 0:
+        FAILURES.append(f"missing_file:{label}:{path.name}")
+
+
 def main() -> int:
     cfg = ROOT / "config" / "default.yaml"
     need(cfg, "deployment_mode:", "deployment_mode")
@@ -61,6 +66,14 @@ def main() -> int:
     need(ROOT / "config" / "live_money.yaml", "spot_alts", "live_money_spot_only")
     need(ROOT / "docs" / "grafana" / "prometheus-scrape.yml", "metrics_path", "grafana_scrape")
     need(ROOT / "docs" / "grafana" / "radar-ops.json", "dup-radar-ops", "grafana_dashboard")
+    need(ROOT / "docs" / "PWA.md", "remote panel", "pwa_doc")
+    need(ROOT / "dashboard" / "manifest.webmanifest", "standalone", "pwa_manifest")
+    need(ROOT / "dashboard" / "sw.js", "dup-radar-shell", "pwa_sw")
+    need_exists(ROOT / "dashboard" / "icons" / "icon-192.png", "pwa_icon_192")
+    need_exists(ROOT / "dashboard" / "icons" / "icon-512.png", "pwa_icon_512")
+    need(ROOT / "src" / "radar" / "api" / "app.py", "/sw.js", "pwa_sw_route")
+    need(ROOT / "src" / "radar" / "api" / "app.py", "manifest.webmanifest", "pwa_manifest_route")
+
     # CI honesty: both workflows must exist; README must not deny ci-native.
     need(ROOT / ".github" / "workflows" / "ci.yml", "python-lab-only", "ci_python_lab")
     need(ROOT / ".github" / "workflows" / "ci-native.yml", "maturin", "ci_native_workflow")

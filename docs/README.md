@@ -10,6 +10,7 @@ Read order for operators:
 3. [`PROFILES.md`](PROFILES.md) — lab / python-lab / ci-native / native / live-money  
 4. [`OPS.md`](OPS.md) — run / verify / Docker  
 4b. [`OPS_READY.md`](OPS_READY.md) — ops-ready gate (`go_ready.ps1`) vs 48h claim  
+4c. [`PWA.md`](PWA.md) — Android PWA panel (host remains the server)  
 5. [`RECOVERY.md`](RECOVERY.md) — self-heal after network / worker death  
 6. [`EVIDENCE_MATRIX.md`](EVIDENCE_MATRIX.md) — claim → pack honesty  
 7. [`DASHBOARD.md`](DASHBOARD.md) — UI pages  

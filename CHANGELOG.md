@@ -2,6 +2,8 @@
 
 ## 0.2.89
 
+- PWA: installable dashboard panel (`manifest.webmanifest` + `/sw.js`); Android remote UI — host remains server; API never cached
+- Docs: `docs/PWA.md`; mobile safe-area / touch targets on dashboard
 - Telegram: `/price` `/unprice` absolute/±% thresholds; `/digest` 1h movers; `/funding`; richer `/status`
 - Paper: `PaperLedger.journal` + `GET /api/trade/journal`; Ops dashboard PnL card
 - Grafana: `docs/grafana/radar-ops.json` + `prometheus-scrape.yml` + `docker-compose.observability.yml`

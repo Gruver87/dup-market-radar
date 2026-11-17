@@ -1421,5 +1421,34 @@ def index() -> FileResponse:
     return FileResponse(path)
 
 
+@app.get("/manifest.webmanifest")
+def pwa_manifest() -> FileResponse:
+    """PWA manifest — phone installable panel (radar stays on host)."""
+    path = DASHBOARD / "manifest.webmanifest"
+    if not path.exists():
+        raise HTTPException(404, detail="manifest missing")
+    return FileResponse(
+        path,
+        media_type="application/manifest+json",
+        headers={"Cache-Control": "public, max-age=300"},
+    )
+
+
+@app.get("/sw.js")
+def pwa_service_worker() -> FileResponse:
+    """Service worker at site root so scope=/ (shell cache only; API never cached)."""
+    path = DASHBOARD / "sw.js"
+    if not path.exists():
+        raise HTTPException(404, detail="service worker missing")
+    return FileResponse(
+        path,
+        media_type="application/javascript; charset=utf-8",
+        headers={
+            "Cache-Control": "no-cache",
+            "Service-Worker-Allowed": "/",
+        },
+    )
+
+
 if DASHBOARD.exists():
     app.mount("/static", StaticFiles(directory=str(DASHBOARD)), name="static")

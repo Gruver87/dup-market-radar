@@ -64,6 +64,7 @@ api:
   trusted_hosts:
     - localhost
     - 127.0.0.1
+    - host.docker.internal   # Prometheus scrape from observability compose
   max_request_body_bytes: 65536          # POST/PUT/PATCH Content-Length cap
   max_request_url_bytes: 2048            # path+query soft refuse 414
   trade_rate_limit_per_min: 30

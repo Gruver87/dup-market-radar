@@ -84,11 +84,26 @@ def score_futures(universe: Dict[str, Any], cfg: Dict[str, Any]) -> List[Dict[st
             + mul_div(25, vol_s, 100)
             + mul_div(10, confluence, 100)
         )
-        entry = (
-            f"{side} watch; mark≈{display_price(int(price))}; funding_i={fr_i}"
-            if fr_i is not None
-            else f"{side} watch; last≈{display_price(int(price))}"
-        )
+        # Watch zones only (not auto TP/SL orders). ±1.5% / ±1.0% around mark.
+        p = int(price)
+        lo15 = mul_div(p, 985, 1000)
+        hi15 = mul_div(p, 1015, 1000)
+        lo10 = mul_div(p, 990, 1000)
+        hi10 = mul_div(p, 1010, 1000)
+        if side == "long":
+            entry = f"long watch; pullback {display_price(lo15)}–{display_price(p)}"
+            exit_h = (
+                f"TP watch {display_price(hi15)}–{display_price(mul_div(p, 1030, 1000))}; "
+                f"invalidate <{display_price(lo10)}"
+            )
+        else:
+            entry = f"short watch; reject {display_price(p)}–{display_price(hi15)}"
+            exit_h = (
+                f"TP watch {display_price(mul_div(p, 970, 1000))}–{display_price(lo15)}; "
+                f"invalidate >{display_price(hi10)}"
+            )
+        if fr_i is not None:
+            entry = f"{entry}; funding_i={fr_i}"
         metrics: Dict[str, Any] = {
             "change_bps": chg_bps,
             "funding_rate_i": fr_i,
@@ -113,6 +128,7 @@ def score_futures(universe: Dict[str, Any], cfg: Dict[str, Any]) -> List[Dict[st
                 score_centi=score,
                 setup=side,
                 entry_hint=entry,
+                exit_hint=exit_h,
                 risk_flags=risks,
                 metrics=metrics,
             )

@@ -1025,8 +1025,45 @@
         const hi = Math.floor((p * 1015) / 1000);
         return `Зона возможного отскока ${fmtPriceI(p)}–${fmtPriceI(hi)}`;
       }
-      if (setup === "short") return `Шорт-watch около ${fmtPriceI(p)}`;
+      if (setup === "short") {
+        const hi = Math.floor((p * 1015) / 1000);
+        return `Шорт-watch · отбой ${fmtPriceI(p)}–${fmtPriceI(hi)}`;
+      }
       return r.entry_hint || "—";
+    }
+
+    /** Futures watch exit (TP / invalidate). Spot/other → em dash. */
+    function exitRu(r) {
+      if (r && r.exit_hint) {
+        const h = String(r.exit_hint);
+        if (r.setup === "long") {
+          return h
+            .replace(/^TP watch /i, "TP ≈ ")
+            .replace(/; invalidate </i, "; стоп-watch <");
+        }
+        if (r.setup === "short") {
+          return h
+            .replace(/^TP watch /i, "TP ≈ ")
+            .replace(/; invalidate >/i, "; стоп-watch >");
+        }
+        return h;
+      }
+      const setup = r && r.setup;
+      const p = r && r.price_i;
+      if (p == null) return "—";
+      if (setup === "long") {
+        const tpLo = Math.floor((p * 1015) / 1000);
+        const tpHi = Math.floor((p * 1030) / 1000);
+        const inv = Math.floor((p * 990) / 1000);
+        return `TP ≈ ${fmtPriceI(tpLo)}–${fmtPriceI(tpHi)}; стоп-watch <${fmtPriceI(inv)}`;
+      }
+      if (setup === "short") {
+        const tpHi = Math.floor((p * 985) / 1000);
+        const tpLo = Math.floor((p * 970) / 1000);
+        const inv = Math.floor((p * 1010) / 1000);
+        return `TP ≈ ${fmtPriceI(tpLo)}–${fmtPriceI(tpHi)}; стоп-watch >${fmtPriceI(inv)}`;
+      }
+      return "—";
     }
 
     function canTradeRow(r) {
@@ -1349,7 +1386,7 @@
       }
       const head = `<table><thead><tr>
         <th>#</th><th>Монета</th><th>Биржа</th><th>Цена</th><th>Δ%</th><th>MTF</th><th>Объём</th>
-        <th>Score</th><th>Что делать</th><th>Зона входа</th><th>Риски</th><th>Сделка</th>
+        <th>Score</th><th>Что делать</th><th>Зона входа</th><th>Зона выхода</th><th>Риски</th><th>Сделка</th>
       </tr></thead><tbody>`;
       const fmtMtf = (r) => {
         const m = r.metrics || {};
@@ -1385,6 +1422,7 @@
           <td class="num">${esc(fmtScoreCenti(r.score_centi))}</td>
           <td class="${esc(s.cls)}">${esc(s.label)}</td>
           <td>${esc(entryRu(r))}</td>
+          <td>${esc(exitRu(r))}</td>
           <td class="flags">${flags}</td>
           <td>${trade}</td>
         </tr>`;

@@ -27,11 +27,26 @@ def test_candidate_caps_flags_hint_url_chain():
     assert all(len(f) <= 64 for f in out["risk_flags"])
     assert len(out["setup"]) == 64
     assert len(out["entry_hint"]) == 256
+    assert "exit_hint" not in out  # optional omitted
     assert out["url"] is None  # non-https refused
     assert len(out["chain"]) == 32
     assert "a" not in out["metrics"]  # float money refused
     assert out["metrics"]["b"] == "ok"
     assert len(out["metrics"]) <= 32
+
+
+def test_candidate_exit_hint_capped():
+    out = candidate(
+        sector="futures",
+        row={"symbol": "BTCUSDT", "venue": "kucoin", "market": "futures"},
+        score_centi=4000,
+        setup="short",
+        entry_hint="short watch",
+        exit_hint="TP watch " + ("x" * 400),
+        risk_flags=[],
+        metrics={},
+    )
+    assert len(out["exit_hint"]) == 256
 
 
 def test_candidate_keeps_https_url_capped():

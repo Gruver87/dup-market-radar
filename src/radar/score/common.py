@@ -194,6 +194,7 @@ def candidate(
     entry_hint: str,
     risk_flags: List[str],
     metrics: Dict[str, Any],
+    exit_hint: Optional[str] = None,
 ) -> Dict[str, Any]:
     url = row.get("url")
     if isinstance(url, str):
@@ -203,7 +204,7 @@ def candidate(
     chain = row.get("chain")
     if isinstance(chain, str):
         chain = chain.strip()[:32]
-    return {
+    out: Dict[str, Any] = {
         "sector": str(sector)[:32],
         "symbol": row.get("symbol"),
         "venue": row.get("venue"),
@@ -226,3 +227,6 @@ def candidate(
             "change_bps": 100,
         },
     }
+    if exit_hint is not None and str(exit_hint).strip():
+        out["exit_hint"] = str(exit_hint)[:256]
+    return out

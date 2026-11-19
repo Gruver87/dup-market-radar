@@ -62,6 +62,23 @@ pub struct Tick {
     pub trade_id: Option<String>,
 }
 
+/// OHLCV bar — integer money; foundation for MTF in Rust.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Bar {
+    pub venue: Venue,
+    pub symbol: String,
+    /// Bar open time (ms), aligned to interval
+    pub open_ms: i64,
+    pub open_i: i64,
+    pub high_i: i64,
+    pub low_i: i64,
+    pub close_i: i64,
+    pub volume_i: i64,
+    /// Interval seconds (60 = 1m, 900 = 15m, …)
+    pub interval_sec: u32,
+    pub trade_count: u32,
+}
+
 impl Tick {
     pub fn notional_quote_i(&self) -> Option<i64> {
         // price_i/PRICE_SCALE * qty_i/PRICE_SCALE * QUOTE_SCALE
@@ -75,6 +92,103 @@ impl Tick {
             return None;
         }
         Some(v as i64)
+    }
+}
+
+/// Align exchange ts_ms down to interval open.
+pub fn bar_open_ms(ts_ms: i64, interval_sec: u32) -> Option<i64> {
+    if interval_sec == 0 || ts_ms < 0 {
+        return None;
+    }
+    let step = (interval_sec as i64).checked_mul(1000)?;
+    Some(ts_ms - (ts_ms.rem_euclid(step)))
+}
+
+/// (to - from) / from in basis points × 1 (integer bps).
+pub fn change_bps(from_i: i64, to_i: i64) -> Option<i64> {
+    if from_i <= 0 {
+        return None;
+    }
+    let num = (to_i as i128 - from_i as i128).checked_mul(10_000)?;
+    let v = num / (from_i as i128);
+    if v > i64::MAX as i128 || v < i64::MIN as i128 {
+        return None;
+    }
+    Some(v as i64)
+}
+
+/// Fold ticks into fixed-interval bars; emits closed bars on rollover.
+#[derive(Debug, Default)]
+pub struct BarAggregator {
+    interval_sec: u32,
+    current: Option<Bar>,
+}
+
+impl BarAggregator {
+    pub fn new(interval_sec: u32) -> Self {
+        Self {
+            interval_sec: interval_sec.max(1),
+            current: None,
+        }
+    }
+
+    pub fn interval_sec(&self) -> u32 {
+        self.interval_sec
+    }
+
+    /// Push a tick. Returns a **closed** bar when the interval rolls.
+    pub fn push(&mut self, tick: &Tick) -> Option<Bar> {
+        let open = bar_open_ms(tick.ts_ms, self.interval_sec)?;
+        match self.current.as_mut() {
+            None => {
+                self.current = Some(Bar {
+                    venue: tick.venue,
+                    symbol: tick.symbol.clone(),
+                    open_ms: open,
+                    open_i: tick.price_i,
+                    high_i: tick.price_i,
+                    low_i: tick.price_i,
+                    close_i: tick.price_i,
+                    volume_i: tick.qty_i.max(0),
+                    interval_sec: self.interval_sec,
+                    trade_count: 1,
+                });
+                None
+            }
+            Some(bar) if bar.open_ms == open && bar.symbol == tick.symbol => {
+                if tick.price_i > bar.high_i {
+                    bar.high_i = tick.price_i;
+                }
+                if tick.price_i < bar.low_i {
+                    bar.low_i = tick.price_i;
+                }
+                bar.close_i = tick.price_i;
+                bar.volume_i = bar.volume_i.saturating_add(tick.qty_i.max(0));
+                bar.trade_count = bar.trade_count.saturating_add(1);
+                None
+            }
+            Some(_) => {
+                let closed = self.current.take();
+                self.current = Some(Bar {
+                    venue: tick.venue,
+                    symbol: tick.symbol.clone(),
+                    open_ms: open,
+                    open_i: tick.price_i,
+                    high_i: tick.price_i,
+                    low_i: tick.price_i,
+                    close_i: tick.price_i,
+                    volume_i: tick.qty_i.max(0),
+                    interval_sec: self.interval_sec,
+                    trade_count: 1,
+                });
+                closed
+            }
+        }
+    }
+
+    /// Emit in-progress bar (partial / end of stream).
+    pub fn flush(&mut self) -> Option<Bar> {
+        self.current.take()
     }
 }
 
@@ -158,5 +272,50 @@ mod tests {
         };
         // 50_000 * 0.001 = 50 USDT → 50e6 micros
         assert_eq!(t.notional_quote_i(), Some(50 * QUOTE_SCALE));
+    }
+
+    #[test]
+    fn bar_rollup_1m() {
+        let mut agg = BarAggregator::new(60);
+        let base = 1_700_000_000_000i64; // aligned-ish
+        let open0 = bar_open_ms(base, 60).unwrap();
+        let t1 = Tick {
+            venue: Venue::Binance,
+            symbol: "BTCUSDT".into(),
+            price_i: 100 * PRICE_SCALE,
+            qty_i: PRICE_SCALE,
+            ts_ms: open0 + 1_000,
+            side: Side::Buy,
+            trade_id: None,
+        };
+        let t2 = Tick {
+            venue: Venue::Binance,
+            symbol: "BTCUSDT".into(),
+            price_i: 110 * PRICE_SCALE,
+            qty_i: PRICE_SCALE,
+            ts_ms: open0 + 2_000,
+            side: Side::Buy,
+            trade_id: None,
+        };
+        assert!(agg.push(&t1).is_none());
+        assert!(agg.push(&t2).is_none());
+        let t3 = Tick {
+            venue: Venue::Binance,
+            symbol: "BTCUSDT".into(),
+            price_i: 105 * PRICE_SCALE,
+            qty_i: PRICE_SCALE,
+            ts_ms: open0 + 60_000 + 500,
+            side: Side::Sell,
+            trade_id: None,
+        };
+        let closed = agg.push(&t3).expect("closed bar");
+        assert_eq!(closed.open_i, 100 * PRICE_SCALE);
+        assert_eq!(closed.high_i, 110 * PRICE_SCALE);
+        assert_eq!(closed.close_i, 110 * PRICE_SCALE);
+        assert_eq!(closed.trade_count, 2);
+        assert_eq!(change_bps(closed.open_i, closed.close_i), Some(1_000)); // +10%
+        let partial = agg.flush().expect("partial");
+        assert_eq!(partial.open_i, 105 * PRICE_SCALE);
+        assert_eq!(partial.trade_count, 1);
     }
 }

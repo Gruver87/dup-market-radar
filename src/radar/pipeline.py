@@ -361,6 +361,41 @@ def run_scan(
     t_ingest = int(time.time() * 1000)
     universe = build_universe(http, cfg, force=force)
     ingest_ms = int(time.time() * 1000) - t_ingest
+    # Optional age-gated WS last → universe price_i + additive bar metrics.
+    ws_price_applied = 0
+    ws_bars_stamped = 0
+    ws_kline_skip_n = 0
+    ws_htf_backfill = True
+    try:
+        from radar.ingest.tick_ring import bar_metrics_snapshot as _nws_bars
+        from radar.ingest.tick_ring import configure_from_cfg as _nws_cfg
+        from radar.ingest.tick_ring import overlay_status as _nws_overlay
+        from radar.ingest.ws_bar_stamp import stamp_ws_bar_metrics
+        from radar.ingest.ws_price_apply import apply_ws_to_universe
+
+        _nopts = _nws_cfg(cfg)
+        ws_htf_backfill = bool(_nopts.get("htf_backfill_when_ws", True))
+        if _nopts.get("enabled") and _nopts.get("apply_ws_to_price_i"):
+            _ov = _nws_overlay(cfg)
+            if isinstance(_ov, dict) and _ov.get("ok"):
+                universe, ws_price_applied = apply_ws_to_universe(
+                    universe,
+                    _ov,
+                    max_age_ms=int(_nopts.get("stale_ms") or 15_000),
+                )
+        if _nopts.get("enabled") and _nopts.get("stamp_bar_metrics", True):
+            _bars = _nws_bars()
+            if _bars:
+                promote = bool(_nopts.get("skip_http_kline_when_ws", True))
+                universe, ws_bars_stamped, _skip = stamp_ws_bar_metrics(
+                    universe, _bars, promote_to_mtf=promote
+                )
+                ws_kline_skip_n = len(_skip)
+    except Exception as _ws_exc:  # noqa: BLE001
+        logger.warning(
+            "native_ws price/bar apply soft-fail: %s",
+            redact_exc(_ws_exc, max_len=128),
+        )
     top_n = int(cfg.get("top_n") or 10)
     max_kline = ingest.get("max_kline_gets")
     max_kline_n = int(max_kline) if max_kline is not None else 96
@@ -561,6 +596,7 @@ def run_scan(
             spot_symbols=spot_syms,
             fut_symbols=fut_syms,
             reuse_ttl_ms=reuse_ttl,
+            htf_backfill=ws_htf_backfill,
         )
         _merge_ensure(ensure_acc, part, 1)
 
@@ -573,6 +609,7 @@ def run_scan(
                 spot_symbols=gate_spot,
                 fut_symbols=gate_fut,
                 reuse_ttl_ms=reuse_ttl,
+                htf_backfill=ws_htf_backfill,
             )
             _merge_ensure(ensure_acc, part2, 2)
 
@@ -689,6 +726,7 @@ def run_scan(
                         spot_symbols=miss_spot or set(),
                         fut_symbols=miss_fut or set(),
                         reuse_ttl_ms=reuse_ttl,
+                        htf_backfill=ws_htf_backfill,
                     )
                     timed_out = False
                     try:
@@ -785,6 +823,9 @@ def run_scan(
         "score_backend": backend,
         "score_ms": score_ms,
         "native": native_status(),
+        "native_ws_price_applied": int(ws_price_applied),
+        "native_ws_bars_stamped": int(ws_bars_stamped),
+        "native_ws_kline_skip_n": int(ws_kline_skip_n),
         "universe_size": universe.get("universe_size"),
         "http_stats": http_stats,
         "venue_ms": universe.get("venue_ms") or {},

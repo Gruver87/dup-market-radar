@@ -250,38 +250,50 @@ def vol_vs_median_bps_from_closed(
     return mul_div(recent, 10_000, baseline) - 10_000
 
 
+def _has_15m(row: Dict[str, Any]) -> bool:
+    return row.get("change_bps_15m") is not None or row.get("change_pct_15m") is not None
+
+
+def _missing_higher_tf(row: Dict[str, Any]) -> bool:
+    return row.get("change_bps_1h") is None or row.get("change_bps_4h") is None
+
+
 def _apply_kucoin_spot_buckets(
     row: Dict[str, Any],
     buckets: List[Any],
     *,
     now: int,
     counts: Dict[str, int],
+    preserve_15m: bool = False,
 ) -> None:
     closed = closed_buckets(buckets, period_sec=_PERIOD_15M, now_sec=now)
+    write_15m = not (preserve_15m and _has_15m(row))
     if not closed:
         bucket = pick_closed_bucket(buckets, period_sec=_PERIOD_15M, now_sec=now)
-        if bucket:
+        if bucket and write_15m:
             bps_15 = candle_change_bps(bucket[1], bucket[2])
             if bps_15 is not None:
                 row["change_pct_15m"] = bps_to_pct_str(bps_15)
                 counts["n_15m"] = int(counts.get("n_15m") or 0) + 1
         return
-    bps_15 = candle_change_bps(closed[-1][1], closed[-1][2])
-    if bps_15 is not None:
-        row["change_pct_15m"] = bps_to_pct_str(bps_15)
-        counts["n_15m"] = int(counts.get("n_15m") or 0) + 1
+    if write_15m:
+        bps_15 = candle_change_bps(closed[-1][1], closed[-1][2])
+        if bps_15 is not None:
+            row["change_pct_15m"] = bps_to_pct_str(bps_15)
+            counts["n_15m"] = int(counts.get("n_15m") or 0) + 1
     bps_1h = change_bps_from_closed_span(closed, n_buckets=_BUCKETS_1H)
-    if bps_1h is not None:
+    if bps_1h is not None and row.get("change_bps_1h") is None:
         row["change_pct_1h"] = bps_to_pct_str(bps_1h)
         counts["n_1h"] = int(counts.get("n_1h") or 0) + 1
     bps_4h = change_bps_from_closed_span(closed, n_buckets=_BUCKETS_4H)
-    if bps_4h is not None:
+    if bps_4h is not None and row.get("change_bps_4h") is None:
         row["change_pct_4h"] = bps_to_pct_str(bps_4h)
         counts["n_4h"] = int(counts.get("n_4h") or 0) + 1
-    vol_vs = vol_vs_median_bps_from_closed(closed, n_buckets=_BUCKETS_1H)
-    if vol_vs is not None:
-        row["vol_vs_median_bps"] = int(vol_vs)
-        counts["n_vol_vs"] = int(counts.get("n_vol_vs") or 0) + 1
+    if row.get("vol_vs_median_bps") is None:
+        vol_vs = vol_vs_median_bps_from_closed(closed, n_buckets=_BUCKETS_1H)
+        if vol_vs is not None:
+            row["vol_vs_median_bps"] = int(vol_vs)
+            counts["n_vol_vs"] = int(counts.get("n_vol_vs") or 0) + 1
 
 
 def attach_kucoin_short_windows(
@@ -289,6 +301,7 @@ def attach_kucoin_short_windows(
     spot_rows: List[Dict[str, Any]],
     *,
     top_n: int = DEFAULT_SHORT_SAMPLE_N,
+    preserve_15m: bool = False,
 ) -> Dict[str, int]:
     """Mutate top-N rows with change_pct_{15m,1h,4h} + vol_vs_median_bps. Returns counts."""
     n = max(0, min(64, int(top_n)))
@@ -301,6 +314,11 @@ def attach_kucoin_short_windows(
         if isinstance(r, dict)
         and str(r.get("symbol") or "").endswith("USDT")
         and r.get("symbol_raw")
+        and (
+            (_has_15m(r) and _missing_higher_tf(r))
+            if preserve_15m
+            else True
+        )
     ]
     sample = select_short_window_sample(usdt, top_n=n)
     now = int(time.time())
@@ -334,7 +352,9 @@ def attach_kucoin_short_windows(
 
     for row, buckets in _parallel_map(sample, _fetch):
         if buckets:
-            _apply_kucoin_spot_buckets(row, buckets, now=now, counts=counts)
+            _apply_kucoin_spot_buckets(
+                row, buckets, now=now, counts=counts, preserve_15m=preserve_15m
+            )
             _stamp_mtf(row)
     return counts
 
@@ -495,6 +515,36 @@ def _usdt_missing_sample(
     return select_short_window_sample(usdt, top_n=n) if len(usdt) > n else usdt[:n]
 
 
+def _usdt_htf_sample(
+    rows: List[Dict[str, Any]], *, top_n: int
+) -> List[Dict[str, Any]]:
+    """Rows that already have 15m but still need 1h and/or 4h (WS promote path)."""
+    usdt = [
+        r
+        for r in rows
+        if isinstance(r, dict)
+        and str(r.get("symbol") or "").endswith("USDT")
+        and _has_15m(r)
+        and _missing_higher_tf(r)
+    ]
+    n = max(0, min(64, int(top_n)))
+    if n <= 0:
+        return []
+    return select_short_window_sample(usdt, top_n=n) if len(usdt) > n else usdt[:n]
+
+
+def _mark_htf_http(row: Dict[str, Any]) -> None:
+    """Label HTTP higher-TF fills; do not clobber an existing native_ws 1h label."""
+    if str(row.get("mtf_source") or "") != "native_ws":
+        return
+    if row.get("change_bps_1h") is None and row.get("change_bps_4h") is None:
+        return
+    existing = str(row.get("htf_source") or "")
+    if existing.startswith("native_ws"):
+        return
+    row["htf_source"] = "http_kline"
+
+
 # Stop venue waterfall when target set already meets fill honesty (same as pipeline).
 _ENSURE_FILL_OK = 0.85
 
@@ -533,21 +583,23 @@ def _apply_ohlc_mtf(
     now: int,
     counts: Dict[str, int],
     quote_vol_idx: Optional[int] = None,
+    preserve_15m: bool = False,
 ) -> None:
     """Mutate row from OHLC candles [t,o,h,l,c,…]. Optional quote turnover index."""
     if not isinstance(buckets, list) or not buckets:
         return
     closed = closed_buckets(buckets, period_sec=_PERIOD_15M, now_sec=now)
+    write_15m = not (preserve_15m and _has_15m(row))
     if not closed:
         bucket = pick_closed_bucket(buckets, period_sec=_PERIOD_15M, now_sec=now)
-        if bucket and len(bucket) > _FUT_CLOSE_IDX:
+        if write_15m and bucket and len(bucket) > _FUT_CLOSE_IDX:
             bps_15 = candle_change_bps(bucket[_FUT_OPEN_IDX], bucket[_FUT_CLOSE_IDX])
             if bps_15 is not None:
                 row["change_pct_15m"] = bps_to_pct_str(bps_15)
                 counts["n_15m"] = int(counts.get("n_15m") or 0) + 1
         return
     last = closed[-1]
-    if len(last) > _FUT_CLOSE_IDX:
+    if write_15m and len(last) > _FUT_CLOSE_IDX:
         bps_15 = candle_change_bps(last[_FUT_OPEN_IDX], last[_FUT_CLOSE_IDX])
         if bps_15 is not None:
             row["change_pct_15m"] = bps_to_pct_str(bps_15)
@@ -558,7 +610,7 @@ def _apply_ohlc_mtf(
         open_idx=_FUT_OPEN_IDX,
         close_idx=_FUT_CLOSE_IDX,
     )
-    if bps_1h is not None:
+    if bps_1h is not None and row.get("change_bps_1h") is None:
         row["change_pct_1h"] = bps_to_pct_str(bps_1h)
         counts["n_1h"] = int(counts.get("n_1h") or 0) + 1
     bps_4h = change_bps_from_closed_span_ohlc(
@@ -567,10 +619,14 @@ def _apply_ohlc_mtf(
         open_idx=_FUT_OPEN_IDX,
         close_idx=_FUT_CLOSE_IDX,
     )
-    if bps_4h is not None:
+    if bps_4h is not None and row.get("change_bps_4h") is None:
         row["change_pct_4h"] = bps_to_pct_str(bps_4h)
         counts["n_4h"] = int(counts.get("n_4h") or 0) + 1
-    if quote_vol_idx is not None and "n_vol_vs" in counts:
+    if (
+        quote_vol_idx is not None
+        and "n_vol_vs" in counts
+        and row.get("vol_vs_median_bps") is None
+    ):
         vol_vs = _quote_vol_vs_median_bps(closed, quote_idx=quote_vol_idx)
         if vol_vs is not None:
             row["vol_vs_median_bps"] = int(vol_vs)
@@ -587,6 +643,7 @@ def attach_binance_spot_short_windows(
     spot_rows: List[Dict[str, Any]],
     *,
     top_n: int = DEFAULT_SHORT_SAMPLE_N,
+    preserve_15m: bool = False,
 ) -> Dict[str, int]:
     """Fallback MTF via Binance /api/v3/klines (OHLC layout like futures).
 
@@ -600,7 +657,11 @@ def attach_binance_spot_short_windows(
         if isinstance(r, dict)
         and str(r.get("venue") or "") not in _SKIP_BINANCE_KLINE_VENUES
     ]
-    sample = _usdt_missing_sample(scoped, top_n=top_n)
+    sample = (
+        _usdt_htf_sample(scoped, top_n=top_n)
+        if preserve_15m
+        else _usdt_missing_sample(scoped, top_n=top_n)
+    )
     if not sample:
         return counts
     now = int(time.time())
@@ -648,7 +709,14 @@ def attach_binance_spot_short_windows(
 
     for row, buckets in _parallel_map(sample, _fetch):
         if buckets:
-            _apply_ohlc_mtf(row, buckets, now=now, counts=counts, quote_vol_idx=7)
+            _apply_ohlc_mtf(
+                row,
+                buckets,
+                now=now,
+                counts=counts,
+                quote_vol_idx=7,
+                preserve_15m=preserve_15m,
+            )
             _stamp_mtf(row)
     return counts
 
@@ -658,10 +726,15 @@ def attach_bybit_spot_short_windows(
     spot_rows: List[Dict[str, Any]],
     *,
     top_n: int = DEFAULT_SHORT_SAMPLE_N,
+    preserve_15m: bool = False,
 ) -> Dict[str, int]:
     """Fallback MTF via Bybit v5 spot kline — Bybit-only alts (e.g. BSBUSDT)."""
     counts = {"n_15m": 0, "n_1h": 0, "n_4h": 0, "n_vol_vs": 0}
-    sample = _usdt_missing_sample(spot_rows, top_n=top_n)
+    sample = (
+        _usdt_htf_sample(spot_rows, top_n=top_n)
+        if preserve_15m
+        else _usdt_missing_sample(spot_rows, top_n=top_n)
+    )
     if not sample:
         return counts
     now = int(time.time())
@@ -701,7 +774,14 @@ def attach_bybit_spot_short_windows(
 
     for row, buckets in _parallel_map(sample, _fetch):
         if buckets:
-            _apply_ohlc_mtf(row, buckets, now=now, counts=counts, quote_vol_idx=6)
+            _apply_ohlc_mtf(
+                row,
+                buckets,
+                now=now,
+                counts=counts,
+                quote_vol_idx=6,
+                preserve_15m=preserve_15m,
+            )
             _stamp_mtf(row)
     return counts
 
@@ -711,6 +791,7 @@ def attach_binance_futures_short_windows(
     fut_rows: List[Dict[str, Any]],
     *,
     top_n: int = DEFAULT_FUTURES_SHORT_SAMPLE_N,
+    preserve_15m: bool = False,
 ) -> Dict[str, int]:
     """Fallback MTF via Binance USDT-M /fapi/v1/klines when KuCoin futures miss."""
     counts = {"n_15m": 0, "n_1h": 0, "n_4h": 0}
@@ -720,7 +801,11 @@ def attach_binance_futures_short_windows(
         if isinstance(r, dict)
         and str(r.get("venue") or "") not in _SKIP_BINANCE_KLINE_VENUES
     ]
-    sample = _usdt_missing_sample(scoped, top_n=top_n)
+    sample = (
+        _usdt_htf_sample(scoped, top_n=top_n)
+        if preserve_15m
+        else _usdt_missing_sample(scoped, top_n=top_n)
+    )
     if not sample:
         return counts
     now = int(time.time())
@@ -767,7 +852,9 @@ def attach_binance_futures_short_windows(
 
     for row, buckets in _parallel_map(sample, _fetch):
         if buckets:
-            _apply_ohlc_mtf(row, buckets, now=now, counts=counts)
+            _apply_ohlc_mtf(
+                row, buckets, now=now, counts=counts, preserve_15m=preserve_15m
+            )
             _stamp_mtf(row)
     return counts
 
@@ -777,10 +864,15 @@ def attach_bybit_futures_short_windows(
     fut_rows: List[Dict[str, Any]],
     *,
     top_n: int = DEFAULT_FUTURES_SHORT_SAMPLE_N,
+    preserve_15m: bool = False,
 ) -> Dict[str, int]:
     """Fallback MTF via Bybit v5 linear kline."""
     counts = {"n_15m": 0, "n_1h": 0, "n_4h": 0}
-    sample = _usdt_missing_sample(fut_rows, top_n=top_n)
+    sample = (
+        _usdt_htf_sample(fut_rows, top_n=top_n)
+        if preserve_15m
+        else _usdt_missing_sample(fut_rows, top_n=top_n)
+    )
     if not sample:
         return counts
     now = int(time.time())
@@ -820,7 +912,9 @@ def attach_bybit_futures_short_windows(
 
     for row, buckets in _parallel_map(sample, _fetch):
         if buckets:
-            _apply_ohlc_mtf(row, buckets, now=now, counts=counts)
+            _apply_ohlc_mtf(
+                row, buckets, now=now, counts=counts, preserve_15m=preserve_15m
+            )
             _stamp_mtf(row)
     return counts
 
@@ -830,10 +924,15 @@ def attach_mexc_futures_short_windows(
     fut_rows: List[Dict[str, Any]],
     *,
     top_n: int = DEFAULT_FUTURES_SHORT_SAMPLE_N,
+    preserve_15m: bool = False,
 ) -> Dict[str, int]:
     """Fallback MTF via MEXC contract kline (parallel arrays → OHLC)."""
     counts = {"n_15m": 0, "n_1h": 0, "n_4h": 0}
-    sample = _usdt_missing_sample(fut_rows, top_n=top_n)
+    sample = (
+        _usdt_htf_sample(fut_rows, top_n=top_n)
+        if preserve_15m
+        else _usdt_missing_sample(fut_rows, top_n=top_n)
+    )
     if not sample:
         return counts
     now = int(time.time())
@@ -871,7 +970,9 @@ def attach_mexc_futures_short_windows(
 
     for row, buckets in _parallel_map(sample, _fetch):
         if buckets:
-            _apply_ohlc_mtf(row, buckets, now=now, counts=counts)
+            _apply_ohlc_mtf(
+                row, buckets, now=now, counts=counts, preserve_15m=preserve_15m
+            )
             _stamp_mtf(row)
     return counts
 
@@ -879,6 +980,115 @@ def attach_mexc_futures_short_windows(
 def _merge_window_counts(dst: Dict[str, int], src: Dict[str, int]) -> None:
     for k, v in src.items():
         dst[k] = int(dst.get(k) or 0) + int(v or 0)
+
+
+def _ws_htf_candidates(
+    rows: List[Dict[str, Any]],
+    *,
+    symbols: Optional[set[str]] = None,
+) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        if str(r.get("mtf_source") or "") != "native_ws":
+            continue
+        if not _missing_higher_tf(r):
+            continue
+        if symbols is not None and str(r.get("symbol") or "") not in symbols:
+            continue
+        out.append(r)
+    return out
+
+
+def _htf_backfill_spot(
+    http: AllowlistHttp, rows: List[Dict[str, Any]], *, top_n: int
+) -> Dict[str, int]:
+    """HTTP 1h/4h only — keep existing WS/native change_bps_15m."""
+    counts: Dict[str, int] = {"n_15m": 0, "n_1h": 0, "n_4h": 0, "n_vol_vs": 0}
+    if not rows:
+        return counts
+    n = max(0, min(64, int(top_n)))
+    for r in rows:
+        derived = kucoin_spot_symbol_raw(r)
+        if derived and not r.get("symbol_raw"):
+            r["symbol_raw"] = derived
+    sw = attach_kucoin_short_windows(
+        http, rows, top_n=n, preserve_15m=True
+    )
+    _merge_window_counts(counts, sw)
+    for r in rows:
+        _apply_pct_windows_to_bps(r)
+        _mark_htf_http(r)
+    still = [r for r in rows if _missing_higher_tf(r)]
+    if still:
+        bw = attach_binance_spot_short_windows(
+            http, still, top_n=min(len(still), n), preserve_15m=True
+        )
+        _merge_window_counts(counts, bw)
+        for r in still:
+            _apply_pct_windows_to_bps(r)
+            _mark_htf_http(r)
+    still = [r for r in rows if _missing_higher_tf(r)]
+    if still:
+        yw = attach_bybit_spot_short_windows(
+            http, still, top_n=min(len(still), n), preserve_15m=True
+        )
+        _merge_window_counts(counts, yw)
+        for r in still:
+            _apply_pct_windows_to_bps(r)
+            _mark_htf_http(r)
+    return counts
+
+
+def _htf_backfill_fut(
+    http: AllowlistHttp, rows: List[Dict[str, Any]], *, top_n: int
+) -> Dict[str, int]:
+    counts: Dict[str, int] = {"n_15m": 0, "n_1h": 0, "n_4h": 0}
+    if not rows:
+        return counts
+    n = max(0, min(64, int(top_n)))
+    for r in rows:
+        if str(r.get("venue") or "") != "kucoin":
+            continue
+        derived = kucoin_futures_symbol_raw(r)
+        if derived and not r.get("symbol_raw"):
+            r["symbol_raw"] = derived
+    fw = attach_kucoin_futures_short_windows(
+        http, rows, top_n=n, preserve_15m=True
+    )
+    _merge_window_counts(counts, fw)
+    for r in rows:
+        _apply_pct_windows_to_bps(r)
+        _mark_htf_http(r)
+    still = [r for r in rows if _missing_higher_tf(r)]
+    if still:
+        bfw = attach_binance_futures_short_windows(
+            http, still, top_n=min(len(still), n), preserve_15m=True
+        )
+        _merge_window_counts(counts, bfw)
+        for r in still:
+            _apply_pct_windows_to_bps(r)
+            _mark_htf_http(r)
+    still = [r for r in rows if _missing_higher_tf(r)]
+    if still:
+        yfw = attach_bybit_futures_short_windows(
+            http, still, top_n=min(len(still), n), preserve_15m=True
+        )
+        _merge_window_counts(counts, yfw)
+        for r in still:
+            _apply_pct_windows_to_bps(r)
+            _mark_htf_http(r)
+    still = [r for r in rows if _missing_higher_tf(r)]
+    if still:
+        mfw = attach_mexc_futures_short_windows(
+            http, still, top_n=min(len(still), n), preserve_15m=True
+        )
+        _merge_window_counts(counts, mfw)
+        for r in still:
+            _apply_pct_windows_to_bps(r)
+            _mark_htf_http(r)
+    return counts
 
 
 def ensure_universe_short_windows(
@@ -891,6 +1101,7 @@ def ensure_universe_short_windows(
     fut_top_n: int = DEFAULT_FUTURES_SHORT_SAMPLE_N,
     reuse_ttl_ms: int = 0,
     fill_threshold: float = _ENSURE_FILL_OK,
+    htf_backfill: bool = True,
 ) -> Dict[str, Any]:
     """Fill MTF on merged rows missing windows.
 
@@ -898,6 +1109,8 @@ def ensure_universe_short_windows(
     Spot and futures waterfalls run in parallel (shared atomic kline budget).
     Short-circuits venue stages when target fill ≥ fill_threshold.
     Process-lifetime MTF cache hydrates rows before the waterfall (0.2.87).
+    When ``htf_backfill`` — selective HTTP 1h/4h for ``mtf_source=native_ws``
+    rows that skipped full kline GET (preserve WS 15m).
     """
     from radar.ingest.mtf_cache import mtf_cache
 
@@ -1081,6 +1294,29 @@ def ensure_universe_short_windows(
 
     stage_ms = {**stage_s, **stage_f}
     skipped_venues = skip_s + skip_f
+
+    htf_spot_counts: Dict[str, int] = {}
+    htf_fut_counts: Dict[str, int] = {}
+    htf_spot_n = 0
+    htf_fut_n = 0
+    if htf_backfill:
+        ws_spot = _ws_htf_candidates(spot_all, symbols=spot_symbols)
+        ws_fut = _ws_htf_candidates(fut_all, symbols=fut_symbols)
+        htf_spot_n = len(ws_spot)
+        htf_fut_n = len(ws_fut)
+        stage_cap_s = max(int(spot_top_n), _WATERFALL_STAGE_CAP)
+        stage_cap_f = max(int(fut_top_n), _WATERFALL_STAGE_CAP)
+        t_htf = int(time.time() * 1000)
+        if ws_spot:
+            htf_spot_counts = _htf_backfill_spot(
+                http, ws_spot[:stage_cap_s], top_n=stage_cap_s
+            )
+        if ws_fut:
+            htf_fut_counts = _htf_backfill_fut(
+                http, ws_fut[:stage_cap_f], top_n=stage_cap_f
+            )
+        stage_ms["ws_htf_backfill_ms"] = int(time.time() * 1000) - t_htf
+
     rem_spot = cache.remember_rows(spot_all, market="spot")
     rem_fut = cache.remember_rows(fut_all, market="futures")
     out = {
@@ -1098,6 +1334,10 @@ def ensure_universe_short_windows(
         "mtf_cache_hydrate_fut": int(hyd_fut),
         "mtf_cache_remember_spot": int(rem_spot),
         "mtf_cache_remember_fut": int(rem_fut),
+        "ws_htf_backfill_spot_n": int(htf_spot_n),
+        "ws_htf_backfill_fut_n": int(htf_fut_n),
+        "ws_htf_backfill_spot": htf_spot_counts,
+        "ws_htf_backfill_fut": htf_fut_counts,
     }
     universe["short_window_ensure"] = out
     return out
@@ -1123,6 +1363,7 @@ def attach_kucoin_futures_short_windows(
     fut_rows: List[Dict[str, Any]],
     *,
     top_n: int = DEFAULT_FUTURES_SHORT_SAMPLE_N,
+    preserve_15m: bool = False,
 ) -> Dict[str, int]:
     """Mutate top-N futures rows with change_pct_{15m,1h,4h} from futures klines."""
     n = max(0, min(64, int(top_n)))
@@ -1135,6 +1376,11 @@ def attach_kucoin_futures_short_windows(
         if isinstance(r, dict)
         and str(r.get("symbol") or "").endswith("USDT")
         and r.get("symbol_raw")
+        and (
+            (_has_15m(r) and _missing_higher_tf(r))
+            if preserve_15m
+            else True
+        )
     ]
     sample = select_short_window_sample(usdt, top_n=n)
     now = int(time.time())
@@ -1171,6 +1417,8 @@ def attach_kucoin_futures_short_windows(
 
     for row, buckets in _parallel_map(sample, _fetch):
         if buckets:
-            _apply_ohlc_mtf(row, buckets, now=now, counts=counts)
+            _apply_ohlc_mtf(
+                row, buckets, now=now, counts=counts, preserve_15m=preserve_15m
+            )
             _stamp_mtf(row)
     return counts

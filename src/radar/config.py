@@ -545,12 +545,59 @@ def validate_config(cfg: Dict[str, Any]) -> None:
             else:
                 if "enabled" in nws and not isinstance(nws["enabled"], bool):
                     errors.append("ingest.native_ws.enabled must be bool")
+                _nws_venues = {"binance", "bybit", "kucoin", "mexc"}
                 venue = nws.get("venue")
                 if venue is not None and (
                     not isinstance(venue, str)
-                    or venue.strip().lower() not in {"binance", "bybit", "kucoin"}
+                    or venue.strip().lower() not in _nws_venues
                 ):
-                    errors.append("ingest.native_ws.venue must be binance|bybit|kucoin")
+                    errors.append(
+                        "ingest.native_ws.venue must be binance|bybit|kucoin|mexc"
+                    )
+                venues = nws.get("venues")
+                if venues is not None:
+                    if (
+                        not isinstance(venues, list)
+                        or not venues
+                        or len(venues) > 3
+                        or not all(
+                            isinstance(v, str)
+                            and v.strip().lower() in _nws_venues
+                            for v in venues
+                        )
+                    ):
+                        errors.append(
+                            "ingest.native_ws.venues must be list[str] len 1..3 "
+                            "each binance|bybit|kucoin|mexc"
+                        )
+                vsyms = nws.get("venue_symbols")
+                if vsyms is not None:
+                    if not isinstance(vsyms, dict):
+                        errors.append("ingest.native_ws.venue_symbols must be a mapping")
+                    else:
+                        for vk, vv in vsyms.items():
+                            if (
+                                not isinstance(vk, str)
+                                or vk.strip().lower() not in _nws_venues
+                            ):
+                                errors.append(
+                                    "ingest.native_ws.venue_symbols keys must be "
+                                    "binance|bybit|kucoin|mexc"
+                                )
+                                break
+                            if (
+                                not isinstance(vv, list)
+                                or not vv
+                                or len(vv) > 32
+                                or not all(
+                                    isinstance(s, str) and s.strip() for s in vv
+                                )
+                            ):
+                                errors.append(
+                                    "ingest.native_ws.venue_symbols values must be "
+                                    "list[str] len 1..32"
+                                )
+                                break
                 syms = nws.get("symbols")
                 if syms is not None and (
                     not isinstance(syms, list)
@@ -569,6 +616,41 @@ def validate_config(cfg: Dict[str, Any]) -> None:
                     errors.append("ingest.native_ws.stale_ms must be int 1000..300000")
                 if "annotate_rows" in nws and not isinstance(nws["annotate_rows"], bool):
                     errors.append("ingest.native_ws.annotate_rows must be bool")
+                if "apply_ws_to_price_i" in nws and not isinstance(
+                    nws["apply_ws_to_price_i"], bool
+                ):
+                    errors.append("ingest.native_ws.apply_ws_to_price_i must be bool")
+                if "stamp_bar_metrics" in nws and not isinstance(
+                    nws["stamp_bar_metrics"], bool
+                ):
+                    errors.append("ingest.native_ws.stamp_bar_metrics must be bool")
+                if "skip_http_kline_when_ws" in nws and not isinstance(
+                    nws["skip_http_kline_when_ws"], bool
+                ):
+                    errors.append("ingest.native_ws.skip_http_kline_when_ws must be bool")
+                if "htf_backfill_when_ws" in nws and not isinstance(
+                    nws["htf_backfill_when_ws"], bool
+                ):
+                    errors.append("ingest.native_ws.htf_backfill_when_ws must be bool")
+                bis = nws.get("bar_interval_sec")
+                if bis is not None and (
+                    not isinstance(bis, int) or bis < 5 or bis > 14400
+                ):
+                    errors.append(
+                        "ingest.native_ws.bar_interval_sec must be int 5..14400"
+                    )
+                biv = nws.get("bar_intervals")
+                if biv is not None:
+                    if (
+                        not isinstance(biv, list)
+                        or not biv
+                        or len(biv) > 5
+                        or not all(isinstance(x, int) and 5 <= x <= 14400 for x in biv)
+                    ):
+                        errors.append(
+                            "ingest.native_ws.bar_intervals must be list[int] len 1..5 "
+                            "each 5..14400"
+                        )
 
     bubbles = cfg.get("bubbles")
     if bubbles is not None:

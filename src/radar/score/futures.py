@@ -42,8 +42,16 @@ def score_futures(universe: Dict[str, Any], cfg: Dict[str, Any]) -> List[Dict[st
         chg_1h = _opt_int(row.get("change_bps_1h"))
         chg_15m = _opt_int(row.get("change_bps_15m"))
         chg_4h = _opt_int(row.get("change_bps_4h"))
+        chg_ws_1m = _opt_int(row.get("change_bps_ws_1m"))
+        chg_15m_for_blend = chg_15m
+        if chg_15m_for_blend is None and chg_ws_1m is not None:
+            chg_15m_for_blend = chg_ws_1m
 
-        mom, risks = blend_mtf_momentum(int(chg_bps), chg_1h, chg_15m, chg_4h)
+        mom, risks = blend_mtf_momentum(
+            int(chg_bps), chg_1h, chg_15m_for_blend, chg_4h
+        )
+        if chg_15m is None and chg_ws_1m is not None:
+            risks.append("mtf_proxy_ws_1m")
         if oi is not None and oi > 0:
             oi_s = log_volume_score_i(int(oi), int(min_oi_i))
             if oi < min_oi_i:
@@ -93,6 +101,11 @@ def score_futures(universe: Dict[str, Any], cfg: Dict[str, Any]) -> List[Dict[st
             metrics["change_bps_15m"] = chg_15m
         if chg_4h is not None:
             metrics["change_bps_4h"] = chg_4h
+        if chg_ws_1m is not None:
+            metrics["change_bps_ws_1m"] = chg_ws_1m
+        ws5 = _opt_int(row.get("change_bps_ws_5m"))
+        if ws5 is not None:
+            metrics["change_bps_ws_5m"] = ws5
         out.append(
             candidate(
                 sector="futures",

@@ -345,3 +345,104 @@ def test_mexc_futures_contract_path_and_parallel_ohlc():
     _apply_ohlc_mtf(row, buckets, now=10_000, counts=counts)
     assert row.get("change_pct_1h") == "4.00"
     assert counts["n_15m"] == 1
+
+
+def test_apply_ohlc_preserve_15m_fills_1h():
+    """WS-promoted 15m must not be overwritten; 1h still fills from candles."""
+    from radar.ingest.short_window import _apply_ohlc_mtf
+
+    now = 10_000
+    buckets = []
+    for i in range(4):
+        start = 1000 + i * 900
+        o = 100 + i
+        c = 101 + i
+        buckets.append(
+            [str(start), str(o), str(c), str(o), str(c), "1", "0", str(1000 + i)]
+        )
+    row: dict = {
+        "symbol": "BTCUSDT",
+        "change_bps_15m": 42,
+        "mtf_source": "native_ws",
+    }
+    counts = {"n_15m": 0, "n_1h": 0, "n_4h": 0, "n_vol_vs": 0}
+    _apply_ohlc_mtf(
+        row, buckets, now=now, counts=counts, quote_vol_idx=7, preserve_15m=True
+    )
+    assert row["change_bps_15m"] == 42
+    assert row.get("change_pct_15m") is None
+    assert counts["n_15m"] == 0
+    assert row.get("change_pct_1h") == "4.00"
+    assert counts["n_1h"] == 1
+
+
+def test_ws_htf_backfill_preserve_and_label(monkeypatch):
+    """ensure htf path fills 1h/4h for native_ws rows without wiping 15m."""
+    from radar.ingest import short_window as sw
+    from radar.ingest.kline_budget import init_kline_budget
+
+    # 16 closed 15m bars need now >= last_start+900 (14500+900)
+    now = 20_000
+    buckets = []
+    for i in range(16):
+        start = 1000 + i * 900
+        o = 100 + i
+        c = 101 + i
+        buckets.append(
+            [str(start), str(o), str(c), str(o), str(c), "1", "0", str(1000 + i)]
+        )
+
+    class _Http:
+        pass
+
+    http = _Http()
+    init_kline_budget(http, 32)
+
+    def _fake_binance(http_obj, rows, *, top_n=8, preserve_15m=False):
+        counts = {"n_15m": 0, "n_1h": 0, "n_4h": 0, "n_vol_vs": 0}
+        for row in rows[:top_n]:
+            sw._apply_ohlc_mtf(
+                row,
+                buckets,
+                now=now,
+                counts=counts,
+                quote_vol_idx=7,
+                preserve_15m=preserve_15m,
+            )
+            sw._stamp_mtf(row)
+        return counts
+
+    monkeypatch.setattr(sw, "attach_kucoin_short_windows", lambda *a, **k: {
+        "n_15m": 0, "n_1h": 0, "n_4h": 0, "n_vol_vs": 0
+    })
+    monkeypatch.setattr(sw, "attach_binance_spot_short_windows", _fake_binance)
+    monkeypatch.setattr(
+        sw,
+        "attach_bybit_spot_short_windows",
+        lambda *a, **k: {"n_15m": 0, "n_1h": 0, "n_4h": 0, "n_vol_vs": 0},
+    )
+
+    uni = {
+        "spot": [
+            {
+                "symbol": "BTCUSDT",
+                "venue": "binance",
+                "change_bps_15m": 42,
+                "mtf_source": "native_ws",
+                "mtf_attached_at_ms": now * 1000,
+            }
+        ],
+        "futures": [],
+    }
+    out = sw.ensure_universe_short_windows(
+        http, uni, spot_symbols={"BTCUSDT"}, fut_symbols=set(), htf_backfill=True
+    )
+    row = uni["spot"][0]
+    assert row["change_bps_15m"] == 42
+    # last-4 opens at 112 → close 116; full-16 open 100 → close 116
+    assert row.get("change_bps_1h") == 357
+    assert row.get("change_bps_4h") == 1600
+    assert row["mtf_source"] == "native_ws"
+    assert row.get("htf_source") == "http_kline"
+    assert out.get("ws_htf_backfill_spot_n") == 1
+    assert int(out.get("ws_htf_backfill_spot", {}).get("n_1h") or 0) >= 1

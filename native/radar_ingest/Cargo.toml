@@ -17,6 +17,14 @@ path = "src/bin/bybit_trades.rs"
 name = "radar-ingest-kucoin"
 path = "src/bin/kucoin_trades.rs"
 
+[[bin]]
+name = "radar-ingest-mexc"
+path = "src/bin/mexc_trades.rs"
+
+[[bin]]
+name = "radar-ingest-bars"
+path = "src/bin/bars_binance.rs"
+
 [dependencies]
 radar_core = { path = "../radar_core" }
 serde = { workspace = true }
@@ -28,3 +36,8 @@ url = "2"
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "native-tls"] }
+prost = "0.13"
+
+[build-dependencies]
+prost-build = "0.13"
+protoc-bin-vendored = "3"

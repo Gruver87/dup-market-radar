@@ -1,6 +1,6 @@
 # Architecture
 
-**Pin:** 0.2.93 | Index: [`README.md`](README.md)
+**Pin:** 0.2.104 | Index: [`README.md`](README.md)
 
 **Blueprint (columns / constructor template):** [`ARCHITECTURE_BLUEPRINT.md`](ARCHITECTURE_BLUEPRINT.md) — module assembly drawing after full repo scan.
 
@@ -25,8 +25,9 @@ Dashboard / Telegram / WebSocket (/ws) / Webhook / Market Ping
                                       + annotate_rows → sector ws_* fields
 ```
 
-HTTP poll remains the snapshot **source of truth**. `native_ws` / `ws_*` are additive (`ingest.native_ws.enabled`, default off) — never mutate scored `price_i`.
-Smoke: `.\check_ingest.ps1` · venue: `.\run_ingest_binance.ps1` / `bybit` / `kucoin`.
+HTTP poll remains the baseline. `native_ws` annotate (`ws_*`) is additive. `apply_ws_to_price_i` (default **true**) age-gate-refreshes universe `price_i` before score when sidecar is fresh (keeps `price_i_http`).
+Bars: sidecar 1m…4h → `change_bps_ws_*`; dense promote 15m/1h/4h (labeled). Multi-venue (`venues`, optional `venue_symbols`); MEXC via `radar-ingest-mexc`. HTTP HTF backfill when WS higher-TF not dense.
+Verify: `.\verify_native.ps1`.
 
 Transport (HTTP/TG) must not reach raw L1-style state: this product is **not** the L1. Persistence is JSON under `data/` (positions, watches, oid ledger) with integrity checks where applicable.
 

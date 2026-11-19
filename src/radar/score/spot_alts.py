@@ -41,14 +41,25 @@ def score_spot_alts(universe: Dict[str, Any], cfg: Dict[str, Any]) -> List[Dict[
         chg_1h = row.get("change_bps_1h")
         chg_15m = row.get("change_bps_15m")
         chg_4h = row.get("change_bps_4h")
+        chg_ws_1m = row.get("change_bps_ws_1m")
         if chg_1h is not None:
             chg_1h = int(chg_1h)
         if chg_15m is not None:
             chg_15m = int(chg_15m)
         if chg_4h is not None:
             chg_4h = int(chg_4h)
+        if chg_ws_1m is not None:
+            chg_ws_1m = int(chg_ws_1m)
+        # Soft proxy only when HTTP 15m missing — risk flag keeps honesty.
+        chg_15m_for_blend = chg_15m
+        if chg_15m_for_blend is None and chg_ws_1m is not None:
+            chg_15m_for_blend = chg_ws_1m
 
-        momentum, risks = blend_mtf_momentum(int(chg_bps), chg_1h, chg_15m, chg_4h)
+        momentum, risks = blend_mtf_momentum(
+            int(chg_bps), chg_1h, chg_15m_for_blend, chg_4h
+        )
+        if chg_15m is None and chg_ws_1m is not None:
+            risks.append("mtf_proxy_ws_1m")
         vol_vs = row.get("vol_vs_median_bps")
         if vol_vs is not None:
             vol_vs = int(vol_vs)
@@ -104,6 +115,11 @@ def score_spot_alts(universe: Dict[str, Any], cfg: Dict[str, Any]) -> List[Dict[
             metrics["change_bps_15m"] = chg_15m
         if chg_4h is not None:
             metrics["change_bps_4h"] = chg_4h
+        if chg_ws_1m is not None:
+            metrics["change_bps_ws_1m"] = chg_ws_1m
+        ws5 = row.get("change_bps_ws_5m")
+        if ws5 is not None:
+            metrics["change_bps_ws_5m"] = int(ws5)
         if vol_vs is not None:
             metrics["vol_vs_median_bps"] = vol_vs
         if range_bps is not None:

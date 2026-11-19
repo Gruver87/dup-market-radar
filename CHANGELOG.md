@@ -1,5 +1,89 @@
 # Changelog - DUP Market Radar
 
+## 0.2.104
+
+- Native: `radar-ingest-mexc` (spot aggre deals protobuf + JSON fallback)
+- Python `venues` / `venue` accept `mexc`; `check_ingest` + `run_ingest_mexc.ps1`
+- Package / `__version__` / native pin `0.2.104`
+- Soak / 48h: **not** claimed this pin
+
+## 0.2.103
+
+- Native WS: per-venue subscribe lists (`venue_symbols`) → each ingest proc gets its own symbols
+- Snapshot `symbols_by_venue`; missing venue inherits global `symbols`
+- Package / `__version__` / native pin `0.2.103`
+- Soak / 48h: **not** claimed this pin
+
+## 0.2.102
+
+- Native WS bars: add 4h interval (`14400`; default `[60,300,900,3600,14400]`, up to 5)
+- Dense WS 4h soft-fills `change_bps_4h`; `htf_source=native_ws_bar_htf` when both 1h+4h from WS
+- Package / `__version__` / native pin `0.2.102`
+- Soak / 48h: **not** claimed this pin
+
+## 0.2.101
+
+- Native WS: concurrent multi-venue ingest (`venues: [binance, bybit]`) → shared ring/bars
+- Snapshot `native_ws.venues` / `venue_procs_n`; partial venue failure soft (ok if any alive)
+- Package / `__version__` / native pin `0.2.101`
+- Soak / 48h: **not** claimed this pin
+
+## 0.2.100
+
+- Native WS bars: add 1h interval (`bar_intervals` up to 3600; default `[60,300,900,3600]`)
+- Dense WS 1h soft-fills `change_bps_1h` (`change_bps_1h_source=native_ws_bar_1h`); HTF HTTP mainly for 4h
+- Package / `__version__` / native pin `0.2.100`
+- Soak / 48h: **not** claimed this pin
+
+## 0.2.99
+
+- Selective HTTP 1h/4h backfill for `mtf_source=native_ws` rows after WS 15m skip (`htf_backfill_when_ws`)
+- Preserve WS `change_bps_15m`; label `htf_source=http_kline`; ensure reports `ws_htf_backfill_*`
+- Package / `__version__` / native pin `0.2.99`
+- Soak / 48h: **not** claimed this pin
+
+## 0.2.98
+
+- Native WS bars: add 15m interval (`bar_intervals: [60,300,900]`)
+- Dense WS 15m/5m promotes into `change_bps_15m` + `mtf_attached_at_ms` → ensure skips HTTP kline GET (`skip_http_kline_when_ws`)
+- Snapshot: `native_ws_kline_skip_n`; honesty via `change_bps_15m_source` / `mtf_source=native_ws`
+- Package / `__version__` / native pin `0.2.98`
+- Soak / 48h: **not** claimed this pin
+
+## 0.2.97
+
+- Native WS: multi-interval bars `[60, 300]` → `change_bps_ws_1m` / `change_bps_ws_5m`
+- Futures score: same soft 15m WS proxy + risk `mtf_proxy_ws_1m` as spot
+- Soft HTTP `change_bps_5m` prefers WS 5m bar (`native_ws_bar_5m`) before 1m proxy
+- DX: `verify_native.ps1` (check_ingest + pytest); check_ingest includes bars smoke
+- Package / `__version__` / native pin `0.2.97`
+- Soak / 48h: **not** claimed this pin
+
+## 0.2.96
+
+- Sidecar folds WS ticks into bars → stamps `change_bps_ws_1m` on universe (`stamp_bar_metrics`)
+- Spot score: if HTTP 15m missing, soft-blend WS 1m with risk `mtf_proxy_ws_1m`
+- Soft `change_bps_5m` proxy only when HTTP empty (`change_bps_5m_source=native_ws_bar_proxy`)
+- HTTP 15m/1h/4h klines remain SoT when present
+- Package / `__version__` / native pin `0.2.96`
+- Soak / 48h: **not** claimed this pin
+
+## 0.2.95
+
+- Config: `ingest.native_ws.apply_ws_to_price_i: true` (age-gated WS last into score inputs; `price_i_http` kept)
+- Native: `BarAggregator` / `change_bps` in `radar_core`; `radar-ingest-bars` + `run_ingest_bars.ps1`
+- HTTP kline short_window still SoT for MTF (bars additive)
+- Package / `__version__` / native pin `0.2.95`
+- Soak / 48h: **not** claimed this pin
+
+## 0.2.94
+
+- Native: `native/.cargo/config.toml` target-dir + `build_ingest.ps1` for release sidecar bins
+- Pipeline: explicit `ingest.native_ws.apply_ws_to_price_i` age-gates WS last into universe `price_i` before score (`price_i_http` kept)
+- `radar_core::Bar` type stub (MTF foundation)
+- Package / `__version__` / native pin `0.2.94`
+- Soak / 48h: **not** claimed this pin
+
 ## 0.2.93
 
 - Config: `ingest.native_ws.enabled: true` (Binance WS sidecar; HTTP poll still SoT)

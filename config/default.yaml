@@ -37,14 +37,23 @@ ingest:
   # Rust WS tick ring (additive overlay on snapshot.native_ws — does NOT replace HTTP poll)
   native_ws:
     enabled: true                       # Rust WS sidecar → snapshot.native_ws + ws_* rows
-    venue: binance                      # binance | bybit | kucoin
+    venue: binance                      # primary (back-compat)
+    venues: [binance, bybit]            # concurrent; also kucoin|mexc (cap 3)
     symbols:
       - BTCUSDT
       - ETHUSDT
       - SOLUSDT
+    # venue_symbols:                    # optional per-venue override (else inherit symbols)
+    #   bybit: [BTCUSDT, ETHUSDT]
     ring_size: 512
     stale_ms: 15000
     annotate_rows: true                 # attach ws_* on sector rows (never mutates price_i)
+    apply_ws_to_price_i: true           # age-gated WS last → universe price_i before score (keeps price_i_http)
+    bar_interval_sec: 60                # primary fold interval
+    bar_intervals: [60, 300, 900, 3600, 14400]  # 1m..4h WS bars
+    stamp_bar_metrics: true             # additive change_bps_ws_* (+ soft HTTP fills)
+    skip_http_kline_when_ws: true       # dense WS 15m/5m → fill change_bps_15m, skip kline GET
+    htf_backfill_when_ws: true          # HTTP only when WS 1h/4h not dense yet; preserve 15m
 
 
 snapshot_refresh_ms: 45000

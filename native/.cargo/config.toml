@@ -1,0 +1,4 @@
+# Keep workspace artifacts under native/target (not a global CARGO_TARGET_DIR).
+# Sidecar discovery looks here first: native/target/release/radar-ingest-*.
+[build]
+target-dir = "target"

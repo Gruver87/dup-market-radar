@@ -222,6 +222,12 @@ def _attach_native_ws(snap: Dict[str, Any]) -> Dict[str, Any]:
         overlay = native_ws_overlay(cfg)
         out["native_ws"] = overlay
         opts = native_ws_cfg(cfg)
+        if isinstance(overlay, dict):
+            nw = dict(overlay)
+            nw["apply_ws_to_price_i"] = bool(opts.get("apply_ws_to_price_i"))
+            # Honesty: apply only patches matched symbols before score; HTTP remains baseline.
+            nw["replaces_http_poll"] = False
+            out["native_ws"] = nw
         if (
             opts.get("enabled")
             and opts.get("annotate_rows", True)
@@ -235,6 +241,8 @@ def _attach_native_ws(snap: Dict[str, Any]) -> Dict[str, Any]:
             )
             nw = dict(out.get("native_ws") or overlay)
             nw["rows_annotated"] = int(n_pat)
+            nw["apply_ws_to_price_i"] = bool(opts.get("apply_ws_to_price_i"))
+            nw["replaces_http_poll"] = False
             out["native_ws"] = nw
     except Exception as exc:  # noqa: BLE001
         out["native_ws"] = {
@@ -750,10 +758,10 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         try:
             st = native_ws_start(load_config())
             logger.info(
-                "native_ws enabled=%s ok=%s venue=%s",
+                "native_ws enabled=%s ok=%s venues=%s",
                 st.get("enabled"),
                 st.get("ok"),
-                st.get("venue"),
+                st.get("venues") or st.get("venue"),
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning("native_ws start soft-fail: %s", redact_exc(exc, max_len=128))
@@ -803,7 +811,7 @@ def _openapi_enabled() -> bool:
 _OPENAPI_ON = _openapi_enabled()
 app = FastAPI(
     title="DUP Market Radar",
-    version="0.2.93",
+    version="0.2.98",
     lifespan=_lifespan,
     docs_url="/docs" if _OPENAPI_ON else None,
     redoc_url="/redoc" if _OPENAPI_ON else None,

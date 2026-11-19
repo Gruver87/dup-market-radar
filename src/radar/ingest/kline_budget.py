@@ -35,6 +35,22 @@ def budget_consume(http: Any) -> bool:
         return True
 
 
+def budget_refund(http: Any) -> None:
+    """Return one slot after a client-refuse (4xx) so denylist burns do not starve fill.
+
+    ``kline_gets`` stays counted (honesty of HTTP attempts); only ``kline_budget_left``
+    is restored when a ceiling is active.
+    """
+    lock = getattr(http, "_kline_budget_lock", None)
+    if lock is None:
+        return
+    with lock:
+        left = getattr(http, "kline_budget_left", None)
+        if left is None:
+            return
+        http.kline_budget_left = int(left) + 1
+
+
 def budget_status(http: Any) -> dict:
     lock = getattr(http, "_kline_budget_lock", None)
     if lock is None:

@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from radar import __version__ as RADAR_VERSION
 from radar.auth import (
     api_key_gate_ok,
     api_key_required,
@@ -811,7 +812,7 @@ def _openapi_enabled() -> bool:
 _OPENAPI_ON = _openapi_enabled()
 app = FastAPI(
     title="DUP Market Radar",
-    version="0.2.98",
+    version=RADAR_VERSION,
     lifespan=_lifespan,
     docs_url="/docs" if _OPENAPI_ON else None,
     redoc_url="/redoc" if _OPENAPI_ON else None,

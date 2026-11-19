@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
 
 from radar.http_client import AllowlistHttp
-from radar.ingest.kline_budget import budget_consume, budget_status
+from radar.ingest.kline_budget import budget_consume, budget_refund, budget_status
 from radar.ingest.kline_skip import (
     is_client_refuse_exc,
     kline_skip_add,
@@ -692,6 +692,7 @@ def attach_binance_spot_short_windows(
         except Exception as exc:  # noqa: BLE001
             if is_client_refuse_exc(exc):
                 is_new = kline_skip_add(http, "binance_spot", sym)
+                budget_refund(http)
                 # One info line on first refuse; later scans silent via denylist.
                 if is_new:
                     logger.info(
@@ -836,6 +837,7 @@ def attach_binance_futures_short_windows(
         except Exception as exc:  # noqa: BLE001
             if is_client_refuse_exc(exc):
                 is_new = kline_skip_add(http, "binance_fut", sym)
+                budget_refund(http)
                 if is_new:
                     logger.info(
                         "binance fut 15m kline denylist %s (client refuse)",

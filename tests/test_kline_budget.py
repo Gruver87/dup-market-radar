@@ -1,6 +1,11 @@
 """Per-scan kline GET budget + MTF reuse helpers."""
 
-from radar.ingest.kline_budget import budget_consume, budget_status, init_kline_budget
+from radar.ingest.kline_budget import (
+    budget_consume,
+    budget_refund,
+    budget_status,
+    init_kline_budget,
+)
 from radar.ingest.short_window import _missing_15m, _stamp_mtf, _target_fill_ratio
 
 
@@ -19,11 +24,25 @@ def test_budget_consume_respects_ceiling():
     assert st["kline_budget_left"] == 0
 
 
+def test_budget_refund_restores_slot_keeps_gets():
+    http = _Http()
+    init_kline_budget(http, 2)
+    assert budget_consume(http) is True
+    budget_refund(http)
+    st = budget_status(http)
+    assert st["kline_gets"] == 1
+    assert st["kline_budget_left"] == 2
+    assert budget_consume(http) is True
+    assert budget_consume(http) is True
+    assert budget_consume(http) is False
+
+
 def test_budget_unlimited_when_none():
     http = _Http()
     init_kline_budget(http, None)
     for _ in range(5):
         assert budget_consume(http) is True
+    budget_refund(http)  # no-op when unlimited
     assert budget_status(http)["kline_gets"] == 5
     assert budget_status(http)["kline_budget_left"] is None
 

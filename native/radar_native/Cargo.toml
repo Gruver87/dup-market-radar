@@ -1,6 +1,6 @@
 [package]
 name = "radar_native"
-version = "0.2.106"
+version = "0.2.107"
 edition.workspace = true
 description = "DUP Market Radar hot path — scoring/ranking (Python orchestration + Rust native)"
 license.workspace = true

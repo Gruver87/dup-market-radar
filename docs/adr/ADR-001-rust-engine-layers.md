@@ -120,6 +120,10 @@ Rules:
 - Dynamic WS symbols from scored sectors (throttled restart)
 - Primary-venue price/bar policy; ring_drops + stale_by_venue honesty fields
 
+## Seventeenth slice (0.2.107)
+
+- Ops gate: FastAPI version follows package; kline budget 160 + refund on Binance 4xx
+
 ## Consequences
 
 - Maturin still builds `radar_native` from its crate dir (workspace member).

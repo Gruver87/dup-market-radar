@@ -1,5 +1,12 @@
 # Changelog - DUP Market Radar
 
+## 0.2.107
+
+- FastAPI `app.version` tracks `radar.__version__` (no hard-pin drift)
+- `ingest.max_kline_gets` default 160; `budget_refund` on Binance 4xx so denylist burns do not starve list_spot fill
+- Package / `__version__` / native pin `0.2.107`
+- Soak / 48h: **not** claimed this pin
+
 ## 0.2.106
 
 - Dynamic WS subscribe from scored sectors (`dynamic_symbols`, n=12, throttled restart)

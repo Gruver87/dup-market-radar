@@ -143,6 +143,22 @@
     }
     .pos-bag .basis-fill { color: var(--pos); }
     .pos-bag .basis-est { color: var(--warn); }
+    .trades-wrap { margin-top: 4px; }
+    .trades-wrap h2 {
+      font-size: 0.95rem;
+      font-weight: 650;
+      margin: 0 0 8px;
+    }
+    .trades-wrap .trades-meta {
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-family: var(--mono);
+      margin: 0 0 12px;
+    }
+    .trades-wrap .trades-block { margin-bottom: 18px; }
+    .trades-wrap .side-buy { color: var(--pos); font-weight: 650; }
+    .trades-wrap .side-sell { color: var(--neg); font-weight: 650; }
+    .trades-wrap .ok-false { color: var(--warn); }
     .errors {
       color: var(--neg);
       font-size: 0.8rem;
@@ -417,6 +433,7 @@
   </div>
   <nav class="pages" id="pageNav" aria-label="Pages">
     <button type="button" class="nav-btn active" data-view="watchlist" data-i18n="nav_watchlist">Watchlist</button>
+    <button type="button" class="nav-btn" data-view="trades" data-i18n="nav_trades">Сделки</button>
     <button type="button" class="nav-btn" data-view="markets" data-i18n="nav_markets">Markets ~6m</button>
     <button type="button" class="nav-btn" data-view="ops" data-i18n="nav_ops">Ops</button>
     <button type="button" class="nav-btn" data-view="help" data-i18n="nav_help">Help</button>
@@ -432,6 +449,21 @@
       <div class="method" id="method"></div>
       <div class="errors" id="errors"></div>
       <div id="table"></div>
+    </section>
+
+    <section class="view" id="view-trades">
+      <div class="trades-wrap">
+        <h2 data-i18n="trades_title">Сделки · купил / продал</h2>
+        <p class="trades-meta" id="tradesMeta" data-i18n="trades_note">Открытые позиции + последние события (ручные и авто). Не прогноз будущих входов.</p>
+        <div class="trades-block">
+          <h2 data-i18n="trades_open">Открытые позиции</h2>
+          <div id="tradesOpenWrap"><div class="empty">…</div></div>
+        </div>
+        <div class="trades-block">
+          <h2 data-i18n="trades_log">Журнал</h2>
+          <div id="tradesLogWrap"><div class="empty">…</div></div>
+        </div>
+      </div>
     </section>
 
     <section class="view" id="view-markets">
@@ -495,6 +527,7 @@
           <li data-i18n="help_7">Нужен <span class="key">.env</span> с ключами KuCoin. Можно включить <span class="key">auto_trade.dry_run: true</span> для лога без ордеров.</li>
           <li data-i18n="help_8"><span class="key">Telegram</span> — алерты + /time /fx /lang. Токен и chat id в <span class="key">.env</span>.</li>
           <li data-i18n="help_9"><span class="key">PWA / Android</span> — установи дашборд как приложение (Chrome → «На экран»). Это пульт к радару на хосте, не сервер в телефоне.</li>
+          <li data-i18n="help_10"><span class="key">Сделки</span> — журнал реальных buy/sell и открытые позиции, не список «что купит завтра».</li>
         </ul>
       </div>
     </section>
@@ -533,9 +566,17 @@
         pnl_title: "Paper PnL journal",
         pnl_refresh: "Обновить",
         nav_watchlist: "Watchlist",
+        nav_trades: "Сделки",
         nav_markets: "Markets ~6m",
         nav_ops: "Ops",
         nav_help: "Help",
+        trades_title: "Сделки · купил / продал",
+        trades_note: "Открытые позиции + последние события (ручные и авто). Не прогноз будущих входов.",
+        trades_open: "Открытые позиции",
+        trades_log: "Журнал",
+        trades_empty_pos: "Нет открытых позиций.",
+        trades_empty_log: "Пока нет записей buy/sell.",
+        trades_need_key: "Нужен radar_api_key в Local Storage (как для snapshot).",
         markets_title: "Markets · топ-100 · ~6м",
         help_title: "Как читать / ручная торговля",
         help_1: "<span class=\"key\">Score</span> — насколько монета выделяется. Не гарантия прибыли.",
@@ -547,6 +588,7 @@
         help_7: "Нужен <span class=\"key\">.env</span> с ключами KuCoin. <span class=\"key\">auto_trade.dry_run: true</span> = лог без ордеров.",
         help_8: "<span class=\"key\">Telegram</span> — алерты + /time /fx /lang. Токен в <span class=\"key\">.env</span>.",
         help_9: "<span class=\"key\">PWA / Android</span> — установи дашборд как приложение (Chrome → «На экран»). Это пульт к радару на хосте, не сервер в телефоне. Автоторговля на телефоне не переносится.",
+        help_10: "<span class=\"key\">Сделки</span> — журнал реальных buy/sell и открытые позиции, не список «что купит завтра».",
         pwa_hint: "Можно установить как приложение (пульт к радару на компе).",
         pwa_install: "Установить",
         sectors: {
@@ -567,9 +609,17 @@
         pnl_title: "Paper PnL journal",
         pnl_refresh: "Refresh",
         nav_watchlist: "Watchlist",
+        nav_trades: "Trades",
         nav_markets: "Markets ~6m",
         nav_ops: "Ops",
         nav_help: "Help",
+        trades_title: "Trades · bought / sold",
+        trades_note: "Open positions + recent events (manual and auto). Not a forecast of future entries.",
+        trades_open: "Open positions",
+        trades_log: "Journal",
+        trades_empty_pos: "No open positions.",
+        trades_empty_log: "No buy/sell records yet.",
+        trades_need_key: "Need radar_api_key in Local Storage (same as snapshot).",
         markets_title: "Markets · top-100 · ~6m",
         help_title: "How to read / manual trade",
         help_1: "<span class=\"key\">Score</span> — how unusual the coin looks. Not a profit guarantee.",
@@ -581,6 +631,7 @@
         help_7: "Needs KuCoin keys in <span class=\"key\">.env</span>. <span class=\"key\">auto_trade.dry_run: true</span> = log only.",
         help_8: "<span class=\"key\">Telegram</span> — alerts + /time /fx /lang. Token in <span class=\"key\">.env</span>.",
         help_9: "<span class=\"key\">PWA / Android</span> — install the dashboard (Chrome → Add to Home). Phone is a remote panel; radar stays on your host. Auto-trade is not moved to the phone.",
+        help_10: "<span class=\"key\">Trades</span> — real buy/sell journal and open bags, not “what it will buy next”.",
         pwa_hint: "Install as an app (remote panel to your host radar).",
         pwa_install: "Install",
         sectors: {
@@ -606,6 +657,12 @@
       loadWorldClock();
       renderTabs();
       if (state.snap) render();
+      const h = (location.hash || "").replace(/^#/, "");
+      if (h === "trades") loadTrades();
+    }
+    function t(key) {
+      const pack = I18N[getLang()] || I18N.ru;
+      return pack[key] != null ? pack[key] : key;
     }
     function applyI18n() {
       const lg = getLang();
@@ -795,7 +852,7 @@
       }
     }
 
-    const VIEWS = ["watchlist", "markets", "ops", "help"];
+    const VIEWS = ["watchlist", "trades", "markets", "ops", "help"];
 
     function setView(name) {
       if (!VIEWS.includes(name)) name = "watchlist";
@@ -813,6 +870,7 @@
         }
       } catch (_) { /* soft */ }
       if (name === "markets") loadMarkets(false);
+      if (name === "trades") loadTrades();
       if (name === "ops") {
         loadWorldClock();
         loadPnlJournal();
@@ -1355,6 +1413,115 @@
       } catch (_) { /* soft — snapshot counts still shown */ }
     }
 
+    function fmtEventTime(ms) {
+      const n = Number(ms || 0);
+      if (!n) return "—";
+      try {
+        return new Date(n).toLocaleString(getLang() === "en" ? "en-GB" : "ru-RU", { hour12: false });
+      } catch (_) {
+        return String(n);
+      }
+    }
+
+    function renderTradesOpen(at) {
+      const wrap = document.getElementById("tradesOpenWrap");
+      if (!wrap) return;
+      const positions = (at && at.positions) || {};
+      const keys = Object.keys(positions);
+      if (!keys.length) {
+        wrap.innerHTML = `<div class="empty">${esc(t("trades_empty_pos"))}</div>`;
+        return;
+      }
+      const head =
+        "<table><thead><tr>" +
+        "<th>SYMBOL</th><th>SIZE</th><th>BASIS</th><th>ORDER</th><th>ENTRY</th>" +
+        "</tr></thead><tbody>";
+      const body = keys.map((sym) => {
+        const p = positions[sym] || {};
+        const basis = String(p.size_basis || "—");
+        const cls = basis.indexOf("kucoin_fill") >= 0 ? "basis-fill"
+          : (basis.indexOf("estimat") >= 0 || basis.indexOf("unreconcil") >= 0 ? "basis-est" : "");
+        const size = p.base_size_i != null ? String(p.base_size_i) : "—";
+        const oid = p.order_id ? String(p.order_id).slice(0, 14) : "—";
+        const entry = p.entry_price_i != null ? fmtPriceI(p.entry_price_i) : "—";
+        return `<tr>
+          <td>${esc(sym)}</td>
+          <td class="num ${cls}">${esc(size)}</td>
+          <td class="${cls}">${esc(basis)}</td>
+          <td class="num">${esc(oid)}</td>
+          <td class="num">${esc(entry)}</td>
+        </tr>`;
+      }).join("");
+      wrap.innerHTML = head + body + "</tbody></table>";
+    }
+
+    function renderTradesLog(events) {
+      const wrap = document.getElementById("tradesLogWrap");
+      if (!wrap) return;
+      const rows = Array.isArray(events) ? events.slice().reverse() : [];
+      if (!rows.length) {
+        wrap.innerHTML = `<div class="empty">${esc(t("trades_empty_log"))}</div>`;
+        return;
+      }
+      const head =
+        "<table><thead><tr>" +
+        "<th>TIME</th><th>SIDE</th><th>SYMBOL</th><th>SRC</th><th>USDT</th><th>OK</th><th>NOTE</th>" +
+        "</tr></thead><tbody>";
+      const body = rows.map((ev) => {
+        const side = String(ev.side || "—").toLowerCase();
+        const sideCls = side === "buy" ? "side-buy" : (side === "sell" ? "side-sell" : "");
+        const ok = ev.ok === true ? "yes" : (ev.ok === false ? "no" : "—");
+        const okCls = ev.ok === false ? "ok-false" : "";
+        const usdt = ev.quote_usdt_micros != null
+          ? fmtUsdtMicros(ev.quote_usdt_micros, 1000000)
+          : "—";
+        const note = ev.message || ev.reason || "";
+        const dry = ev.dry_run ? " dry" : "";
+        return `<tr>
+          <td class="num">${esc(fmtEventTime(ev.at_ms))}</td>
+          <td class="${sideCls}">${esc(side)}</td>
+          <td>${esc(String(ev.symbol || "—"))}</td>
+          <td>${esc(String(ev.source || "—"))}${dry ? " · dry" : ""}</td>
+          <td class="num">${esc(usdt)}</td>
+          <td class="${okCls}">${esc(ok)}</td>
+          <td class="flags">${esc(String(note).slice(0, 120))}</td>
+        </tr>`;
+      }).join("");
+      wrap.innerHTML = head + body + "</tbody></table>";
+    }
+
+    async function loadTrades() {
+      const openWrap = document.getElementById("tradesOpenWrap");
+      const logWrap = document.getElementById("tradesLogWrap");
+      if (!openWrap || !logWrap) return;
+      let hasKey = false;
+      try { hasKey = !!(localStorage.getItem("radar_api_key") || "").trim(); } catch (_) {}
+      if (!hasKey) {
+        const msg = `<div class="empty">${esc(t("trades_need_key"))}</div>`;
+        openWrap.innerHTML = msg;
+        logWrap.innerHTML = msg;
+        return;
+      }
+      try {
+        await enrichTradeDetail();
+        const at = (state.snap && state.snap.auto_trade) || {};
+        renderTradesOpen(at);
+      } catch (_) {
+        openWrap.innerHTML = `<div class="empty">${esc(t("trades_empty_pos"))}</div>`;
+      }
+      try {
+        const res = await fetchTimeout("/api/trade/events?limit=80", { headers: apiHeaders(false) }, 15000);
+        if (!res.ok) {
+          logWrap.innerHTML = `<div class="empty">HTTP ${res.status}</div>`;
+          return;
+        }
+        const data = await res.json();
+        renderTradesLog(data.events || []);
+      } catch (e) {
+        logWrap.innerHTML = `<div class="empty">${esc(String(e))}</div>`;
+      }
+    }
+
     async function load(force = false) {
       const btn = document.getElementById("refresh");
       btn.disabled = true;
@@ -1384,6 +1551,7 @@
       load(true);
       loadMarkets(true);
       loadWorldClock();
+      loadTrades();
     };
     document.getElementById("autoToggle").onclick = () => toggleAuto();
     document.getElementById("modalCancel").onclick = closeTrade;

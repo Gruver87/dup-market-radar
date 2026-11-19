@@ -2,7 +2,7 @@
  * Caches dashboard shell only. API / WS always network (no offline trading).
  * Scope: /  (served from site root).
  */
-const CACHE = "dup-radar-shell-v1";
+const CACHE = "dup-radar-shell-v2";
 const SHELL = [
   "/",
   "/static/manifest.webmanifest",

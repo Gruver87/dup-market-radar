@@ -5,7 +5,7 @@ Never replaces ``price_i`` / score fields — HTTP poll remains source of truth.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 
 
 def _norm_sym(raw: Any) -> str:

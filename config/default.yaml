@@ -38,13 +38,17 @@ ingest:
   native_ws:
     enabled: true                       # Rust WS sidecar → snapshot.native_ws + ws_* rows
     venue: binance                      # primary (back-compat)
-    venues: [binance, bybit]            # concurrent; also kucoin|mexc (cap 3)
+    venues: [binance, bybit, mexc]      # concurrent spot WS (cap 4; kucoin optional)
     symbols:
       - BTCUSDT
       - ETHUSDT
       - SOLUSDT
     # venue_symbols:                    # optional per-venue override (else inherit symbols)
     #   bybit: [BTCUSDT, ETHUSDT]
+    price_venue_policy: primary         # primary prefer for last/bars (not silent mix)
+    dynamic_symbols: true               # expand subscribe from scored sectors top-N
+    dynamic_symbols_n: 12               # seed + sector USDT symbols (1..32)
+    dynamic_symbols_min_interval_ms: 90000  # throttle feed restart
     ring_size: 512
     stale_ms: 15000
     annotate_rows: true                 # attach ws_* on sector rows (never mutates price_i)

@@ -111,10 +111,19 @@ Rules:
 - `radar-ingest-mexc` — MEXC spot `aggre.deals` protobuf (minimal proto + vendored protoc)
 - Opt-in via `venues` / `venue: mexc` (default still binance+bybit)
 
+## Fifteenth slice (0.2.105)
+
+- Denser default venues `[binance, bybit, mexc]`; list cap 4
+
+## Sixteenth slice (0.2.106)
+
+- Dynamic WS symbols from scored sectors (throttled restart)
+- Primary-venue price/bar policy; ring_drops + stale_by_venue honesty fields
+
 ## Consequences
 
 - Maturin still builds `radar_native` from its crate dir (workspace member).
-- Later: more venues / denser multi-venue defaults.
+- Later: additional venue adapters / soak evidence (not claimed here).
 - Market Ping unchanged except faster/fresher Radar snapshots over time.
 
 ## Non-goals

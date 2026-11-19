@@ -1,5 +1,21 @@
 # Changelog - DUP Market Radar
 
+## 0.2.106
+
+- Dynamic WS subscribe from scored sectors (`dynamic_symbols`, n=12, throttled restart)
+- `price_venue_policy: primary` — last/bars prefer primary venue; no silent cross-venue mix
+- Snapshot: `ring_drops`, `stale_by_venue`, `native_ws_dynamic`
+- Includes denser default venues `[binance, bybit, mexc]` (cap 4)
+- Package / `__version__` / native pin `0.2.106`
+- Soak / 48h: **not** claimed this pin
+
+## 0.2.105
+
+- Default `ingest.native_ws.venues: [binance, bybit, mexc]` (denser concurrent WS)
+- Venue list cap raised to 4 (optional KuCoin alongside the three)
+- Package / `__version__` / native pin `0.2.105`
+- Soak / 48h: **not** claimed this pin
+
 ## 0.2.104
 
 - Native: `radar-ingest-mexc` (spot aggre deals protobuf + JSON fallback)

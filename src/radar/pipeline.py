@@ -808,6 +808,27 @@ def run_scan(
     kb = budget_status(http)
     http_stats["kline_gets"] = int(kb.get("kline_gets") or 0)
 
+    ws_dyn: Dict[str, Any] = {}
+    try:
+        from radar.ingest.tick_ring import configure_from_cfg as _nws_cfg2
+        from radar.ingest.tick_ring import reconcile_dynamic_symbols
+        from radar.ingest.tick_ring import suggest_symbols_from_sectors
+
+        _dopts = _nws_cfg2(cfg)
+        if _dopts.get("enabled") and _dopts.get("dynamic_symbols", True):
+            sug = suggest_symbols_from_sectors(
+                sectors,
+                seed=list(_dopts.get("symbols") or []),
+                n=int(_dopts.get("dynamic_symbols_n") or 12),
+            )
+            ws_dyn = reconcile_dynamic_symbols(cfg, sug)
+    except Exception as _dyn_exc:  # noqa: BLE001
+        logger.warning(
+            "native_ws dynamic symbols soft-fail: %s",
+            redact_exc(_dyn_exc, max_len=128),
+        )
+        ws_dyn = {"ok": False, "error": "soft_fail"}
+
     return {
         "ok": ok,
         "mtf_ensure_ok": universe.get("mtf_ensure_ok"),
@@ -826,6 +847,7 @@ def run_scan(
         "native_ws_price_applied": int(ws_price_applied),
         "native_ws_bars_stamped": int(ws_bars_stamped),
         "native_ws_kline_skip_n": int(ws_kline_skip_n),
+        "native_ws_dynamic": ws_dyn,
         "universe_size": universe.get("universe_size"),
         "http_stats": http_stats,
         "venue_ms": universe.get("venue_ms") or {},

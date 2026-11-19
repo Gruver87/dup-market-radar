@@ -559,7 +559,7 @@ def validate_config(cfg: Dict[str, Any]) -> None:
                     if (
                         not isinstance(venues, list)
                         or not venues
-                        or len(venues) > 3
+                        or len(venues) > 4
                         or not all(
                             isinstance(v, str)
                             and v.strip().lower() in _nws_venues
@@ -567,7 +567,7 @@ def validate_config(cfg: Dict[str, Any]) -> None:
                         )
                     ):
                         errors.append(
-                            "ingest.native_ws.venues must be list[str] len 1..3 "
+                            "ingest.native_ws.venues must be list[str] len 1..4 "
                             "each binance|bybit|kucoin|mexc"
                         )
                 vsyms = nws.get("venue_symbols")
@@ -632,6 +632,33 @@ def validate_config(cfg: Dict[str, Any]) -> None:
                     nws["htf_backfill_when_ws"], bool
                 ):
                     errors.append("ingest.native_ws.htf_backfill_when_ws must be bool")
+                pvp = nws.get("price_venue_policy")
+                if pvp is not None and (
+                    not isinstance(pvp, str)
+                    or pvp.strip().lower() not in {"primary", "last_wins"}
+                ):
+                    errors.append(
+                        "ingest.native_ws.price_venue_policy must be primary|last_wins"
+                    )
+                if "dynamic_symbols" in nws and not isinstance(
+                    nws["dynamic_symbols"], bool
+                ):
+                    errors.append("ingest.native_ws.dynamic_symbols must be bool")
+                dsn = nws.get("dynamic_symbols_n")
+                if dsn is not None and (
+                    not isinstance(dsn, int) or dsn < 1 or dsn > 32
+                ):
+                    errors.append(
+                        "ingest.native_ws.dynamic_symbols_n must be int 1..32"
+                    )
+                dsi = nws.get("dynamic_symbols_min_interval_ms")
+                if dsi is not None and (
+                    not isinstance(dsi, int) or dsi < 5_000 or dsi > 3_600_000
+                ):
+                    errors.append(
+                        "ingest.native_ws.dynamic_symbols_min_interval_ms "
+                        "must be int 5000..3600000"
+                    )
                 bis = nws.get("bar_interval_sec")
                 if bis is not None and (
                     not isinstance(bis, int) or bis < 5 or bis > 14400

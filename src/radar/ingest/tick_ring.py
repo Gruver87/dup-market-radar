@@ -98,7 +98,7 @@ def resolve_ingest_cmd(venue: str, symbols: List[str]) -> Optional[List[str]]:
 def _normalize_venues(
     venue: str, venues: Optional[List[str]] = None
 ) -> List[str]:
-    """Dedupe venue list; fall back to single ``venue``; cap 3."""
+    """Dedupe venue list; fall back to single ``venue``; cap 4."""
     raw: List[str] = []
     if venues:
         for v in venues:
@@ -110,7 +110,7 @@ def _normalize_venues(
         if primary not in _VENUE_BINS:
             primary = "binance"
         raw = [primary]
-    return raw[:3]
+    return raw[:4]
 
 
 def _normalize_symbols(raw: Optional[List[Any]]) -> List[str]:
@@ -153,6 +153,7 @@ class NativeWsFeed:
         stale_ms: int = 15_000,
         bar_interval_sec: int = 60,
         bar_intervals: Optional[List[int]] = None,
+        price_venue_policy: str = "primary",
     ) -> None:
         self.venues = _normalize_venues(venue, venues)
         self.venue = self.venues[0]
@@ -201,18 +202,61 @@ class NativeWsFeed:
         self._stop = threading.Event()
         self._started_at_ms = 0
         self._ticks_total = 0
+        self._ring_drops = 0
         self._last_error: Optional[str] = None
         self._running = False
         self._venue_errors: Dict[str, str] = {}
+        self._last_by_venue: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        pol = str(price_venue_policy or "primary").strip().lower()
+        self.price_venue_policy = pol if pol in {"primary", "last_wins"} else "primary"
+        self._last_reconcile_ms = 0
+
+    def _primary_stale(self, row: Optional[Dict[str, Any]], *, now_ms: int) -> bool:
+        if not row:
+            return True
+        try:
+            ts = int(row.get("ts_ms") or row.get("recv_ms") or 0)
+        except (TypeError, ValueError):
+            return True
+        if ts <= 0:
+            return True
+        return (now_ms - ts) > self.stale_ms
 
     def _ingest_tick_locked(self, row: Dict[str, Any]) -> None:
         """Caller holds _LOCK."""
         sym = str(row.get("symbol") or "").upper()
         if not sym:
             return
+        if len(self._ring) >= self.ring_size:
+            self._ring_drops += 1
         self._ring.append(row)
-        self._last[sym] = row
         self._ticks_total += 1
+        ven = str(row.get("venue") or self.venue).strip().lower() or self.venue
+        row = dict(row)
+        row["venue"] = ven
+        self._last_by_venue.setdefault(sym, {})[ven] = row
+        now_ms = int(time.time() * 1000)
+        policy = str(self.price_venue_policy or "primary").lower()
+        fold_bars = True
+        if policy == "primary":
+            cur = self._last.get(sym)
+            cur_ven = str((cur or {}).get("venue") or "").lower()
+            if ven == self.venue:
+                self._last[sym] = row
+                fold_bars = True
+            elif cur is None or cur_ven != self.venue or self._primary_stale(
+                cur, now_ms=now_ms
+            ):
+                # No fresh primary → allow secondary into last (not bars)
+                self._last[sym] = row
+                fold_bars = False
+            else:
+                fold_bars = False
+        else:
+            self._last[sym] = row
+            fold_bars = True
+        if not fold_bars:
+            return
         by_iv = self._aggs.get(sym)
         if by_iv is None:
             by_iv = {iv: BarAggregator(iv) for iv in self.bar_intervals}
@@ -444,6 +488,18 @@ class NativeWsFeed:
             venue_errs = dict(self._venue_errors)
             n_procs = len(self._procs)
             by_ven = {k: list(v) for k, v in self.symbols_by_venue.items()}
+            ring_drops = int(self._ring_drops)
+            policy = self.price_venue_policy
+            stale_by_venue: Dict[str, int] = {}
+            for _sym, byv in self._last_by_venue.items():
+                for vname, vrow in byv.items():
+                    try:
+                        ts = int(vrow.get("ts_ms") or vrow.get("recv_ms") or 0)
+                    except (TypeError, ValueError):
+                        ts = 0
+                    age = max(0, now - ts) if ts else None
+                    if age is None or age > self.stale_ms:
+                        stale_by_venue[vname] = int(stale_by_venue.get(vname) or 0) + 1
         stale = freshest_age is None or freshest_age > self.stale_ms
         ok = running and total > 0 and not stale
         return {
@@ -454,12 +510,15 @@ class NativeWsFeed:
             "venues": venues,
             "venue_procs_n": n_procs,
             "venue_errors": venue_errs or None,
+            "price_venue_policy": policy,
             "symbols": list(self.symbols),
             "symbols_by_venue": by_ven,
             "ring_n": n,
+            "ring_drops": ring_drops,
             "ticks_total": total,
             "stale_ms": self.stale_ms,
             "freshest_age_ms": freshest_age,
+            "stale_by_venue": stale_by_venue or None,
             "started_at_ms": started or None,
             "last_by_symbol": last_by,
             "bar_interval_sec": bar_iv,
@@ -522,6 +581,16 @@ def configure_from_cfg(cfg: Dict[str, Any] | None) -> Dict[str, Any]:
         "skip_http_kline_when_ws": bool(nws.get("skip_http_kline_when_ws", True)),
         # After WS 15m promote/skip: HTTP higher-TF only when WS 1h/4h not dense
         "htf_backfill_when_ws": bool(nws.get("htf_backfill_when_ws", True)),
+        "price_venue_policy": (
+            "last_wins"
+            if str(nws.get("price_venue_policy") or "primary").lower() == "last_wins"
+            else "primary"
+        ),
+        "dynamic_symbols": bool(nws.get("dynamic_symbols", True)),
+        "dynamic_symbols_n": int(nws.get("dynamic_symbols_n") or 12),
+        "dynamic_symbols_min_interval_ms": int(
+            nws.get("dynamic_symbols_min_interval_ms") or 90_000
+        ),
     }
 
 
@@ -549,6 +618,7 @@ def start_from_config(cfg: Dict[str, Any] | None) -> Dict[str, Any]:
             bar_intervals=list(
                 opts.get("bar_intervals") or [60, 300, 900, 3600, 14400]
             ),  # type: ignore[arg-type]
+            price_venue_policy=str(opts.get("price_venue_policy") or "primary"),
         )
         ok = feed.start()
         _FEED = feed if ok else feed
@@ -596,3 +666,107 @@ def bar_metrics_snapshot() -> Dict[str, Dict[str, Any]]:
     if feed is None:
         return {}
     return feed.bar_metrics_by_symbol()
+
+
+def suggest_symbols_from_sectors(
+    sectors: Dict[str, Any] | None,
+    *,
+    seed: Optional[List[str]] = None,
+    n: int = 12,
+) -> List[str]:
+    """Seed first, then ranked sector rows (USDT only). Cap ``n`` (1..32)."""
+    n = max(1, min(32, int(n)))
+    out = _normalize_symbols(seed)
+    if not isinstance(sectors, dict):
+        return out[:n] or ["BTCUSDT"]
+    for key in (
+        "spot_alts",
+        "listings",
+        "memes",
+        "spot",
+        "whales",
+    ):
+        rows = sectors.get(key)
+        if not isinstance(rows, list):
+            continue
+        for r in rows:
+            if not isinstance(r, dict):
+                continue
+            got = _normalize_symbols([r.get("symbol")])
+            if not got:
+                continue
+            s = got[0]
+            if not s.endswith("USDT"):
+                continue
+            if s not in out:
+                out.append(s)
+            if len(out) >= n:
+                return out[:n]
+    return out[:n] or ["BTCUSDT"]
+
+
+def reconcile_dynamic_symbols(
+    cfg: Dict[str, Any] | None,
+    symbols: List[str],
+    *,
+    force: bool = False,
+) -> Dict[str, Any]:
+    """Restart feed when dynamic symbol set changes (throttled). Soft-fail."""
+    global _FEED
+    opts = configure_from_cfg(cfg)
+    if not opts.get("enabled") or not opts.get("dynamic_symbols", True):
+        return {"ok": False, "changed": False, "reason": "disabled"}
+    want = _normalize_symbols(symbols)
+    if not want:
+        return {"ok": False, "changed": False, "reason": "empty"}
+    min_iv = max(5_000, int(opts.get("dynamic_symbols_min_interval_ms") or 90_000))
+    now = int(time.time() * 1000)
+    with _LOCK:
+        feed = _FEED
+        if feed is None or not feed._running:  # noqa: SLF001
+            return {"ok": False, "changed": False, "reason": "feed_not_running"}
+        cur = list(feed.symbols)
+        if want == cur and not force:
+            return {"ok": True, "changed": False, "symbols": cur}
+        last = int(feed._last_reconcile_ms or 0)  # noqa: SLF001
+        if not force and last and (now - last) < min_iv:
+            return {
+                "ok": True,
+                "changed": False,
+                "throttled": True,
+                "symbols": cur,
+                "next_ms": last + min_iv,
+            }
+        # Keep venue_symbols overrides only for venues that list a subset of want
+        feed.stop(join_timeout_sec=2.0)
+        _FEED = None
+    new_feed = NativeWsFeed(
+        venue=str(opts["venue"]),
+        venues=list(opts.get("venues") or [opts["venue"]]),  # type: ignore[arg-type]
+        symbols=want,
+        venue_symbols=None,  # dynamic set is global subscribe list
+        ring_size=int(opts["ring_size"]),  # type: ignore[arg-type]
+        stale_ms=int(opts["stale_ms"]),  # type: ignore[arg-type]
+        bar_interval_sec=int(opts.get("bar_interval_sec") or 60),
+        bar_intervals=list(
+            opts.get("bar_intervals") or [60, 300, 900, 3600, 14400]
+        ),  # type: ignore[arg-type]
+        price_venue_policy=str(opts.get("price_venue_policy") or "primary"),
+    )
+    ok = new_feed.start()
+    new_feed._last_reconcile_ms = now  # noqa: SLF001
+    with _LOCK:
+        _FEED = new_feed
+    logger.info(
+        "native_ws dynamic symbols changed=%s n=%s ok=%s",
+        True,
+        len(want),
+        ok,
+    )
+    return {
+        "ok": bool(ok),
+        "changed": True,
+        "symbols": list(new_feed.symbols),
+        "prev_n": len(cur),
+        "n": len(want),
+    }

@@ -1,5 +1,12 @@
 # Changelog - DUP Market Radar
 
+## 0.2.108
+
+- Default `native_ws.venues: [binance, bybit, kucoin, mexc]` (full cap-4 concurrent WS)
+- Skip Binance kline GETs for KuCoin `*ONUSDT` tokenized equities (no 400 spam / budget burn)
+- Package / `__version__` / native pin `0.2.108`
+- Soak / 48h: **not** claimed this pin
+
 ## 0.2.107
 
 - FastAPI `app.version` tracks `radar.__version__` (no hard-pin drift)

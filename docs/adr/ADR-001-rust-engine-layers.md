@@ -124,6 +124,10 @@ Rules:
 
 - Ops gate: FastAPI version follows package; kline budget 160 + refund on Binance 4xx
 
+## Eighteenth slice (0.2.108)
+
+- Default WS venues fill cap-4 with KuCoin; skip Binance kline for `*ONUSDT`
+
 ## Consequences
 
 - Maturin still builds `radar_native` from its crate dir (workspace member).

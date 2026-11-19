@@ -33,6 +33,15 @@ DEFAULT_SHORT_SAMPLE_N = 24
 DEFAULT_FUTURES_SHORT_SAMPLE_N = 16
 # Not listed on Binance spot/fapi — skip to avoid 400 retry storms (Bybit/MEXC cover).
 _SKIP_BINANCE_KLINE_VENUES = frozenset({"bybit", "mexc"})
+# KuCoin tokenized equities (*ONUSDT) are never on Binance — skip before GET.
+_BINANCE_KLINE_SYM_SUFFIX_SKIP = ("ONUSDT",)
+
+
+def _skip_binance_kline_symbol(symbol: str) -> bool:
+    sym = str(symbol or "").strip().upper()
+    if not sym:
+        return True
+    return any(sym.endswith(suf) for suf in _BINANCE_KLINE_SYM_SUFFIX_SKIP)
 # Per-venue waterfall stage cap — prevents prelim∪listings∪memes from burning
 # the whole kline budget before scored top-N round 2.
 _WATERFALL_STAGE_CAP = 24
@@ -656,6 +665,7 @@ def attach_binance_spot_short_windows(
         for r in spot_rows
         if isinstance(r, dict)
         and str(r.get("venue") or "") not in _SKIP_BINANCE_KLINE_VENUES
+        and not _skip_binance_kline_symbol(str(r.get("symbol") or ""))
     ]
     sample = (
         _usdt_htf_sample(scoped, top_n=top_n)
@@ -670,7 +680,7 @@ def attach_binance_spot_short_windows(
 
     def _fetch(row: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[List[Any]]]:
         sym = str(row.get("symbol") or "")
-        if not sym:
+        if not sym or _skip_binance_kline_symbol(sym):
             return row, None
         if kline_skip_has(http, "binance_spot", sym):
             kline_skip_bump(http)
@@ -801,6 +811,7 @@ def attach_binance_futures_short_windows(
         for r in fut_rows
         if isinstance(r, dict)
         and str(r.get("venue") or "") not in _SKIP_BINANCE_KLINE_VENUES
+        and not _skip_binance_kline_symbol(str(r.get("symbol") or ""))
     ]
     sample = (
         _usdt_htf_sample(scoped, top_n=top_n)
@@ -815,7 +826,7 @@ def attach_binance_futures_short_windows(
 
     def _fetch(row: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[List[Any]]]:
         sym = str(row.get("symbol") or "")
-        if not sym:
+        if not sym or _skip_binance_kline_symbol(sym):
             return row, None
         if kline_skip_has(http, "binance_fut", sym):
             kline_skip_bump(http)

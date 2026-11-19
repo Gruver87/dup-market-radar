@@ -38,7 +38,7 @@ ingest:
   native_ws:
     enabled: true                       # Rust WS sidecar → snapshot.native_ws + ws_* rows
     venue: binance                      # primary (back-compat)
-    venues: [binance, bybit, mexc]      # concurrent spot WS (cap 4; kucoin optional)
+    venues: [binance, bybit, kucoin, mexc]  # concurrent spot WS (cap 4)
     symbols:
       - BTCUSDT
       - ETHUSDT

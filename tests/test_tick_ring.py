@@ -47,12 +47,12 @@ def test_configure_venues_list() -> None:
                 "native_ws": {
                     "enabled": True,
                     "venue": "binance",
-                    "venues": ["binance", "bybit", "mexc"],
+                    "venues": ["binance", "bybit", "kucoin", "mexc"],
                 }
             }
         }
     )
-    assert opts["venues"] == ["binance", "bybit", "mexc"]
+    assert opts["venues"] == ["binance", "bybit", "kucoin", "mexc"]
     assert opts["venue"] == "binance"
 
 

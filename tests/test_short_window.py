@@ -320,6 +320,32 @@ def test_binance_spot_attach_skips_bybit_venue():
     assert counts["n_15m"] == 0
 
 
+def test_binance_spot_attach_skips_onusdt_tokenized():
+    """KuCoin *ONUSDT equities are never on Binance — no GET / budget burn."""
+    from radar.ingest.short_window import (
+        _skip_binance_kline_symbol,
+        attach_binance_spot_short_windows,
+    )
+
+    assert _skip_binance_kline_symbol("NVDAONUSDT") is True
+    assert _skip_binance_kline_symbol("BTCUSDT") is False
+
+    class _BoomHttp:
+        def get_json(self, *a, **k):
+            raise AssertionError("binance must not be called for *ONUSDT")
+
+    rows = [
+        {
+            "venue": "kucoin",
+            "symbol": "NVDAONUSDT",
+            "quote_volume": "2000000",
+            "change_pct": "10",
+        }
+    ]
+    counts = attach_binance_spot_short_windows(_BoomHttp(), rows, top_n=8)
+    assert counts["n_15m"] == 0
+
+
 def test_mexc_futures_contract_path_and_parallel_ohlc():
     from radar.ingest.short_window import (
         mexc_futures_contract_path,

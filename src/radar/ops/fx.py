@@ -21,7 +21,8 @@ from radar.secrets_redact import redact_exc
 
 logger = logging.getLogger("radar.ops.fx")
 
-FX_HOST = "api.frankfurter.app"
+# frankfurter.app → 301 to frankfurter.dev (Bot API / httpx follow_redirects=False)
+FX_HOST = "api.frankfurter.dev"
 NBRB_HOST = "www.nbrb.by"
 FX_MAX_RESPONSE_BYTES = 65_536
 # Fiat amount / rate scale: micros (1 unit = 1_000_000)
@@ -77,7 +78,7 @@ def _rate_to_micros(v: Any) -> Optional[int]:
 
 
 def _fetch_rates(base: str) -> Dict[str, int]:
-    url = f"https://{FX_HOST}/latest"
+    url = f"https://{FX_HOST}/v1/latest"
     try:
         with httpx.Client(
             timeout=httpx.Timeout(15.0, connect=5.0),

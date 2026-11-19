@@ -1,9 +1,11 @@
 # Build radar_native (Rust/PyO3) into the active venv.
-# Uses maturin build + pip install (same as ci-native) to avoid
-# "pip could not overwrite ... in use" / leftover ~adar_native on Windows.
+#   .\build_native.ps1
+#   .\scripts\build_native.ps1
 $ErrorActionPreference = "Stop"
-$Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+. (Join-Path $PSScriptRoot "_radar_root.ps1")
+$Root = Get-RadarRepoRoot -StartPath $PSScriptRoot
 Set-Location $Root
+Write-Host "repo: $Root"
 
 $py = Join-Path $Root ".venv\Scripts\python.exe"
 if (-not (Test-Path $py)) {
@@ -30,7 +32,6 @@ function Clear-RadarNativeLeftovers {
 
 Clear-RadarNativeLeftovers
 
-# pip/maturin write progress to stderr; do not treat as terminating under Stop.
 $prevEap = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
 & $py -m pip install -q "maturin>=1.7,<2.0"
@@ -59,8 +60,6 @@ if (-not $wheel) {
   Write-Error "maturin build produced no wheel under native/radar_native/dist"
   exit 1
 }
-# Prefer install over develop: works when .pyd is locked by a running interpreter.
-# Discard pip upgrade-notice noise on stderr so PS Stop does not false-fail.
 & $py -m pip install --force-reinstall --no-deps $wheel.FullName 2>$null
 $pipCode = $LASTEXITCODE
 Set-Location $Root

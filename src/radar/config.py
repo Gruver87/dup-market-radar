@@ -538,6 +538,37 @@ def validate_config(cfg: Dict[str, Any]) -> None:
                 v = -1.0
             if v < 0.0 or v > 1.0:
                 errors.append("ingest.display_ensure_board_low must be float 0..1")
+        nws = ingest.get("native_ws")
+        if nws is not None:
+            if not isinstance(nws, dict):
+                errors.append("ingest.native_ws must be a mapping")
+            else:
+                if "enabled" in nws and not isinstance(nws["enabled"], bool):
+                    errors.append("ingest.native_ws.enabled must be bool")
+                venue = nws.get("venue")
+                if venue is not None and (
+                    not isinstance(venue, str)
+                    or venue.strip().lower() not in {"binance", "bybit", "kucoin"}
+                ):
+                    errors.append("ingest.native_ws.venue must be binance|bybit|kucoin")
+                syms = nws.get("symbols")
+                if syms is not None and (
+                    not isinstance(syms, list)
+                    or not all(isinstance(s, str) and s.strip() for s in syms)
+                    or len(syms) < 1
+                    or len(syms) > 32
+                ):
+                    errors.append("ingest.native_ws.symbols must be list[str] len 1..32")
+                rs = nws.get("ring_size")
+                if rs is not None and (not isinstance(rs, int) or rs < 32 or rs > 8192):
+                    errors.append("ingest.native_ws.ring_size must be int 32..8192")
+                sm = nws.get("stale_ms")
+                if sm is not None and (
+                    not isinstance(sm, int) or sm < 1_000 or sm > 300_000
+                ):
+                    errors.append("ingest.native_ws.stale_ms must be int 1000..300000")
+                if "annotate_rows" in nws and not isinstance(nws["annotate_rows"], bool):
+                    errors.append("ingest.native_ws.annotate_rows must be bool")
 
     bubbles = cfg.get("bubbles")
     if bubbles is not None:

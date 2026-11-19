@@ -27,11 +27,26 @@ fn native_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
+/// Engine layer ids present in this wheel / workspace build.
+#[pyfunction]
+fn native_engine_layers() -> Vec<&'static str> {
+    vec!["radar_core", "radar_native", "radar_ingest"]
+}
+
+/// Parse a decimal price string into Radar price_i (1e8) via radar_core.
+#[pyfunction]
+fn price_i_from_decimal(raw: &str) -> PyResult<i64> {
+    radar_core::price_i_from_str(raw)
+        .ok_or_else(|| PyValueError::new_err("bad decimal price"))
+}
+
 #[pymodule]
 fn radar_native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(score_universe_json, m)?)?;
     m.add_function(wrap_pyfunction!(normalize_kucoin_symbol, m)?)?;
     m.add_function(wrap_pyfunction!(native_version, m)?)?;
+    m.add_function(wrap_pyfunction!(native_engine_layers, m)?)?;
+    m.add_function(wrap_pyfunction!(price_i_from_decimal, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }

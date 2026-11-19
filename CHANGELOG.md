@@ -1,5 +1,41 @@
 # Changelog - DUP Market Radar
 
+## 0.2.93
+
+- Config: `ingest.native_ws.enabled: true` (Binance WS sidecar; HTTP poll still SoT)
+- Ingest: fix false `binance reconnect: connect timeout` at end of short `--seconds` windows — connect skip floor 400ms; reconnect skip 2s; first attempt always; connect budget 20s; read idle 60s
+- KuCoin: don't abort after bullet-public when <3s left (was → 0 ticks on `--seconds 4`); check_ingest KuCoin window 10s
+- Package / `__version__` / native pin `0.2.93`
+- Soak / 48h: **not** claimed this pin
+
+## 0.2.92
+
+- Native ingest: KuCoin spot match WS (`radar-ingest-kucoin`, bullet-public)
+- Snapshot: opt-in `annotate_rows` attaches `ws_*` on sector rows (HTTP `price_i` untouched)
+- DX: release binary discovery via `CARGO_TARGET_DIR` / sandbox target; `run_ingest_kucoin.ps1` shims
+- Package / `__version__` / native pin `0.2.92`
+- Soak / 48h: **not** claimed this pin
+
+## 0.2.91
+
+- Native ingest: Bybit spot `publicTrade` WS → NDJSON (`radar-ingest-bybit`); Binance/Bybit `--seconds 0` = forever
+- Python: `ingest.tick_ring` sidecar + snapshot/`health` field `native_ws` (opt-in `ingest.native_ws.enabled`, **does not** replace HTTP poll)
+- API: `GET /api/native/ws`
+- DX: shims under `native/*.ps1` so smoke works from `native/` cwd; `run_ingest_bybit.ps1`
+- Package / `__version__` / native pin `0.2.91`
+- Soak / 48h: **not** claimed this pin
+
+## 0.2.90
+
+- Native engine: Cargo workspace `native/` — `radar_core` (Tick / integer money, no pyo3) + `radar_ingest` (Binance trade WS → NDJSON) + existing `radar_native`
+- ADR: `docs/adr/ADR-001-rust-engine-layers.md` — core / ingest / native split; Ping stays consumer
+- Scripts: `check_ingest.ps1`, `run_ingest_binance.ps1` (watch-only WS smoke)
+- `radar_native`: `native_engine_layers`, `price_i_from_decimal` via `radar_core`
+- Docs: ARCHITECTURE layers diagram updated
+- Package / `__version__` / native pin `0.2.90`
+- Ingest **not** yet replacing HTTP poll snapshot path (additive)
+- Soak / 48h: **not** claimed this pin
+
 ## 0.2.89
 
 - DX: companion [`dup-agent-skills`](https://github.com/Gruver87/dup-agent-skills) — `docs/AGENT_SKILLS.md` + `scripts/link_agent_skills.ps1` + `radar_gate` needles; OPS pointer (no pin bump)

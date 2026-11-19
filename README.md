@@ -1,6 +1,6 @@
 # DUP Market Radar
 
-**Version:** 0.2.89 · **Org:** [DUP Labs](https://github.com/Gruver87) · **Author:** Uladzimir Dabranski
+**Version:** 0.2.93 · **Org:** [DUP Labs](https://github.com/Gruver87) · **Author:** Uladzimir Dabranski
 
 Hybrid **Python + Rust** market watchlist for crypto spot, USDT-M futures (watch-only), memes, stables, listings, and large prints — with optional **KuCoin spot** manual orders and **opt-in auto-trade** (spot_alts / CEX memes / listings; **never futures**; DEX memes watchlist-only).
 
@@ -32,6 +32,7 @@ Companion to industrial L1 work ([`dup-protocol`](https://github.com/Gruver87/du
 - **Integer money** only (price `1e8`, USDT micros `1e6`, bps, score centi) — no float on money paths.
 - **Security posture:** HTTPS allowlist, TLS verify on, CORS deny `*`, API key gate for trade mutations, secret redaction in logs.
 - **Hybrid score:** Rust `radar_native` (PyO3) when built; Docker compose default = **python-lab** (prefer off). GitHub runs **both** `ci.yml` (python-lab full suite) and `ci-native.yml` (maturin + score parity) — see honesty below.
+- **Rust engine workspace** (`native/`): `radar_core` · `radar_ingest` (Binance / Bybit / KuCoin WS) · `radar_native`. Opt-in `ingest.native_ws` → `native_ws` + optional `ws_*` on sector rows (`price_i` untouched). Smoke: `.\check_ingest.ps1`.
 - **Auto fail-closed:** refuses buys on `ok=false` / `mtf_ensure_ok=false` / native-prefer + python backend; with open positions runs **stop-only** via KuCoin mark.
 - **Ingest speed (0.2.73–0.2.89):** parallel venue bootstraps; Dex/CG walls; KuCoin warm stale-OK; process MTF reuse cache; optional `RADAR_PROFILE=light` (KuCoin-primary); display wall scales with board fill.
 - **Dashboard pages** (like DUP Console): Watchlist · Markets ~6m table · Ops (clock/FX) · Help · hash routes `#watchlist` / `#markets` / `#ops` / `#help`.

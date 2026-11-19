@@ -39,10 +39,17 @@ def native_status() -> Dict[str, Any]:
     _try_load()
     if _NATIVE is None:
         return {"available": False, "error": _LOAD_ERROR, "backend": "python"}
+    layers = None
+    if hasattr(_NATIVE, "native_engine_layers"):
+        try:
+            layers = list(_NATIVE.native_engine_layers())
+        except Exception:  # noqa: BLE001
+            layers = None
     return {
         "available": True,
         "backend": "radar_native",
         "version": getattr(_NATIVE, "native_version", lambda: "unknown")(),
+        "engine_layers": layers,
         "error": None,
     }
 

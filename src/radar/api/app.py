@@ -29,6 +29,11 @@ from radar.auth_stats import AUTH_STATS
 from radar.config import ROOT, load_config
 from radar.ingest.circuit import get_breaker
 from radar.ingest.sector_poll import effective_snapshot_refresh_ms
+from radar.ingest.tick_ring import configure_from_cfg as native_ws_cfg
+from radar.ingest.tick_ring import overlay_status as native_ws_overlay
+from radar.ingest.tick_ring import start_from_config as native_ws_start
+from radar.ingest.tick_ring import stop_feed as native_ws_stop
+from radar.ingest.ws_annotate import annotate_snapshot_rows
 from radar.metrics import build_metrics_payload, to_prometheus
 from radar.middleware import (
     DEFAULT_MAX_BODY_BYTES,
@@ -209,12 +214,45 @@ def _scan_on_pool(*, force: bool = False) -> Dict[str, Any]:
     return fut.result(timeout=180)
 
 
+def _attach_native_ws(snap: Dict[str, Any]) -> Dict[str, Any]:
+    """Live WS overlay — never cached into score path; HTTP poll remains SoT."""
+    out = dict(snap)
+    cfg = load_config()
+    try:
+        overlay = native_ws_overlay(cfg)
+        out["native_ws"] = overlay
+        opts = native_ws_cfg(cfg)
+        if (
+            opts.get("enabled")
+            and opts.get("annotate_rows", True)
+            and isinstance(overlay, dict)
+            and overlay.get("ok")
+        ):
+            out, n_pat = annotate_snapshot_rows(
+                out,
+                overlay,
+                max_age_ms=int(opts.get("stale_ms") or 15_000),
+            )
+            nw = dict(out.get("native_ws") or overlay)
+            nw["rows_annotated"] = int(n_pat)
+            out["native_ws"] = nw
+    except Exception as exc:  # noqa: BLE001
+        out["native_ws"] = {
+            "enabled": False,
+            "ok": False,
+            "replaces_http_poll": False,
+            "error": redact_exc(exc, max_len=128),
+        }
+    return out
+
+
 def _get_snapshot(force: bool = False) -> Dict[str, Any]:
-    return _cache.get(
+    snap = _cache.get(
         force=force,
         refresh_ms=_refresh_ms(),
         scan_fn=lambda: _scan_on_pool(force=force),
     )
+    return _attach_native_ws(snap)
 
 
 def _trust_proxy() -> bool:
@@ -708,11 +746,26 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
                 logger.error("warm scan failed: %s", redact_exc(exc, max_len=256))
 
         threading.Thread(target=_warm, name="radar-warm-scan", daemon=True).start()
+    if "pytest" not in sys.modules:
+        try:
+            st = native_ws_start(load_config())
+            logger.info(
+                "native_ws enabled=%s ok=%s venue=%s",
+                st.get("enabled"),
+                st.get("ok"),
+                st.get("venue"),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("native_ws start soft-fail: %s", redact_exc(exc, max_len=128))
     try:
         yield
     finally:
         # Always run cleanup on Ctrl+C / CancelledError — quiet exit, no orphan locks.
         logger.info("shutdown: stopping recovery + telegram + auto-trade")
+        try:
+            native_ws_stop(join_timeout_sec=3.0)
+        except Exception:  # noqa: BLE001
+            pass
         try:
             HUB.close_all()
         except Exception:  # noqa: BLE001
@@ -750,7 +803,7 @@ def _openapi_enabled() -> bool:
 _OPENAPI_ON = _openapi_enabled()
 app = FastAPI(
     title="DUP Market Radar",
-    version="0.2.89",
+    version="0.2.93",
     lifespan=_lifespan,
     docs_url="/docs" if _OPENAPI_ON else None,
     redoc_url="/redoc" if _OPENAPI_ON else None,
@@ -1015,6 +1068,14 @@ def ops_recovery(request: Request) -> Dict[str, Any]:
     return {"ok": bool(st.get("running")), "recovery": st}
 
 
+@app.get("/api/native/ws")
+def native_ws_status(request: Request) -> Dict[str, Any]:
+    """Rust venue WS tick ring status (additive; does not replace HTTP poll)."""
+    _check_probe_rate(request)
+    body = native_ws_overlay(load_config())
+    return {"ok": bool(body.get("ok")), "native_ws": body, "product": "DUP Market Radar"}
+
+
 @app.get("/api/health")
 def health(request: Request) -> Dict[str, Any]:
     """Honest health — not always green (ops dashboard; not a k8s probe)."""
@@ -1030,6 +1091,7 @@ def health(request: Request) -> Dict[str, Any]:
         "product": "DUP Market Radar",
         "schema_version": None if snap is None else snap.get("schema_version"),
         "native": native_status(),
+        "native_ws": native_ws_overlay(load_config()),
         "manual_trade": surface["manual_trade"],
         "auto_trade": surface["auto_trade"],
         "recovery": _recovery.status() if _recovery else {"running": False},

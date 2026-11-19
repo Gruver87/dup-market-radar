@@ -1,25 +1,32 @@
 # Architecture
 
-**Pin:** 0.2.89 | Index: [`README.md`](README.md)
+**Pin:** 0.2.93 | Index: [`README.md`](README.md)
 
-**Blueprint (columns / constructor template):** [`ARCHITECTURE_BLUEPRINT.md`](ARCHITECTURE_BLUEPRINT.md) ? module assembly drawing after full repo scan.
+**Blueprint (columns / constructor template):** [`ARCHITECTURE_BLUEPRINT.md`](ARCHITECTURE_BLUEPRINT.md) — module assembly drawing after full repo scan.
+
+**Rust engine ADR:** [`adr/ADR-001-rust-engine-layers.md`](adr/ADR-001-rust-engine-layers.md)
 
 ## Layers
 
 ```text
-Dashboard / Telegram / WebSocket (/ws) / Webhook
+Dashboard / Telegram / WebSocket (/ws) / Webhook / Market Ping
         |
    FastAPI (radar.api.app)
         |
    Pipeline (ingest -> MTF ensure -> score -> display patch -> snapshot)
         |
-   -----+-----
- Python     Rust radar_native (PyO3)  -- score hot path when built
- ingest     score_universe_json
- trade      parity with Python scorers (tests)
- paper      dry-run P&L ledger (USDT micros)
- ops        worldtime / FX / markets (~6m) payload
+   -----+---------------------------+------------------
+ Python HTTP poll              Rust workspace (native/)
+ trade / paper / ops           radar_core   — Tick, integer money (no pyo3)
+                               radar_ingest — Binance / Bybit / KuCoin WS → ticks
+                               radar_native — score/rank PyO3 hot path
+                                      |
+                               tick_ring (opt-in) → snapshot.native_ws
+                                      + annotate_rows → sector ws_* fields
 ```
+
+HTTP poll remains the snapshot **source of truth**. `native_ws` / `ws_*` are additive (`ingest.native_ws.enabled`, default off) — never mutate scored `price_i`.
+Smoke: `.\check_ingest.ps1` · venue: `.\run_ingest_binance.ps1` / `bybit` / `kucoin`.
 
 Transport (HTTP/TG) must not reach raw L1-style state: this product is **not** the L1. Persistence is JSON under `data/` (positions, watches, oid ledger) with integrity checks where applicable.
 

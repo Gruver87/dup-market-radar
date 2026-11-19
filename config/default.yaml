@@ -34,6 +34,18 @@ ingest:
   display_ensure_wall_ms: 1500          # residual display MTF soft timeout (board OK)
   display_ensure_wall_low_ms: 4000      # longer display wall when board fill < low bar
   display_ensure_board_low: 0.5         # board fill bar for low-wall selection (0.2.86)
+  # Rust WS tick ring (additive overlay on snapshot.native_ws — does NOT replace HTTP poll)
+  native_ws:
+    enabled: true                       # Rust WS sidecar → snapshot.native_ws + ws_* rows
+    venue: binance                      # binance | bybit | kucoin
+    symbols:
+      - BTCUSDT
+      - ETHUSDT
+      - SOLUSDT
+    ring_size: 512
+    stale_ms: 15000
+    annotate_rows: true                 # attach ws_* on sector rows (never mutates price_i)
+
 
 snapshot_refresh_ms: 45000
 
@@ -243,4 +255,5 @@ allowlist_hosts:
   - api.dexscreener.com
   - api.coingecko.com
   - api.frankfurter.app
+  - api.frankfurter.dev
   - www.nbrb.by

@@ -1,0 +1,30 @@
+[package]
+name = "radar_ingest"
+version = "0.1.0"
+edition.workspace = true
+description = "DUP Market Radar venue ingest — WS normalize to Tick (no pyo3)"
+license.workspace = true
+
+[[bin]]
+name = "radar-ingest-binance"
+path = "src/bin/binance_trades.rs"
+
+[[bin]]
+name = "radar-ingest-bybit"
+path = "src/bin/bybit_trades.rs"
+
+[[bin]]
+name = "radar-ingest-kucoin"
+path = "src/bin/kucoin_trades.rs"
+
+[dependencies]
+radar_core = { path = "../radar_core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "signal"] }
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+futures-util = "0.3"
+url = "2"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "native-tls"] }

@@ -11,22 +11,41 @@
 
 UI layout: [`DASHBOARD.md`](DASHBOARD.md).
 
-## Auto-trade
+## Auto-execute (autonomous mode)
 
-Config: `config/default.yaml` → `auto_trade`.
+Config: `config/default.yaml` → `auto_trade`.  
+Runtime toggle = **auto_execute** (`enabled` in API / dashboard «Автоисполнение»). **OFF by default** — never silently arms live trading.
 
 | Rule | Behavior |
 |------|----------|
-| Default | **OFF** |
+| Default | **OFF** (`enabled_default: false`) |
+| Armed | `enabled` + keys + `dry_run: false` + persist OK + kill-switch clear → live KuCoin spot market orders **without** browser confirm |
+| Dry run | `dry_run: true` → cycle may log actions; status `armed=false` (no live auto orders) |
+| Manual buttons | Always keep Preview → Confirm (independent of auto-execute) |
 | Sectors | `spot_alts` / `memes` (CEX only) / `listings` — futures blocked; DEX memes skipped |
-| Dry run | `dry_run: true` → log only |
+| Buys | `buy_setups` (default `buy-watch`, `new-listing-watch`) + min score + risk flags |
+| Sells | `sell_setups` (default `fade-watch`) **or** `stop_loss_bps` from entry |
+| Quote size | `quote_usdt_micros_per_buy` + `api.max_order_quote_usdt_micros` |
+| Open bags | `max_open_positions` |
+| Daily rails | `max_daily_buys`, `max_daily_notional_usdt_micros` (UTC day; `0` = unlimited) |
+| Cooldown | `signal_cooldown_sec` same symbol+side (hard stop-loss exempt) |
+| Kill-switch | `POST /api/trade/auto/kill` → immediate OFF + latch; `clear-kill` then enable again |
 | Degraded snap (`ok=false`, `mtf_ensure_ok=false`, native-prefer + python backend) | **No buys** |
 | Degraded / empty sectors **with** open positions | **Stop-only** via KuCoin public mark (`get_spot_mark_price_i`) |
 | Degraded **without** positions | Cycle refused |
 | Persist corrupt | Cannot enable auto |
 | Single-flight | Concurrent `run_once` soft-refused |
+| Fill reconcile | `fill_reconcile` (default true) sizes bags from KuCoin fills |
 
 Fade / setup sells require a healthy analysis row. Hard stop-loss on degrade uses **exchange mark**, not fade labels.
+
+### Enable live auto-execute (operator)
+
+1. Read [`DISCLAIMER.md`](DISCLAIMER.md) + [`LIVE_MONEY.md`](LIVE_MONEY.md).
+2. Keys in `.env`; prefer `RADAR_PROFILE=live-money` (`dry_run: false` overlay) — lab default stays `dry_run: true`.
+3. Dashboard: confirm Watchlist `ok` / `mtf_ensure_ok`, then **Автоисполнение: ON**.
+4. Status must show **ARMED** (not only ON + `dry_run=true`).
+5. Emergency: **СТОП** → kill-switch. Clear latch before re-enable.
 
 ## Telegram
 

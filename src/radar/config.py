@@ -235,6 +235,9 @@ def validate_config(cfg: Dict[str, Any]) -> None:
                 "min_score_centi",
                 "stop_loss_bps",
                 "max_open_positions",
+                "max_daily_buys",
+                "max_daily_notional_usdt_micros",
+                "signal_cooldown_sec",
                 "cycle_sec",
                 "positions_backup_keep",
                 "fill_reconcile_attempts",
@@ -254,6 +257,21 @@ def validate_config(cfg: Dict[str, Any]) -> None:
                 errors.append("auto_trade.positions_backup_keep must be int 0..50")
             if "quote_usdt_micros_per_buy" in auto and auto["quote_usdt_micros_per_buy"] <= 0:
                 errors.append("auto_trade.quote_usdt_micros_per_buy must be > 0")
+            if "max_daily_buys" in auto and (
+                auto["max_daily_buys"] < 0 or auto["max_daily_buys"] > 10_000
+            ):
+                errors.append("auto_trade.max_daily_buys must be int 0..10000 (0=unlimited)")
+            if "max_daily_notional_usdt_micros" in auto and (
+                auto["max_daily_notional_usdt_micros"] < 0
+                or auto["max_daily_notional_usdt_micros"] > 100_000 * 1_000_000
+            ):
+                errors.append(
+                    "auto_trade.max_daily_notional_usdt_micros must be int 0..1e11 (0=unlimited)"
+                )
+            if "signal_cooldown_sec" in auto and (
+                auto["signal_cooldown_sec"] < 0 or auto["signal_cooldown_sec"] > 86_400
+            ):
+                errors.append("auto_trade.signal_cooldown_sec must be int 0..86400")
             if "fill_reconcile" in auto and not isinstance(auto["fill_reconcile"], bool):
                 errors.append("auto_trade.fill_reconcile must be bool")
             if "sell_clamp_to_balance" in auto and not isinstance(

@@ -31,7 +31,9 @@ def test_live_money_overlay_spot_only_small_size(monkeypatch):
     sectors = list(auto.get("allowed_sectors") or [])
     assert "spot_alts" in sectors
     assert not (set(sectors) & FUTURES_BLOCK)
-    assert int(auto.get("quote_usdt_micros_per_buy") or 0) == 5_000_000
+    assert int(auto.get("quote_usdt_micros_per_buy") or 0) == 25_000_000
+    assert int(auto.get("max_open_positions") or 0) == 4
+    assert int(auto.get("max_daily_buys") or 0) == 12
     assert (cfg.get("secrets") or {}).get("backend") == "env"
     native = cfg.get("native") or {}
     assert native.get("prefer") is True

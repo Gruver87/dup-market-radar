@@ -1,5 +1,15 @@
 # Changelog - DUP Market Radar
 
+## 0.2.109
+
+- Auto-execute clarity: dashboard **Автоисполнение** + `armed` status (distinct from dry_run-only ON)
+- Safety rails: `max_daily_buys`, `max_daily_notional_usdt_micros`, `signal_cooldown_sec`, kill-switch (`/api/trade/auto/kill` + UI **СТОП**)
+- Modal / help copy no longer claims Radar never places orders when auto-execute is armed
+- Tests: gating for default OFF, kill latch, cooldown, daily caps
+- Docs: TRADE / LIVE_MONEY / README enablement + risks
+- Package / `__version__` `0.2.109`
+- Soak / 48h: **not** claimed this pin
+
 ## 0.2.108
 
 - Default `native_ws.venues: [binance, bybit, kucoin, mexc]` (full cap-4 concurrent WS)

@@ -1,6 +1,9 @@
 # DUP Market Radar
 
-**Version:** 0.2.109 · **Org:** [DUP Labs](https://github.com/Gruver87) · **Author:** Uladzimir Dabranski
+**Version:** 0.2.110 · **Org:** [DUP Labs](https://github.com/Gruver87) · **Author:** Uladzimir Dabranski
+
+[![ci](https://github.com/Gruver87/dup-market-radar/actions/workflows/ci.yml/badge.svg)](https://github.com/Gruver87/dup-market-radar/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/Gruver87/dup-market-radar?display_name=tag)](https://github.com/Gruver87/dup-market-radar/releases)
 
 Hybrid **Python + Rust** market watchlist for crypto spot, USDT-M futures (watch-only), memes, stables, listings, and large prints — with optional **KuCoin spot** manual orders and **opt-in auto-trade** (spot_alts / CEX memes / listings; **never futures**; DEX memes watchlist-only).
 
@@ -15,6 +18,7 @@ Hybrid **Python + Rust** market watchlist for crypto spot, USDT-M futures (watch
 | Watchlist / MTF / dashboard / Telegram alerts | Primary product |
 | Manual KuCoin Buy/Sell | Opt-in; confirm required |
 | Auto-execute ON/OFF | Default **OFF**; armed only with keys + `dry_run=false`; kill-switch; daily/cooldown rails; fail-closed on degraded snapshots; stop-only if bags open |
+| Equal sleeves (0.2.110) | Free USDT split across spot_alts/memes/listings; buy = sleeve cash; sell credits same sleeve — **not** a profit claim |
 
 Companion to industrial L1 work ([`dup-protocol`](https://github.com/Gruver87/dup-protocol) / [`dup-protocol-experimental`](https://github.com/Gruver87/dup-protocol-experimental)) — **standalone**; not the L1 pin and not a "mainnet trading stack."
 

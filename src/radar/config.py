@@ -257,6 +257,21 @@ def validate_config(cfg: Dict[str, Any]) -> None:
                 errors.append("auto_trade.positions_backup_keep must be int 0..50")
             if "quote_usdt_micros_per_buy" in auto and auto["quote_usdt_micros_per_buy"] <= 0:
                 errors.append("auto_trade.quote_usdt_micros_per_buy must be > 0")
+            sizing = auto.get("sizing_mode")
+            if sizing is not None:
+                if not isinstance(sizing, str) or sizing.strip().lower() not in {
+                    "equal_sleeves",
+                    "fixed_quote",
+                }:
+                    errors.append(
+                        "auto_trade.sizing_mode must be equal_sleeves or fixed_quote"
+                    )
+            if "sleeve_paper_seed_usdt_micros" in auto:
+                seed = auto["sleeve_paper_seed_usdt_micros"]
+                if not isinstance(seed, int) or seed < 1_000_000 or seed > 100_000_000_000:
+                    errors.append(
+                        "auto_trade.sleeve_paper_seed_usdt_micros must be int 1e6..1e11"
+                    )
             if "max_daily_buys" in auto and (
                 auto["max_daily_buys"] < 0 or auto["max_daily_buys"] > 10_000
             ):
@@ -482,10 +497,13 @@ def validate_config(cfg: Dict[str, Any]) -> None:
                 not isinstance(mhb, int) or mhb < 1024 or mhb > 262_144
             ):
                 errors.append("api.max_request_header_bytes must be int 1024..262144")
-            # Auto buy size must not exceed manual fat-finger cap when both set
-            auto_q = (cfg.get("auto_trade") or {}).get("quote_usdt_micros_per_buy")
+            # Fixed-quote size must not exceed fat-finger cap (equal_sleeves sizes dynamically)
+            auto_trade = cfg.get("auto_trade") or {}
+            sizing_mode = str(auto_trade.get("sizing_mode") or "fixed_quote").strip().lower()
+            auto_q = auto_trade.get("quote_usdt_micros_per_buy")
             if (
-                isinstance(max_q, int)
+                sizing_mode != "equal_sleeves"
+                and isinstance(max_q, int)
                 and isinstance(auto_q, int)
                 and auto_q > max_q
             ):

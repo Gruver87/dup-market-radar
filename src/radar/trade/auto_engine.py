@@ -18,6 +18,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from radar.audit_log import AuditLogError, append_jsonl
 from radar.config import ROOT, load_config
 from radar.money import (
+    BASE_SCALE,
     PRICE_SCALE,
     QUOTE_SCALE,
     SCORE_CENTI,
@@ -49,6 +50,9 @@ FUTURES_BLOCK = frozenset({"futures", "futures_long", "futures_short"})
 _DEFAULT_MAX_DAILY_BUYS = 20
 _DEFAULT_MAX_DAILY_NOTIONAL_MICROS = 200 * QUOTE_SCALE  # 200 USDT
 _DEFAULT_SIGNAL_COOLDOWN_SEC = 900  # 15m same symbol+side
+_DEFAULT_PAPER_SEED_MICROS = 90 * QUOTE_SCALE  # dry-run seed when no KuCoin USDT
+_SIZING_EQUAL = "equal_sleeves"
+_SIZING_FIXED = "fixed_quote"
 
 
 def _utc_day() -> str:
@@ -58,6 +62,32 @@ def _utc_day() -> str:
 def _fire_key(symbol: str, side: str) -> str:
     sym = str(symbol).upper().replace("-", "").replace("/", "")
     return f"{sym}:{str(side).lower()}"
+
+
+def split_equal_micros(amount_micro: int, parts: int) -> Tuple[int, ...]:
+    """Split USDT micros into equal parts; remainder goes to the first part."""
+    if (
+        isinstance(amount_micro, bool)
+        or isinstance(parts, bool)
+        or not isinstance(amount_micro, int)
+        or not isinstance(parts, int)
+    ):
+        return tuple()
+    if amount_micro < 0 or parts < 1 or parts > 8 or amount_micro >= 10**24:
+        return tuple()
+    base = amount_micro // parts
+    out = [base] * parts
+    out[0] += amount_micro - base * parts
+    return tuple(out)
+
+
+def usdt_base_i_to_micros(base_size_i: int) -> int:
+    """KuCoin USDT available is BASE_SCALE (1e8); auto quotes use QUOTE_SCALE (1e6)."""
+    if isinstance(base_size_i, bool) or not isinstance(base_size_i, int) or base_size_i <= 0:
+        return 0
+    if base_size_i >= 10**24:
+        return 0
+    return int(base_size_i) * QUOTE_SCALE // BASE_SCALE
 
 
 class AutoTradeEngine:
@@ -112,6 +142,10 @@ class AutoTradeEngine:
                 and not dry
                 and keys_ok
             )
+            sleeves = self._state.get("sleeves")
+            if not isinstance(sleeves, dict):
+                sleeves = {}
+            sizing = str(cfg.get("sizing_mode") or _SIZING_FIXED).strip().lower()
             return {
                 "enabled": enabled,
                 # Alias: auto_execute == runtime enabled toggle (opt-in, OFF default).
@@ -125,6 +159,9 @@ class AutoTradeEngine:
                 "allowed_sectors": list(cfg.get("allowed_sectors") or []),
                 "symbol_blacklist": list(cfg.get("symbol_blacklist") or []),
                 "symbol_whitelist": list(cfg.get("symbol_whitelist") or []),
+                "sizing_mode": sizing,
+                "sleeves": {str(k): int(v) for k, v in sleeves.items() if isinstance(v, int)},
+                "sleeves_seed_usdt_micros": int(self._state.get("sleeves_seed_usdt_micros") or 0),
                 "quote_usdt_micros_per_buy": cfg.get("quote_usdt_micros_per_buy")
                 or quote_i(cfg.get("quote_usdt_per_buy") or 10),
                 "max_open_positions": cfg.get("max_open_positions"),
@@ -193,6 +230,11 @@ class AutoTradeEngine:
         with self._lock:
             self._state["enabled"] = enabled
             self._state["updated_at"] = int(time.time())
+            if enabled:
+                cfg_on = load_config().get("auto_trade") or {}
+                seed_err = self._ensure_sleeves_locked(cfg_on, force=False)
+                if seed_err:
+                    logger.warning("sleeve seed on enable: %s", seed_err)
             self._save_state()
         if enabled:
             self.start()
@@ -388,11 +430,12 @@ class AutoTradeEngine:
             for x in (cfg.get("memes_soft_risk_flags") or ["below_vol_floor"])
             if x
         }
-        quote_micros = int(
+        fixed_quote_micros = int(
             cfg.get("quote_usdt_micros_per_buy")
             or quote_i(cfg.get("quote_usdt_per_buy") or 10)
             or (10 * QUOTE_SCALE)
         )
+        equal_sleeves = self._sizing_equal(cfg)
         max_open = int(cfg.get("max_open_positions") or 5)
         max_buys = int(cfg.get("max_buys_per_cycle") or 2)
         max_sells = int(cfg.get("max_sells_per_cycle") or 5)
@@ -478,10 +521,15 @@ class AutoTradeEngine:
             sells += 1
             # Fail-closed: forget bag only after successful sell
             if result.get("ok"):
+                credit = self._sell_credit_micros(pos, result, row=row, dry=dry)
+                sector = str(pos.get("sector") or (row or {}).get("sector") or "")
                 with self._lock:
                     self._positions.pop(sym, None)
                     self._save_positions_locked()
                     positions = dict(self._positions)
+                    if equal_sleeves and sector and credit > 0:
+                        self._credit_sleeve_locked(sector, credit)
+                        self._save_state()
                     self._record_fire_locked(sym, "sell", notional_micros=0, is_buy=False)
             else:
                 logger.warning(
@@ -493,6 +541,17 @@ class AutoTradeEngine:
         # --- buys ---
         with self._lock:
             positions = dict(self._positions)
+            if equal_sleeves:
+                seed_err = self._ensure_sleeves_locked(cfg, force=False)
+                if seed_err:
+                    actions.append(
+                        {
+                            "ok": False,
+                            "side": "buy",
+                            "skipped": True,
+                            "message": f"sleeve seed failed: {seed_err}",
+                        }
+                    )
         open_n = len(positions)
         buys = 0
         candidates = self._collect_buys(
@@ -512,8 +571,35 @@ class AutoTradeEngine:
                 break
             sym = row["symbol"]
             price_i = int(row.get("price_i") or 0)
+            sector = str(row.get("sector") or "")
             if price_i <= 0:
                 continue
+            if equal_sleeves:
+                if self._sector_has_open(sector, positions):
+                    actions.append(
+                        {
+                            "ok": False,
+                            "side": "buy",
+                            "symbol": sym,
+                            "skipped": True,
+                            "message": f"sleeve {sector} already has open position",
+                        }
+                    )
+                    continue
+                quote_micros, sleeve_err = self._sleeve_buy_quote(sector, cfg)
+                if sleeve_err or quote_micros <= 0:
+                    actions.append(
+                        {
+                            "ok": False,
+                            "side": "buy",
+                            "symbol": sym,
+                            "skipped": True,
+                            "message": sleeve_err or f"sleeve {sector} empty",
+                        }
+                    )
+                    continue
+            else:
+                quote_micros = fixed_quote_micros
             gate_ok, gate_msg = self._buy_gates_ok(
                 sym,
                 quote_micros,
@@ -532,10 +618,11 @@ class AutoTradeEngine:
                     }
                 )
                 continue
-            last = self._exec_buy(sym, quote_micros, price_i, row.get("sector"), dry)
+            last = self._exec_buy(sym, quote_micros, price_i, sector, dry)
             actions.append(last)
             if last.get("ok"):
-                est = apply_fee_bps(mul_div(quote_micros, PRICE_SCALE, price_i), 30)
+                spent = int(last.get("quote_usdt_micros") or quote_micros)
+                est = apply_fee_bps(mul_div(spent, PRICE_SCALE, price_i), 30)
                 size_i = est
                 size_basis = "estimated_fee_adjusted"
                 order_id = last.get("order_id")
@@ -551,6 +638,8 @@ class AutoTradeEngine:
                     if fill.get("ok") and int(fill.get("base_size_i") or 0) > 0:
                         size_i = int(fill["base_size_i"])
                         size_basis = str(fill.get("size_basis") or "kucoin_fill")
+                        if int(fill.get("deal_funds_micros") or 0) > 0:
+                            spent = int(fill["deal_funds_micros"])
                     else:
                         logger.warning(
                             "fill reconcile failed for %s order=%s — keeping estimate: %s",
@@ -560,13 +649,23 @@ class AutoTradeEngine:
                         )
                         size_basis = "estimated_fee_adjusted_unreconciled"
                 with self._lock:
+                    if equal_sleeves and sector:
+                        if not self._debit_sleeve_locked(sector, spent):
+                            # Should not happen after quote check; refuse to orphan bag.
+                            logger.error(
+                                "sleeve debit failed after buy %s sector=%s spent=%s",
+                                sym,
+                                sector,
+                                spent,
+                            )
+                        self._save_state()
                     pos: Dict[str, Any] = {
                         "symbol": sym,
                         "entry_price_i": price_i,
-                        "quote_usdt_micros": quote_micros,
+                        "quote_usdt_micros": spent,
                         "base_size_i": size_i,
                         "size_basis": size_basis,
-                        "sector": row.get("sector"),
+                        "sector": sector,
                         "opened_at_ms": int(time.time() * 1000),
                         "dry_run": bool(dry or last.get("dry_run")),
                     }
@@ -579,13 +678,15 @@ class AutoTradeEngine:
                     self._positions[sym] = pos
                     self._save_positions_locked()
                     open_n = len(self._positions)
+                    positions = dict(self._positions)
                     self._record_fire_locked(
-                        sym, "buy", notional_micros=quote_micros, is_buy=True
+                        sym, "buy", notional_micros=spent, is_buy=True
                     )
                 buys += 1
                 last["base_size_i"] = size_i
                 last["size_basis"] = size_basis
                 last["entry_price_i"] = price_i
+                last["quote_usdt_micros"] = spent
                 self._emit_action({**last, "source": "auto"})
 
         with self._lock:
@@ -649,10 +750,20 @@ class AutoTradeEngine:
             )
             sells += 1
             if result.get("ok"):
+                credit = self._sell_credit_micros(
+                    pos,
+                    result,
+                    row={"price_i": price_i, "sector": pos.get("sector")},
+                    dry=dry,
+                )
+                sector = str(pos.get("sector") or "")
                 with self._lock:
                     self._positions.pop(sym, None)
                     self._save_positions_locked()
                     positions = dict(self._positions)
+                    if self._sizing_equal(cfg) and sector and credit > 0:
+                        self._credit_sleeve_locked(sector, credit)
+                        self._save_state()
                     self._record_fire_locked(sym, "sell", notional_micros=0, is_buy=False)
             else:
                 logger.warning(
@@ -809,10 +920,157 @@ class AutoTradeEngine:
             "message": result.message,
             "exchange": sanitize_exchange_surface(result.exchange),
             "client_oid": client_oid,
+            "quote_usdt_micros": int(quote_micros),
         }
         if oid:
             out["order_id"] = oid
         return out
+
+    def _sizing_equal(self, cfg: Dict[str, Any]) -> bool:
+        mode = str(cfg.get("sizing_mode") or _SIZING_FIXED).strip().lower()
+        return mode == _SIZING_EQUAL
+
+    def _sleeve_sectors(self, cfg: Dict[str, Any]) -> List[str]:
+        raw = [str(s) for s in (cfg.get("allowed_sectors") or []) if s]
+        return [s for s in raw if s not in FUTURES_BLOCK]
+
+    def _sector_has_open(self, sector: str, positions: Dict[str, Any]) -> bool:
+        if not sector:
+            return False
+        for pos in positions.values():
+            if not isinstance(pos, dict):
+                continue
+            if str(pos.get("sector") or "") == sector:
+                return True
+        return False
+
+    def _read_free_usdt_micros(self, cfg: Dict[str, Any]) -> Tuple[int, Optional[str]]:
+        """Live: KuCoin trade USDT. Dry-run / no keys: paper seed from config."""
+        dry = bool(cfg.get("dry_run"))
+        paper = int(
+            cfg.get("sleeve_paper_seed_usdt_micros")
+            if cfg.get("sleeve_paper_seed_usdt_micros") is not None
+            else _DEFAULT_PAPER_SEED_MICROS
+        )
+        if dry or not self._trader.ready:
+            if paper <= 0:
+                return 0, "sleeve_paper_seed_usdt_micros must be > 0 for dry seed"
+            return paper, None
+        try:
+            base_i = int(self._trader.get_available_base_i("USDT"))
+        except Exception as exc:  # noqa: BLE001
+            return 0, redact_exc(exc, max_len=180)
+        micros = usdt_base_i_to_micros(base_i)
+        if micros <= 0:
+            return 0, "KuCoin trade USDT available is 0"
+        return micros, None
+
+    def _ensure_sleeves_locked(
+        self, cfg: Dict[str, Any], *, force: bool = False
+    ) -> Optional[str]:
+        """Caller holds lock. Seed equal sleeves once (or force reseed)."""
+        if not self._sizing_equal(cfg):
+            return None
+        sectors = self._sleeve_sectors(cfg)
+        if not sectors:
+            return "no allowed_sectors for sleeves"
+        cur = self._state.get("sleeves")
+        if (
+            not force
+            and isinstance(cur, dict)
+            and all(isinstance(cur.get(s), int) for s in sectors)
+            and any(int(cur.get(s) or 0) > 0 for s in sectors)
+        ):
+            # Keep existing sleeve books; add missing sector keys at 0.
+            for s in sectors:
+                if s not in cur:
+                    cur[s] = 0
+            self._state["sleeves"] = cur
+            return None
+        total, err = self._read_free_usdt_micros(cfg)
+        if err:
+            return err
+        parts = split_equal_micros(total, len(sectors))
+        if len(parts) != len(sectors):
+            return "equal sleeve split failed"
+        sleeves = {sectors[i]: int(parts[i]) for i in range(len(sectors))}
+        self._state["sleeves"] = sleeves
+        self._state["sleeves_seed_usdt_micros"] = int(total)
+        self._state["sleeves_seeded_at"] = int(time.time())
+        logger.info(
+            "equal sleeves seeded total_micros=%s parts=%s",
+            total,
+            {k: sleeves[k] for k in sectors},
+        )
+        return None
+
+    def _sleeve_buy_quote(
+        self, sector: str, cfg: Dict[str, Any]
+    ) -> Tuple[int, Optional[str]]:
+        if not sector or sector in FUTURES_BLOCK:
+            return 0, "invalid sleeve sector"
+        with self._lock:
+            sleeves = self._state.get("sleeves")
+            if not isinstance(sleeves, dict):
+                return 0, "sleeves not seeded"
+            cash = int(sleeves.get(sector) or 0)
+        if cash <= 0:
+            return 0, f"sleeve {sector} cash=0"
+        max_q = int(
+            (load_config().get("api") or {}).get("max_order_quote_usdt_micros")
+            or 500_000_000
+        )
+        quote = min(cash, max_q)
+        if quote <= 0:
+            return 0, f"sleeve {sector} quote after max_order cap=0"
+        return quote, None
+
+    def _debit_sleeve_locked(self, sector: str, micros: int) -> bool:
+        sleeves = self._state.get("sleeves")
+        if not isinstance(sleeves, dict):
+            return False
+        cash = int(sleeves.get(sector) or 0)
+        spend = int(micros)
+        if spend <= 0 or spend > cash:
+            return False
+        sleeves[sector] = cash - spend
+        self._state["sleeves"] = sleeves
+        self._state["updated_at"] = int(time.time())
+        return True
+
+    def _credit_sleeve_locked(self, sector: str, micros: int) -> None:
+        if not sector or int(micros) <= 0:
+            return
+        sleeves = self._state.get("sleeves")
+        if not isinstance(sleeves, dict):
+            sleeves = {}
+        sleeves[sector] = int(sleeves.get(sector) or 0) + int(micros)
+        self._state["sleeves"] = sleeves
+        self._state["updated_at"] = int(time.time())
+
+    def _sell_credit_micros(
+        self,
+        pos: Dict[str, Any],
+        result: Dict[str, Any],
+        *,
+        row: Optional[Dict[str, Any]],
+        dry: bool,
+    ) -> int:
+        """USDT micros returned to the sleeve after a successful sell."""
+        for key in ("deal_funds_micros", "quote_usdt_micros"):
+            v = result.get(key)
+            if isinstance(v, int) and not isinstance(v, bool) and v > 0:
+                return int(v)
+        if dry or result.get("dry_run"):
+            price_i = 0
+            if row and int(row.get("price_i") or 0) > 0:
+                price_i = int(row["price_i"])
+            size_i = int(pos.get("base_size_i") or 0)
+            if price_i > 0 and size_i > 0:
+                return int(mul_div(size_i, price_i, PRICE_SCALE) or 0)
+            return int(pos.get("quote_usdt_micros") or 0)
+        # Live without fill funds yet — fall back to cost basis (no invented profit).
+        return int(pos.get("deal_funds_micros") or pos.get("quote_usdt_micros") or 0)
 
     def _reconcile_buy_fill(
         self, symbol: str, order_id: str, cfg: Dict[str, Any]
@@ -915,7 +1173,8 @@ class AutoTradeEngine:
                 client_oid=client_oid,
             )
         )
-        return {
+        oid = extract_order_id(result.exchange)
+        out_sell: Dict[str, Any] = {
             "ok": result.ok,
             "dry_run": result.dry_run,
             "side": "sell",
@@ -924,8 +1183,16 @@ class AutoTradeEngine:
             "reason": reason,
             "exchange": sanitize_exchange_surface(result.exchange),
             "client_oid": client_oid,
-            "order_id": extract_order_id(result.exchange),
         }
+        if oid:
+            out_sell["order_id"] = oid
+        if result.ok and oid:
+            cfg = load_config().get("auto_trade") or {}
+            if bool(cfg.get("fill_reconcile", True)):
+                fill = self._reconcile_buy_fill(symbol, str(oid), cfg)
+                if int(fill.get("deal_funds_micros") or 0) > 0:
+                    out_sell["deal_funds_micros"] = int(fill["deal_funds_micros"])
+        return out_sell
 
     def _ensure_daily_locked(self) -> Dict[str, Any]:
         """Reset UTC-day counters when the day rolls. Caller holds lock."""

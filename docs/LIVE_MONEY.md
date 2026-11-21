@@ -47,7 +47,7 @@ Overlay: `config/live_money.yaml` via `RADAR_PROFILE=live-money`
 6. Prefer `.\scripts\verify.ps1 -Profile PreSoak` (or at least `--live --evidence`) and keep the pack
 7. Use `RADAR_PROFILE=live-money` (or set `auto_trade.dry_run: false` in an overlay — do not weaken lab default)
 8. Enable auto-execute only after a dry_run cycle with expected actions in the log (lab) then live profile
-9. Keep position size + daily caps low (`quote_usdt_micros_per_buy`, `max_daily_buys`, `max_daily_notional_usdt_micros`, `signal_cooldown_sec`)
+9. Sizing is **`equal_sleeves`**: free USDT split across spot_alts/memes/listings; keep daily caps low (`max_daily_buys`, `max_daily_notional_usdt_micros`, `signal_cooldown_sec`). Fat-finger ceiling: `api.max_order_quote_usdt_micros`
 10. Know the kill-switch: dashboard **СТОП** or `POST /api/trade/auto/kill`
 
 ## Memes auto

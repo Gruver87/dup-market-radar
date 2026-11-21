@@ -1,5 +1,14 @@
 # Changelog - DUP Market Radar
 
+## 0.2.110
+
+- Auto sizing **`equal_sleeves`**: free USDT split equally across `spot_alts` / `memes` / `listings`; buy = sleeve cash; sell credits same sleeve (bot-style books)
+- One open position per sector in equal_sleeves; `fixed_quote` still available
+- Live-money: raise order ceiling to 500 USDT (fat-finger only — size comes from sleeves)
+- Dashboard shows sleeve cash; docs TRADE updated
+- Package / `__version__` `0.2.110`
+- Soak / 48h: **not** claimed this pin
+
 ## 0.2.109
 
 - Auto-execute clarity: dashboard **Автоисполнение** + `armed` status (distinct from dry_run-only ON)

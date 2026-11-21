@@ -141,7 +141,11 @@ telegram:
 auto_trade:
   enabled_default: false                 # auto_execute OFF until operator enables
   cycle_sec: 90
-  quote_usdt_micros_per_buy: 10000000   # 10 USDT per auto buy (also capped by api.max_order_*)
+  # equal_sleeves: split free USDT equally across allowed_sectors; buy = that sleeve's cash;
+  # sell credits the same sleeve (P&L stays in-sector). fixed_quote: legacy flat size.
+  sizing_mode: equal_sleeves
+  sleeve_paper_seed_usdt_micros: 90000000  # dry-run seed (90 USDT → 30 per sector)
+  quote_usdt_micros_per_buy: 10000000   # only used when sizing_mode=fixed_quote
   max_open_positions: 5
   max_buys_per_cycle: 2
   max_sells_per_cycle: 5

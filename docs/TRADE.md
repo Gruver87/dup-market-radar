@@ -23,10 +23,10 @@ Runtime toggle = **auto_execute** (`enabled` in API / dashboard «Автоисп
 | Dry run | `dry_run: true` → cycle may log actions; status `armed=false` (no live auto orders) |
 | Manual buttons | Always keep Preview → Confirm (independent of auto-execute) |
 | Sectors | `spot_alts` / `memes` (CEX only) / `listings` — futures blocked; DEX memes skipped |
-| Buys | `buy_setups` (default `buy-watch`, `new-listing-watch`) + min score + risk flags |
+| Buys | `buy_setups` (default `buy-watch`, `new-listing-watch`) + min score + risk flags; equal sleeves seed from KuCoin free USDT (or `sleeve_paper_seed_usdt_micros` in dry_run) |
 | Sells | `sell_setups` (default `fade-watch`) **or** `stop_loss_bps` from entry |
-| Quote size | `quote_usdt_micros_per_buy` + `api.max_order_quote_usdt_micros` |
-| Open bags | `max_open_positions` |
+| Quote size | **`sizing_mode: equal_sleeves`** (default): free USDT split equally across `allowed_sectors`; buy = that sleeve’s cash; sell credits the same sleeve. Legacy: `fixed_quote` + `quote_usdt_micros_per_buy`. Hard cap: `api.max_order_quote_usdt_micros` |
+| Open bags | `max_open_positions`; equal_sleeves also **one open per sector** |
 | Daily rails | `max_daily_buys`, `max_daily_notional_usdt_micros` (UTC day; `0` = unlimited) |
 | Cooldown | `signal_cooldown_sec` same symbol+side (hard stop-loss exempt) |
 | Kill-switch | `POST /api/trade/auto/kill` → immediate OFF + latch; `clear-kill` then enable again |

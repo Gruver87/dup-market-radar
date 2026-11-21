@@ -1311,10 +1311,20 @@
       if (at.enabled || at.auto_execute) {
         const armedTag = at.armed ? "ARMED (живые ордера)" : (at.dry_run ? "dry_run (лог)" : "не armed");
         autoEl.className = at.armed ? "trade-status ok" : "trade-status bad";
+        const sleeveMap = at.sleeves || {};
+        const sleeveBits = Object.keys(sleeveMap).map((k) => {
+          const u = (Number(sleeveMap[k]) || 0) / 1e6;
+          return `${k}=${u.toFixed(2)}`;
+        });
+        const sleeveTag =
+          at.sizing_mode === "equal_sleeves"
+            ? ` · рукава: ${sleeveBits.join(" / ") || "ещё не seeded"}`
+            : "";
         autoEl.textContent =
           `Автоисполнение: ON · ${armedTag} · сектора: ${(at.allowed_sectors || []).join(", ") || "—"} · ` +
           `позиции=${pos} · ${persistTag}` +
           (sha ? ` · sha=${sha}` : "") +
+          sleeveTag +
           ` · fill_reconcile=${fillOn}` +
           ` · dry_run=${!!at.dry_run}` +
           dailyTag +

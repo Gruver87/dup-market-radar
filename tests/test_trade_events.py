@@ -59,6 +59,8 @@ def test_auto_on_action_emits(tmp_path, monkeypatch):
         on_action=lambda e: seen.append(e),
     )
     eng._persist_ok = True
+    with eng._lock:
+        eng._state["enabled"] = True
     eng._positions = {
         "SOLUSDT": {
             "symbol": "SOLUSDT",

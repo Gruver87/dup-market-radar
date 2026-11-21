@@ -199,7 +199,7 @@
       cursor: pointer;
       border-radius: 2px;
     }
-    button.auto-off, button.auto-on {
+    button.auto-off, button.auto-on, button.auto-kill {
       border: 1px solid var(--border);
       padding: 6px 14px;
       font: inherit;
@@ -216,6 +216,15 @@
       background: #1a3a28;
       color: var(--pos);
       border-color: #2a5a40;
+    }
+    button.auto-kill {
+      background: #3a1a1a;
+      color: var(--neg);
+      border-color: #5a2a2a;
+    }
+    button.auto-kill:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
     }
     button.refresh:disabled, button.primary:disabled { opacity: 0.5; cursor: wait; }
     button.buy, button.sell {
@@ -420,7 +429,8 @@
         <button type="button" id="langRu" data-lang="ru">RU</button>
         <button type="button" id="langEn" data-lang="en">EN</button>
       </div>
-      <button class="auto-off" id="autoToggle" type="button" data-i18n-title="auto_title">Авто: OFF</button>
+      <button class="auto-off" id="autoToggle" type="button" data-i18n-title="auto_title">Автоисполнение: OFF</button>
+      <button class="auto-kill" id="autoKill" type="button" data-i18n-title="kill_title" title="Аварийный стоп автоисполнения">СТОП</button>
       <button class="refresh" id="refresh" type="button" data-i18n="refresh">Обновить</button>
     </div>
   </header>
@@ -521,10 +531,10 @@
           <li data-i18n="help_1"><span class="key">Score</span> — насколько монета выделяется. Не гарантия прибыли.</li>
           <li data-i18n="help_2"><span class="key">Смотреть лонг (откат)</span> — рост уже был; ждать откат, не гнаться за пиком.</li>
           <li data-i18n="help_3"><span class="key">Смотреть отскок</span> — после дампа; агрессивно и рискованно.</li>
-          <li data-i18n="help_4"><span class="key">Купить / Продать</span> — ручной режим. Превью → подтверждение. Работает и при Авто OFF, и при Авто ON.</li>
-          <li data-i18n="help_5"><span class="key">Авто: ON/OFF</span> — если ON, Radar сам шлёт market buy/sell по сигналам спот/мемы/листинги. <b>Фьючерсы никогда.</b> По умолчанию OFF.</li>
-          <li data-i18n="help_6">Авто-покупка: setup «лонг/откат» или новый листинг, score ≥ порога, без риск-флагов. Авто-продажа: fade-watch или стоп-лосс % от входа (см. config).</li>
-          <li data-i18n="help_7">Нужен <span class="key">.env</span> с ключами KuCoin. Можно включить <span class="key">auto_trade.dry_run: true</span> для лога без ордеров.</li>
+          <li data-i18n="help_4"><span class="key">Купить / Продать</span> — ручной режим. Превью → подтверждение. Работает и при Автоисполнение OFF, и при ON.</li>
+          <li data-i18n="help_5"><span class="key">Автоисполнение: ON/OFF</span> — opt-in. Если ON + keys + dry_run=false, Radar сам шлёт market buy/sell по сигналам спот/мемы/листинги без диалога. <b>Фьючерсы никогда.</b> По умолчанию OFF. Кнопка <span class="key">СТОП</span> — kill-switch.</li>
+          <li data-i18n="help_6">Авто-покупка: setup «лонг/откат» или новый листинг, score ≥ порога, без риск-флагов. Авто-продажа: fade-watch или стоп-лосс % от входа (см. config). Лимиты: размер ордера, max позиций, дневной notional/число сделок, cooldown.</li>
+          <li data-i18n="help_7">Нужен <span class="key">.env</span> с ключами KuCoin. <span class="key">auto_trade.dry_run: true</span> = лог без ордеров (Автоисполнение не «armed»).</li>
           <li data-i18n="help_8"><span class="key">Telegram</span> — алерты + /time /fx /lang. Токен и chat id в <span class="key">.env</span>.</li>
           <li data-i18n="help_9"><span class="key">PWA / Android</span> — установи дашборд как приложение (Chrome → «На экран»). Это пульт к радару на хосте, не сервер в телефоне.</li>
           <li data-i18n="help_10"><span class="key">Сделки</span> — журнал реальных buy/sell и открытые позиции, не список «что купит завтра».</li>
@@ -540,8 +550,8 @@
       <label id="amountLabel" for="amount">Сумма</label>
       <input id="amount" type="number" min="0" step="any" />
       <p class="warn" id="modalWarn">
-        Это market-ордер на KuCoin spot. Автоматически Radar ордера не ставит.
-        Нажми «Превью», проверь, затем «Подтвердить ордер».
+        Это ручной market-ордер на KuCoin spot — нужен превью и подтверждение.
+        Автоисполнение (если ON и armed) ставит ордера отдельно по циклу, не через этот диалог.
       </p>
       <div class="row">
         <button class="ghost" type="button" id="modalCancel">Отмена</button>
@@ -557,8 +567,9 @@
       ru: {
         loading: "загрузка…",
         refresh: "Обновить",
-        auto_title: "Автоторговля спот (без фьючерсов)",
-        disclaimer: "Watchlist · ручные Купить/Продать · авто ON/OFF (спот/мемы/листинги, без фьючерсов). Не финансовый совет.",
+        auto_title: "Автоисполнение спот (без фьючерсов) — opt-in",
+        kill_title: "Аварийный стоп: выключить автоисполнение и зафиксировать kill-switch",
+        disclaimer: "Watchlist · ручные Купить/Продать · Автоисполнение ON/OFF (спот/мемы/листинги, без фьючерсов). Не финансовый совет.",
         world_clock: "Мировое время",
         clock_note: "фиксированные UTC-смещения (без DST)",
         fx_title: "Обмен валют (ECB + НБРБ)",
@@ -583,9 +594,9 @@
         help_2: "<span class=\"key\">Смотреть лонг (откат)</span> — рост уже был; ждать откат, не гнаться за пиком.",
         help_3: "<span class=\"key\">Смотреть отскок</span> — после дампа; агрессивно и рискованно.",
         help_4: "<span class=\"key\">Купить / Продать</span> — ручной режим. Превью → подтверждение.",
-        help_5: "<span class=\"key\">Авто: ON/OFF</span> — market buy/sell по спот/мемы/листинги. <b>Фьючерсы никогда.</b>",
-        help_6: "Авто-покупка: лонг/откат или листинг; авто-продажа: fade или стоп-лосс.",
-        help_7: "Нужен <span class=\"key\">.env</span> с ключами KuCoin. <span class=\"key\">auto_trade.dry_run: true</span> = лог без ордеров.",
+        help_5: "<span class=\"key\">Автоисполнение: ON/OFF</span> — opt-in market buy/sell по спот/мемы/листинги без диалога (нужны keys + dry_run=false). <b>Фьючерсы никогда.</b> <span class=\"key\">СТОП</span> = kill-switch.",
+        help_6: "Авто-покупка: лонг/откат или листинг; авто-продажа: fade или стоп-лосс. Лимиты размера / позиций / дня / cooldown.",
+        help_7: "Нужен <span class=\"key\">.env</span> с ключами KuCoin. <span class=\"key\">auto_trade.dry_run: true</span> = лог без ордеров (не armed).",
         help_8: "<span class=\"key\">Telegram</span> — алерты + /time /fx /lang. Токен в <span class=\"key\">.env</span>.",
         help_9: "<span class=\"key\">PWA / Android</span> — установи дашборд как приложение (Chrome → «На экран»). Это пульт к радару на хосте, не сервер в телефоне. Автоторговля на телефоне не переносится.",
         help_10: "<span class=\"key\">Сделки</span> — журнал реальных buy/sell и открытые позиции, не список «что купит завтра».",
@@ -600,8 +611,9 @@
       en: {
         loading: "loading…",
         refresh: "Refresh",
-        auto_title: "Auto-trade spot (no futures)",
-        disclaimer: "Watchlist · manual Buy/Sell · auto ON/OFF (spot/memes/listings, no futures). Not financial advice.",
+        auto_title: "Auto-execute spot (no futures) — opt-in",
+        kill_title: "Emergency stop: disable auto-execute and latch kill-switch",
+        disclaimer: "Watchlist · manual Buy/Sell · Auto-execute ON/OFF (spot/memes/listings, no futures). Not financial advice.",
         world_clock: "World clock",
         clock_note: "fixed UTC offsets (no DST)",
         fx_title: "FX (ECB + NBRB)",
@@ -626,9 +638,9 @@
         help_2: "<span class=\"key\">Buy-watch (pullback)</span> — move already happened; wait for a dip.",
         help_3: "<span class=\"key\">Fade-watch</span> — after a dump; aggressive and risky.",
         help_4: "<span class=\"key\">Buy / Sell</span> — manual mode. Preview → confirm.",
-        help_5: "<span class=\"key\">Auto: ON/OFF</span> — market buy/sell on spot/memes/listings. <b>Never futures.</b>",
-        help_6: "Auto-buy: pullback or listing; auto-sell: fade or stop-loss.",
-        help_7: "Needs KuCoin keys in <span class=\"key\">.env</span>. <span class=\"key\">auto_trade.dry_run: true</span> = log only.",
+        help_5: "<span class=\"key\">Auto-execute: ON/OFF</span> — opt-in market buy/sell on spot/memes/listings without the dialog (needs keys + dry_run=false). <b>Never futures.</b> <span class=\"key\">STOP</span> = kill-switch.",
+        help_6: "Auto-buy: pullback or listing; auto-sell: fade or stop-loss. Size / positions / daily / cooldown rails.",
+        help_7: "Needs KuCoin keys in <span class=\"key\">.env</span>. <span class=\"key\">auto_trade.dry_run: true</span> = log only (not armed).",
         help_8: "<span class=\"key\">Telegram</span> — alerts + /time /fx /lang. Token in <span class=\"key\">.env</span>.",
         help_9: "<span class=\"key\">PWA / Android</span> — install the dashboard (Chrome → Add to Home). Phone is a remote panel; radar stays on your host. Auto-trade is not moved to the phone.",
         help_10: "<span class=\"key\">Trades</span> — real buy/sell journal and open bags, not “what it will buy next”.",
@@ -888,7 +900,15 @@
       "new-listing-watch": { label: "Новый листинг (watch)", cls: "setup-buy", kind: "buy" },
     };
 
-    let state = { sector: "spot_alts", snap: null, tradeReady: false, autoOn: false, etag: null };
+    let state = {
+      sector: "spot_alts",
+      snap: null,
+      tradeReady: false,
+      autoOn: false,
+      autoArmed: false,
+      killSwitch: false,
+      etag: null,
+    };
     let modal = { symbol: null, side: null, venue: null, clientOid: null };
 
     function newClientOid() {
@@ -1205,14 +1225,49 @@
       bag.innerHTML = lines.join("");
     }
 
+    function updateModalWarn(at) {
+      const el = document.getElementById("modalWarn");
+      if (!el) return;
+      const en = getLang() === "en";
+      const armed = !!(at && at.armed);
+      const autoOn = !!(at && (at.auto_execute || at.enabled));
+      const dry = !!(at && at.dry_run);
+      if (en) {
+        if (armed) {
+          el.textContent =
+            "This dialog is MANUAL only (preview → confirm). Auto-execute is ARMED: the radar cycle places KuCoin spot market buy/sell without this dialog.";
+        } else if (autoOn && dry) {
+          el.textContent =
+            "This dialog is MANUAL (preview → confirm). Auto-execute is ON but dry_run=true — cycle logs only, no live auto orders.";
+        } else {
+          el.textContent =
+            "This is a manual KuCoin spot market order — preview then confirm. Auto-execute is OFF; the radar will not place orders by itself.";
+        }
+      } else {
+        if (armed) {
+          el.textContent =
+            "Этот диалог — только РУЧНОЙ (превью → подтверждение). Автоисполнение ARMED: цикл Radar сам ставит market buy/sell на KuCoin spot без этого диалога.";
+        } else if (autoOn && dry) {
+          el.textContent =
+            "Этот диалог — РУЧНОЙ (превью → подтверждение). Автоисполнение ON, но dry_run=true — цикл только логирует, живых авто-ордеров нет.";
+        } else {
+          el.textContent =
+            "Это ручной market-ордер на KuCoin spot — нужен превью и подтверждение. Автоисполнение OFF: Radar сам ордера не ставит.";
+        }
+      }
+    }
+
     function renderTradeStatus(snap) {
       const el = document.getElementById("tradeStatus");
       const autoEl = document.getElementById("autoStatus");
       const btn = document.getElementById("autoToggle");
+      const killBtn = document.getElementById("autoKill");
       const mt = (snap && snap.manual_trade) || {};
       const at = (snap && snap.auto_trade) || {};
       state.tradeReady = !!mt.configured;
-      state.autoOn = !!at.enabled;
+      state.autoOn = !!(at.auto_execute || at.enabled);
+      state.autoArmed = !!at.armed;
+      state.killSwitch = !!at.kill_switch;
       if (mt.configured) {
         el.className = "trade-status ok";
         el.textContent = "ручные кнопки KuCoin: ключи найдены · работают всегда (с подтверждением)";
@@ -1226,33 +1281,55 @@
       const persistTag = persistOk ? `persist=OK · integrity=${integ}` : `persist=СБОЙ · integrity=${integ}`;
       const sha = at.positions_sha256 ? String(at.positions_sha256).slice(0, 8) : "";
       const fillOn = at.fill_reconcile !== false;
-      if (!persistOk) {
+      const daily = at.daily || {};
+      const dailyTag = daily.day_utc
+        ? ` · day ${daily.buys || 0}/${daily.max_buys != null ? daily.max_buys : "—"} buys`
+        : "";
+      if (killBtn) {
+        killBtn.disabled = !!at.kill_switch && !state.autoOn;
+        killBtn.textContent = at.kill_switch ? "KILL ON" : "СТОП";
+      }
+      updateModalWarn(at);
+      if (at.kill_switch) {
         autoEl.className = "trade-status bad";
         autoEl.textContent =
-          `АВТО заблокирован: файл позиций · ${persistTag} · ${at.persistence_error || ""}`;
-        btn.textContent = state.autoOn ? "Авто: ON?" : "Авто: OFF";
+          `Автоисполнение: KILL · ${at.kill_reason || "latched"} · clear-kill затем ON · позиции=${pos}`;
+        btn.textContent = "Автоисполнение: OFF";
         btn.className = "auto-off";
         renderPosBag(at);
         return;
       }
-      if (at.enabled) {
-        autoEl.className = "trade-status ok";
+      if (!persistOk) {
+        autoEl.className = "trade-status bad";
         autoEl.textContent =
-          `АВТО ON · сектора: ${(at.allowed_sectors || []).join(", ") || "—"} · ` +
+          `Автоисполнение заблокирован: файл позиций · ${persistTag} · ${at.persistence_error || ""}`;
+        btn.textContent = state.autoOn ? "Автоисполнение: ON?" : "Автоисполнение: OFF";
+        btn.className = "auto-off";
+        renderPosBag(at);
+        return;
+      }
+      if (at.enabled || at.auto_execute) {
+        const armedTag = at.armed ? "ARMED (живые ордера)" : (at.dry_run ? "dry_run (лог)" : "не armed");
+        autoEl.className = at.armed ? "trade-status ok" : "trade-status bad";
+        autoEl.textContent =
+          `Автоисполнение: ON · ${armedTag} · сектора: ${(at.allowed_sectors || []).join(", ") || "—"} · ` +
           `позиции=${pos} · ${persistTag}` +
           (sha ? ` · sha=${sha}` : "") +
           ` · fill_reconcile=${fillOn}` +
-          ` · dry_run=${!!at.dry_run} · фьючерсы исключены`;
-        btn.textContent = "Авто: ON";
+          ` · dry_run=${!!at.dry_run}` +
+          dailyTag +
+          ` · фьючерсы исключены`;
+        btn.textContent = "Автоисполнение: ON";
         btn.className = "auto-on";
       } else {
         autoEl.className = "trade-status bad";
         autoEl.textContent =
-          `АВТО OFF · только ручные · позиции=${pos} · ${persistTag}` +
+          `Автоисполнение: OFF · только ручные · позиции=${pos} · ${persistTag}` +
           (sha ? ` · sha=${sha}` : "") +
           ` · fill_reconcile=${fillOn}` +
+          dailyTag +
           ` · фьючерсы не торгуются автоматом`;
-        btn.textContent = "Авто: OFF";
+        btn.textContent = "Автоисполнение: OFF";
         btn.className = "auto-off";
       }
       renderPosBag(at);
@@ -1273,16 +1350,66 @@
     }
 
     async function toggleAuto() {
+      if (state.killSwitch && !state.autoOn) {
+        const clearMsg = getLang() === "en"
+          ? "Kill-switch is latched. Clear it first (does NOT enable auto-execute)?"
+          : "Kill-switch зафиксирован. Снять latch (Автоисполнение останется OFF)?";
+        if (!confirm(clearMsg)) return;
+        try {
+          const res = await fetchTimeout("/api/trade/auto/clear-kill", {
+            method: "POST",
+            headers: apiHeaders(true),
+            body: "{}",
+          }, 15000);
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            alert(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || data));
+            return;
+          }
+          if (state.snap) state.snap.auto_trade = data;
+          renderTradeStatus(state.snap || { auto_trade: data, manual_trade: {} });
+        } catch (e) {
+          alert("сеть: " + e);
+        }
+        return;
+      }
       const next = !state.autoOn;
       const msg = next
-        ? "Включить АВТО-торговлю KuCoin spot (без фьючерсов)? Ордера market buy/sell пойдут сами по циклу."
-        : "Выключить АВТО-торговлю? Останутся только ручные Купить/Продать.";
+        ? (getLang() === "en"
+          ? "Enable AUTO-EXECUTE on KuCoin spot (no futures)? Market buy/sell will fire from the cycle without the confirm dialog when dry_run=false and keys are present."
+          : "Включить АВТОИСПОЛНЕНИЕ KuCoin spot (без фьючерсов)? При dry_run=false и ключах market buy/sell пойдут сами по циклу без диалога подтверждения.")
+        : (getLang() === "en"
+          ? "Disable auto-execute? Manual Buy/Sell with confirm remains."
+          : "Выключить автоисполнение? Останутся только ручные Купить/Продать с подтверждением.");
       if (!confirm(msg)) return;
       try {
         const res = await fetchTimeout("/api/trade/auto", {
           method: "POST",
           headers: apiHeaders(true),
           body: JSON.stringify({ enabled: next }),
+        }, 15000);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          alert(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || data));
+          return;
+        }
+        if (state.snap) state.snap.auto_trade = data;
+        renderTradeStatus(state.snap || { auto_trade: data, manual_trade: {} });
+      } catch (e) {
+        alert("сеть: " + e);
+      }
+    }
+
+    async function killAuto() {
+      const msg = getLang() === "en"
+        ? "EMERGENCY STOP: latch kill-switch and disable auto-execute immediately?"
+        : "АВАРИЙНЫЙ СТОП: сразу выключить автоисполнение и зафиксировать kill-switch?";
+      if (!confirm(msg)) return;
+      try {
+        const res = await fetchTimeout("/api/trade/auto/kill", {
+          method: "POST",
+          headers: apiHeaders(true),
+          body: JSON.stringify({ reason: "ui_emergency_stop" }),
         }, 15000);
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -1327,7 +1454,11 @@
           html += `</ol>`;
         }
       }
-      html += `<p class="note">Кнопки Купить/Продать справа в таблице — только вручную. Не финансовый совет.</p>`;
+      const at = (state.snap && state.snap.auto_trade) || {};
+      const autoNote = at.armed
+        ? "Автоисполнение ARMED: цикл может ставить market-ордера сам. Кнопки справа — всё ещё ручные (с подтверждением)."
+        : "Кнопки Купить/Продать справа — только вручную (с подтверждением). Автоисполнение OFF или не armed.";
+      html += `<p class="note">${autoNote} Не финансовый совет.</p>`;
       box.innerHTML = html;
     }
 
@@ -1344,7 +1475,8 @@
       const errs = snap.errors || [];
       document.getElementById("errors").textContent = errs.length ? errs.join("\n") : "";
       document.getElementById("disclaimer").textContent =
-        snap.disclaimer || "Watchlist + ручные ордера. Автоторговли нет. Не финансовый совет.";
+        snap.disclaimer ||
+        "Watchlist · ручные Купить/Продать · Автоисполнение opt-in (по умолчанию OFF). Не финансовый совет.";
       const when = snap.generated_at ? new Date(snap.generated_at * 1000).toLocaleString() : "—";
       const backend = snap.score_backend || "?";
       const ens = snap.short_window_ensure || {};
@@ -1592,6 +1724,8 @@
       loadTrades();
     };
     document.getElementById("autoToggle").onclick = () => toggleAuto();
+    const killEl = document.getElementById("autoKill");
+    if (killEl) killEl.onclick = () => killAuto();
     document.getElementById("modalCancel").onclick = closeTrade;
     document.getElementById("modalPreview").onclick = () => sendOrder(false);
     document.getElementById("modalConfirm").onclick = () => {

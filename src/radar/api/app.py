@@ -603,6 +603,14 @@ class AutoToggleBody(BaseModel):
     enabled: bool
 
 
+class AutoKillBody(BaseModel):
+    reason: Optional[str] = Field(
+        default="ui_emergency_stop",
+        max_length=128,
+        description="operator reason for kill-switch latch",
+    )
+
+
 class ReconcileBody(BaseModel):
     symbol: Optional[str] = Field(
         None,
@@ -1181,6 +1189,7 @@ def auto_get(request: Request) -> Dict[str, Any]:
 
 @app.post("/api/trade/auto")
 def auto_set(request: Request, body: AutoToggleBody) -> Dict[str, Any]:
+    """Toggle auto_execute (autonomous KuCoin spot). OFF by default; refuse if kill latched."""
     _check_api_key(request)
     _check_trade_rate(request)
     try:
@@ -1190,12 +1199,32 @@ def auto_set(request: Request, body: AutoToggleBody) -> Dict[str, Any]:
     return {"ok": True, **status}
 
 
+@app.post("/api/trade/auto/kill")
+def auto_kill(request: Request, body: AutoKillBody) -> Dict[str, Any]:
+    """Emergency stop: immediately disable auto_execute and latch kill-switch."""
+    _check_api_key(request)
+    _check_trade_rate(request)
+    status = _auto.trip_kill_switch(reason=str(body.reason or "ui_emergency_stop"))
+    return {"ok": True, **status}
+
+
+@app.post("/api/trade/auto/clear-kill")
+def auto_clear_kill(request: Request) -> Dict[str, Any]:
+    """Clear kill-switch latch only — does not enable auto_execute."""
+    _check_api_key(request)
+    _check_trade_rate(request)
+    status = _auto.clear_kill_switch()
+    return {"ok": True, **status}
+
+
 @app.post("/api/trade/auto/cycle")
 def auto_cycle_now(request: Request) -> Dict[str, Any]:
-    """Run one auto cycle immediately (only if enabled)."""
+    """Run one auto cycle immediately (only if enabled and kill-switch clear)."""
     _check_api_key(request)
     _check_trade_rate(request)
     st = _auto.status()
+    if st.get("kill_switch"):
+        raise HTTPException(400, detail="kill-switch latched — clear-kill first")
     if not st.get("enabled"):
         raise HTTPException(400, detail="auto-trade is OFF — enable first")
     return {"ok": True, "cycle": _auto.run_once()}

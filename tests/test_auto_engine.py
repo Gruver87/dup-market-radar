@@ -89,6 +89,8 @@ def test_failed_sell_keeps_position(tmp_path, monkeypatch):
         },
     )
     eng._persist_ok = True
+    with eng._lock:
+        eng._state["enabled"] = True
     eng._positions = {
         "SOLUSDT": {
             "symbol": "SOLUSDT",
@@ -146,6 +148,8 @@ def test_successful_sell_pops_position(tmp_path, monkeypatch):
         },
     )
     eng._persist_ok = True
+    with eng._lock:
+        eng._state["enabled"] = True
     eng._positions = {
         "SOLUSDT": {
             "symbol": "SOLUSDT",
@@ -277,6 +281,8 @@ def test_auto_stop_only_on_degraded_snap(tmp_path, monkeypatch):
         },
     )
     eng._persist_ok = True
+    with eng._lock:
+        eng._state["enabled"] = True
     eng._positions = {
         "SOLUSDT": {
             "symbol": "SOLUSDT",
@@ -348,6 +354,8 @@ def test_auto_stop_only_skips_buy_on_degraded(tmp_path, monkeypatch):
         },
     )
     eng._persist_ok = True
+    with eng._lock:
+        eng._state["enabled"] = True
     eng._positions = {
         "SOLUSDT": {
             "symbol": "SOLUSDT",

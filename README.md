@@ -1,6 +1,6 @@
 # DUP Market Radar
 
-**Version:** 0.2.108 · **Org:** [DUP Labs](https://github.com/Gruver87) · **Author:** Uladzimir Dabranski
+**Version:** 0.2.109 · **Org:** [DUP Labs](https://github.com/Gruver87) · **Author:** Uladzimir Dabranski
 
 Hybrid **Python + Rust** market watchlist for crypto spot, USDT-M futures (watch-only), memes, stables, listings, and large prints — with optional **KuCoin spot** manual orders and **opt-in auto-trade** (spot_alts / CEX memes / listings; **never futures**; DEX memes watchlist-only).
 
@@ -14,7 +14,7 @@ Hybrid **Python + Rust** market watchlist for crypto spot, USDT-M futures (watch
 |-------|------|
 | Watchlist / MTF / dashboard / Telegram alerts | Primary product |
 | Manual KuCoin Buy/Sell | Opt-in; confirm required |
-| Auto ON/OFF | Default **OFF**; fail-closed on degraded snapshots; stop-only path if bags open |
+| Auto-execute ON/OFF | Default **OFF**; armed only with keys + `dry_run=false`; kill-switch; daily/cooldown rails; fail-closed on degraded snapshots; stop-only if bags open |
 
 Companion to industrial L1 work ([`dup-protocol`](https://github.com/Gruver87/dup-protocol) / [`dup-protocol-experimental`](https://github.com/Gruver87/dup-protocol-experimental)) — **standalone**; not the L1 pin and not a "mainnet trading stack."
 
@@ -114,6 +114,8 @@ Full index: [`docs/README.md`](docs/README.md).
 ## Config
 
 [`config/default.yaml`](config/default.yaml) — venues (KuCoin first), thresholds, `top_n`, ingest (`max_kline_gets`, `secondary_http_timeout_ms`, …), `auto_trade`, Telegram. Validated fail-closed (no futures in `auto_trade.allowed_sectors`).
+
+**Auto-execute (opt-in):** `auto_trade.enabled_default: false`, lab `dry_run: true`. Enable from the dashboard (**Автоисполнение**) or `POST /api/trade/auto` after keys + (for live) `RADAR_PROFILE=live-money`. Safety defaults: 10 USDT buys, max 5 open, 20 buys/day, 200 USDT daily notional, 15m signal cooldown, kill-switch latch. Details: [`docs/TRADE.md`](docs/TRADE.md) · risks: [`docs/LIVE_MONEY.md`](docs/LIVE_MONEY.md).
 
 Copy [`.env.example`](.env.example) → `.env`. **Never commit `.env`.**
 

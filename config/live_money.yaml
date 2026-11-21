@@ -20,11 +20,14 @@ api:
 
 auto_trade:
   dry_run: false
-  enabled_default: false                  # operator must flip Auto ON after dry cycle
+  enabled_default: false                  # operator must flip Автоисполнение ON after dry cycle
   quote_usdt_micros_per_buy: 25000000     # 25 USDT
   max_open_positions: 4                   # hard cap on concurrent spot bags
   max_buys_per_cycle: 1
   max_sells_per_cycle: 3
+  max_daily_buys: 12
+  max_daily_notional_usdt_micros: 200000000  # 200 USDT/day
+  signal_cooldown_sec: 900                # 15m same symbol+side
   min_score_centi: 4200                   # 42.00 — matches current board tops (~40–45)
   # Spot / CEX memes / listings only — never futures*
   allowed_sectors:

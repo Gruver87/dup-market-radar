@@ -108,6 +108,8 @@ def test_auto_buy_uses_reconciled_size(tmp_path, monkeypatch):
         },
     )
     eng._persist_ok = True
+    with eng._lock:
+        eng._state["enabled"] = True
     eng._positions = {}
     monkeypatch.setattr(
         ae,
@@ -127,6 +129,9 @@ def test_auto_buy_uses_reconciled_size(tmp_path, monkeypatch):
                 "stop_loss_bps": 1200,
                 "require_no_risk_flags": True,
                 "positions_backup_keep": 3,
+                "signal_cooldown_sec": 0,
+                "max_daily_buys": 20,
+                "max_daily_notional_usdt_micros": 0,
             }
         },
     )
@@ -180,6 +185,8 @@ def test_auto_buy_falls_back_to_estimate_on_reconcile_fail(tmp_path, monkeypatch
         },
     )
     eng._persist_ok = True
+    with eng._lock:
+        eng._state["enabled"] = True
     eng._positions = {}
     monkeypatch.setattr(
         ae,
@@ -199,6 +206,9 @@ def test_auto_buy_falls_back_to_estimate_on_reconcile_fail(tmp_path, monkeypatch
                 "stop_loss_bps": 1200,
                 "require_no_risk_flags": True,
                 "positions_backup_keep": 3,
+                "signal_cooldown_sec": 0,
+                "max_daily_buys": 20,
+                "max_daily_notional_usdt_micros": 0,
             }
         },
     )

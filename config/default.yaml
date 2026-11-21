@@ -134,14 +134,20 @@ telegram:
   outside_top_fade_alerts: true          # take-profit warn if last_setup=fade and not in top-N
   cmd_rate_limit_per_min: 30             # soft refuse flood per chat
 
-# Auto-trade (OFF by default). Futures never included. Integer amounts only.
+# Auto-execute / autonomous mode (OFF by default). Futures never included.
+# Runtime toggle: dashboard «Автоисполнение» or POST /api/trade/auto {enabled}.
+# Kill-switch: POST /api/trade/auto/kill (latches OFF until clear-kill).
+# Integer amounts only. See docs/TRADE.md + docs/LIVE_MONEY.md.
 auto_trade:
-  enabled_default: false
+  enabled_default: false                 # auto_execute OFF until operator enables
   cycle_sec: 90
-  quote_usdt_micros_per_buy: 10000000   # 10 USDT
+  quote_usdt_micros_per_buy: 10000000   # 10 USDT per auto buy (also capped by api.max_order_*)
   max_open_positions: 5
   max_buys_per_cycle: 2
   max_sells_per_cycle: 5
+  max_daily_buys: 20                     # 0 = unlimited; UTC day roll
+  max_daily_notional_usdt_micros: 200000000  # 200 USDT/day buys; 0 = unlimited
+  signal_cooldown_sec: 900               # 15m no re-fire same symbol+side (stops exempt)
   min_score_centi: 5500                  # 55.00
   positions_backup_keep: 5               # rotating copies under data/backups/
   fill_reconcile: true                   # base_size_i from KuCoin dealSize after buy

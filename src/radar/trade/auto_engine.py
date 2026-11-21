@@ -1,4 +1,10 @@
-"""Auto buy/sell engine — off by default; never trades futures."""
+"""Auto buy/sell engine — off by default; never trades futures.
+
+Runtime toggle ``enabled`` is the opt-in **auto_execute** / autonomous mode.
+When armed (enabled + keys + dry_run=false), qualifying buy-watch / new-listing
+buys and fade-watch / stop-loss sells place KuCoin spot market orders without a
+browser confirm dialog. Manual Buy/Sell buttons keep their own preview/confirm.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +12,8 @@ import logging
 import threading
 import time
 import uuid
-from typing import Any, Callable, Dict, List, Optional
+from datetime import datetime, timezone
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from radar.audit_log import AuditLogError, append_jsonl
 from radar.config import ROOT, load_config
@@ -37,6 +44,20 @@ POS_PATH = ROOT / "data" / "auto_positions.json"
 LOG_PATH = ROOT / "data" / "auto_trade_log.jsonl"
 
 FUTURES_BLOCK = frozenset({"futures", "futures_long", "futures_short"})
+
+# Conservative lab defaults when config omits rails.
+_DEFAULT_MAX_DAILY_BUYS = 20
+_DEFAULT_MAX_DAILY_NOTIONAL_MICROS = 200 * QUOTE_SCALE  # 200 USDT
+_DEFAULT_SIGNAL_COOLDOWN_SEC = 900  # 15m same symbol+side
+
+
+def _utc_day() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def _fire_key(symbol: str, side: str) -> str:
+    sym = str(symbol).upper().replace("-", "").replace("/", "")
+    return f"{sym}:{str(side).lower()}"
 
 
 class AutoTradeEngine:
@@ -76,11 +97,30 @@ class AutoTradeEngine:
 
     def status(self) -> Dict[str, Any]:
         cfg = (load_config().get("auto_trade") or {})
+        dry = bool(cfg.get("dry_run"))
         with self._lock:
             positions = dict(self._positions)
+            enabled = bool(self._state.get("enabled"))
+            kill = bool(self._state.get("kill_switch"))
+            daily = self._daily_snapshot_locked(cfg)
+            keys_ok = self._trader.ready
+            # Armed = live autonomous orders can fire (not dry_run log-only).
+            armed = bool(
+                enabled
+                and not kill
+                and self._persist_ok
+                and not dry
+                and keys_ok
+            )
             return {
-                "enabled": bool(self._state.get("enabled")),
-                "dry_run": bool(cfg.get("dry_run")),
+                "enabled": enabled,
+                # Alias: auto_execute == runtime enabled toggle (opt-in, OFF default).
+                "auto_execute": enabled,
+                "armed": armed,
+                "kill_switch": kill,
+                "kill_reason": self._state.get("kill_reason"),
+                "kill_switch_at": self._state.get("kill_switch_at") or 0,
+                "dry_run": dry,
                 "futures_excluded": True,
                 "allowed_sectors": list(cfg.get("allowed_sectors") or []),
                 "symbol_blacklist": list(cfg.get("symbol_blacklist") or []),
@@ -88,6 +128,22 @@ class AutoTradeEngine:
                 "quote_usdt_micros_per_buy": cfg.get("quote_usdt_micros_per_buy")
                 or quote_i(cfg.get("quote_usdt_per_buy") or 10),
                 "max_open_positions": cfg.get("max_open_positions"),
+                "max_daily_buys": int(
+                    cfg.get("max_daily_buys")
+                    if cfg.get("max_daily_buys") is not None
+                    else _DEFAULT_MAX_DAILY_BUYS
+                ),
+                "max_daily_notional_usdt_micros": int(
+                    cfg.get("max_daily_notional_usdt_micros")
+                    if cfg.get("max_daily_notional_usdt_micros") is not None
+                    else _DEFAULT_MAX_DAILY_NOTIONAL_MICROS
+                ),
+                "signal_cooldown_sec": int(
+                    cfg.get("signal_cooldown_sec")
+                    if cfg.get("signal_cooldown_sec") is not None
+                    else _DEFAULT_SIGNAL_COOLDOWN_SEC
+                ),
+                "daily": daily,
                 "integer_money": True,
                 "size_basis_default": "estimated_fee_adjusted",
                 "fill_reconcile": bool(cfg.get("fill_reconcile", True)),
@@ -97,11 +153,18 @@ class AutoTradeEngine:
                 "positions_integrity": self._positions_integrity,
                 "open_positions": len(positions),
                 "positions": positions,
-                "keys_configured": self._trader.ready,
+                "keys_configured": keys_ok,
                 "last_cycle": self._last_cycle,
                 "cycle_inflight": self._cycle_inflight,
                 "manual_still_available": True,
                 "loop_alive": bool(self._thread and self._thread.is_alive()),
+                "buy_setups": list(cfg.get("buy_setups") or ["buy-watch"]),
+                "sell_setups": list(cfg.get("sell_setups") or ["fade-watch"]),
+                "stop_loss_bps": int(
+                    cfg.get("stop_loss_bps")
+                    or pct_to_bps(cfg.get("stop_loss_pct") or 12)
+                    or 1200
+                ),
             }
 
     def loop_alive(self) -> bool:
@@ -114,6 +177,12 @@ class AutoTradeEngine:
                 "cannot enable auto-trade: positions file corrupt/unreadable "
                 f"({self._persist_error}) — fix or remove data/auto_positions.json"
             )
+        with self._lock:
+            if enabled and self._state.get("kill_switch"):
+                raise RuntimeError(
+                    "cannot enable auto-execute: kill-switch is latched — "
+                    "POST /api/trade/auto/clear-kill first"
+                )
         if enabled and not self._trader.ready:
             cfg = load_config().get("auto_trade") or {}
             if not cfg.get("dry_run"):
@@ -127,7 +196,32 @@ class AutoTradeEngine:
             self._save_state()
         if enabled:
             self.start()
-        logger.info("auto_trade enabled=%s", enabled)
+        logger.info("auto_execute enabled=%s", enabled)
+        return self.status()
+
+    def trip_kill_switch(self, reason: str = "ui_emergency_stop") -> Dict[str, Any]:
+        """Immediately disable auto_execute and latch until clear-kill."""
+        reason_s = redact_text(str(reason or "ui_emergency_stop"))[:128]
+        with self._lock:
+            self._state["enabled"] = False
+            self._state["kill_switch"] = True
+            self._state["kill_reason"] = reason_s
+            self._state["kill_switch_at"] = int(time.time())
+            self._state["updated_at"] = int(time.time())
+            self._save_state()
+        logger.warning("auto_execute kill-switch latched: %s", reason_s)
+        return self.status()
+
+    def clear_kill_switch(self) -> Dict[str, Any]:
+        """Clear kill latch only — forces enabled OFF; does not arm auto_execute."""
+        with self._lock:
+            self._state["kill_switch"] = False
+            self._state["kill_reason"] = None
+            self._state["kill_switch_at"] = 0
+            self._state["enabled"] = False
+            self._state["updated_at"] = int(time.time())
+            self._save_state()
+        logger.info("auto_execute kill-switch cleared (still OFF until enable)")
         return self.status()
 
     def start(self) -> None:
@@ -157,7 +251,11 @@ class AutoTradeEngine:
             cfg = load_config().get("auto_trade") or {}
             cycle = int(cfg.get("cycle_sec") or 90)
             try:
-                if self._state.get("enabled"):
+                with self._lock:
+                    armed_toggle = bool(
+                        self._state.get("enabled") and not self._state.get("kill_switch")
+                    )
+                if armed_toggle:
                     self.run_once()
             except Exception as exc:  # noqa: BLE001
                 logger.error("auto cycle failed: %s", redact_exc(exc, max_len=256))
@@ -196,6 +294,33 @@ class AutoTradeEngine:
             }
             self._last_cycle = summary
             return summary
+
+        with self._lock:
+            if self._state.get("kill_switch"):
+                summary = {
+                    "at": int(time.time()),
+                    "ok": False,
+                    "enabled": False,
+                    "auto_execute": False,
+                    "kill_switch": True,
+                    "error": "kill-switch latched — auto cycle refused",
+                    "actions": [],
+                    "open_positions": len(self._positions),
+                }
+                self._last_cycle = summary
+                return summary
+            if not self._state.get("enabled"):
+                summary = {
+                    "at": int(time.time()),
+                    "ok": False,
+                    "enabled": False,
+                    "auto_execute": False,
+                    "error": "auto_execute OFF — cycle refused",
+                    "actions": [],
+                    "open_positions": len(self._positions),
+                }
+                self._last_cycle = summary
+                return summary
 
         cfg = load_config().get("auto_trade") or {}
         snap = self._snapshot_fn() or {}
@@ -271,6 +396,21 @@ class AutoTradeEngine:
         max_open = int(cfg.get("max_open_positions") or 5)
         max_buys = int(cfg.get("max_buys_per_cycle") or 2)
         max_sells = int(cfg.get("max_sells_per_cycle") or 5)
+        max_daily_buys = int(
+            cfg.get("max_daily_buys")
+            if cfg.get("max_daily_buys") is not None
+            else _DEFAULT_MAX_DAILY_BUYS
+        )
+        max_daily_notional = int(
+            cfg.get("max_daily_notional_usdt_micros")
+            if cfg.get("max_daily_notional_usdt_micros") is not None
+            else _DEFAULT_MAX_DAILY_NOTIONAL_MICROS
+        )
+        cooldown_sec = int(
+            cfg.get("signal_cooldown_sec")
+            if cfg.get("signal_cooldown_sec") is not None
+            else _DEFAULT_SIGNAL_COOLDOWN_SEC
+        )
         stop_loss_bps = int(
             cfg.get("stop_loss_bps") or pct_to_bps(cfg.get("stop_loss_pct") or 12) or 1200
         )
@@ -295,6 +435,7 @@ class AutoTradeEngine:
             positions = dict(self._positions)
 
         # --- sells first (free slots) ---
+        # Triggers: sell_setups (default fade-watch) OR stop_loss_bps from entry.
         sells = 0
         for sym, pos in list(positions.items()):
             if sells >= max_sells:
@@ -313,6 +454,21 @@ class AutoTradeEngine:
                         reason = f"stop_loss drop_bps={drop}"
             if not reason:
                 continue
+            # Fade/setup sells respect cooldown; hard stop-loss always may fire.
+            is_stop = str(reason).startswith("stop_loss")
+            if not is_stop:
+                blocked, block_msg = self._cooldown_blocked(sym, "sell", cooldown_sec)
+                if blocked:
+                    actions.append(
+                        {
+                            "ok": False,
+                            "side": "sell",
+                            "symbol": sym,
+                            "skipped": True,
+                            "message": block_msg,
+                        }
+                    )
+                    continue
             size_i = int(pos.get("base_size_i") or 0)
             if size_i <= 0:
                 continue
@@ -326,6 +482,7 @@ class AutoTradeEngine:
                     self._positions.pop(sym, None)
                     self._save_positions_locked()
                     positions = dict(self._positions)
+                    self._record_fire_locked(sym, "sell", notional_micros=0, is_buy=False)
             else:
                 logger.warning(
                     "sell failed — keeping position %s: %s",
@@ -356,6 +513,24 @@ class AutoTradeEngine:
             sym = row["symbol"]
             price_i = int(row.get("price_i") or 0)
             if price_i <= 0:
+                continue
+            gate_ok, gate_msg = self._buy_gates_ok(
+                sym,
+                quote_micros,
+                max_daily_buys=max_daily_buys,
+                max_daily_notional=max_daily_notional,
+                cooldown_sec=cooldown_sec,
+            )
+            if not gate_ok:
+                actions.append(
+                    {
+                        "ok": False,
+                        "side": "buy",
+                        "symbol": sym,
+                        "skipped": True,
+                        "message": gate_msg,
+                    }
+                )
                 continue
             last = self._exec_buy(sym, quote_micros, price_i, row.get("sector"), dry)
             actions.append(last)
@@ -404,6 +579,9 @@ class AutoTradeEngine:
                     self._positions[sym] = pos
                     self._save_positions_locked()
                     open_n = len(self._positions)
+                    self._record_fire_locked(
+                        sym, "buy", notional_micros=quote_micros, is_buy=True
+                    )
                 buys += 1
                 last["base_size_i"] = size_i
                 last["size_basis"] = size_basis
@@ -416,6 +594,7 @@ class AutoTradeEngine:
             "at": int(time.time()),
             "ok": True,
             "enabled": True,
+            "auto_execute": True,
             "dry_run": dry,
             "persistence_ok": self._persist_ok,
             "actions": actions,
@@ -474,6 +653,7 @@ class AutoTradeEngine:
                     self._positions.pop(sym, None)
                     self._save_positions_locked()
                     positions = dict(self._positions)
+                    self._record_fire_locked(sym, "sell", notional_micros=0, is_buy=False)
             else:
                 logger.warning(
                     "stop-only sell failed %s: %s",
@@ -747,9 +927,127 @@ class AutoTradeEngine:
             "order_id": extract_order_id(result.exchange),
         }
 
+    def _ensure_daily_locked(self) -> Dict[str, Any]:
+        """Reset UTC-day counters when the day rolls. Caller holds lock."""
+        day = _utc_day()
+        daily = self._state.get("daily")
+        if not isinstance(daily, dict) or daily.get("day_utc") != day:
+            daily = {
+                "day_utc": day,
+                "buys": 0,
+                "sells": 0,
+                "buy_notional_micros": 0,
+            }
+            self._state["daily"] = daily
+        return daily
+
+    def _daily_snapshot_locked(self, cfg: Dict[str, Any]) -> Dict[str, Any]:
+        daily = dict(self._ensure_daily_locked())
+        daily["max_buys"] = int(
+            cfg.get("max_daily_buys")
+            if cfg.get("max_daily_buys") is not None
+            else _DEFAULT_MAX_DAILY_BUYS
+        )
+        daily["max_notional_usdt_micros"] = int(
+            cfg.get("max_daily_notional_usdt_micros")
+            if cfg.get("max_daily_notional_usdt_micros") is not None
+            else _DEFAULT_MAX_DAILY_NOTIONAL_MICROS
+        )
+        return daily
+
+    def _cooldown_blocked(
+        self, symbol: str, side: str, cooldown_sec: int
+    ) -> Tuple[bool, str]:
+        if cooldown_sec <= 0:
+            return False, ""
+        key = _fire_key(symbol, side)
+        with self._lock:
+            last_fire = self._state.get("last_fire")
+            if not isinstance(last_fire, dict):
+                return False, ""
+            last_ts = int(last_fire.get(key) or 0)
+        if last_ts <= 0:
+            return False, ""
+        age = int(time.time()) - last_ts
+        if age < cooldown_sec:
+            remain = cooldown_sec - age
+            return True, f"signal cooldown {remain}s left for {key}"
+        return False, ""
+
+    def _buy_gates_ok(
+        self,
+        symbol: str,
+        quote_micros: int,
+        *,
+        max_daily_buys: int,
+        max_daily_notional: int,
+        cooldown_sec: int,
+    ) -> Tuple[bool, str]:
+        blocked, msg = self._cooldown_blocked(symbol, "buy", cooldown_sec)
+        if blocked:
+            return False, msg
+        with self._lock:
+            daily = self._ensure_daily_locked()
+            buys = int(daily.get("buys") or 0)
+            notional = int(daily.get("buy_notional_micros") or 0)
+        if max_daily_buys > 0 and buys >= max_daily_buys:
+            return False, f"max_daily_buys={max_daily_buys} reached"
+        if (
+            max_daily_notional > 0
+            and (notional + int(quote_micros)) > max_daily_notional
+        ):
+            return (
+                False,
+                f"max_daily_notional_usdt_micros={max_daily_notional} would exceed",
+            )
+        return True, ""
+
+    def _record_fire_locked(
+        self,
+        symbol: str,
+        side: str,
+        *,
+        notional_micros: int,
+        is_buy: bool,
+    ) -> None:
+        """Caller holds lock. Updates cooldown + daily counters after success."""
+        key = _fire_key(symbol, side)
+        last_fire = self._state.get("last_fire")
+        if not isinstance(last_fire, dict):
+            last_fire = {}
+            self._state["last_fire"] = last_fire
+        last_fire[key] = int(time.time())
+        # Bound map size (soft) — drop oldest-ish by keeping last 500 keys
+        if len(last_fire) > 500:
+            for old in list(last_fire.keys())[: len(last_fire) - 500]:
+                last_fire.pop(old, None)
+        daily = self._ensure_daily_locked()
+        if is_buy:
+            daily["buys"] = int(daily.get("buys") or 0) + 1
+            daily["buy_notional_micros"] = int(daily.get("buy_notional_micros") or 0) + int(
+                notional_micros
+            )
+        else:
+            daily["sells"] = int(daily.get("sells") or 0) + 1
+        self._state["updated_at"] = int(time.time())
+        self._save_state()
+
     def _load_state(self) -> Dict[str, Any]:
         cfg = load_config().get("auto_trade") or {}
-        default = {"enabled": bool(cfg.get("enabled_default")), "updated_at": 0}
+        default: Dict[str, Any] = {
+            "enabled": bool(cfg.get("enabled_default")),
+            "kill_switch": False,
+            "kill_reason": None,
+            "kill_switch_at": 0,
+            "updated_at": 0,
+            "daily": {
+                "day_utc": _utc_day(),
+                "buys": 0,
+                "sells": 0,
+                "buy_notional_micros": 0,
+            },
+            "last_fire": {},
+        }
         data, err, _meta = read_json_object(STATE_PATH)
         if err:
             logger.warning(
@@ -757,7 +1055,15 @@ class AutoTradeEngine:
                 redact_text(str(err))[:256],
             )
             return default
-        return {**default, **data}
+        merged = {**default, **data}
+        # Never inherit enabled=true from a corrupted partial without kill fields
+        if "kill_switch" not in data:
+            merged["kill_switch"] = False
+        if not isinstance(merged.get("last_fire"), dict):
+            merged["last_fire"] = {}
+        if not isinstance(merged.get("daily"), dict):
+            merged["daily"] = default["daily"]
+        return merged
 
     def _save_state(self) -> None:
         atomic_write_json(STATE_PATH, self._state, with_checksum=True)

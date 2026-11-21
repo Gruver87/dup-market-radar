@@ -58,9 +58,22 @@ def test_rejects_auto_buy_above_order_cap():
     cfg["api"] = dict(cfg.get("api") or {})
     cfg["api"]["max_order_quote_usdt_micros"] = 5_000_000
     cfg["auto_trade"] = dict(cfg["auto_trade"])
+    # Cap applies to fixed_quote only — equal_sleeves sizes from balance at runtime.
+    cfg["auto_trade"]["sizing_mode"] = "fixed_quote"
     cfg["auto_trade"]["quote_usdt_micros_per_buy"] = 10_000_000
     with pytest.raises(ConfigError, match="quote_usdt_micros_per_buy"):
         validate_config(cfg)
+
+
+def test_equal_sleeves_allows_legacy_quote_above_order_cap():
+    cfg = load_config()
+    cfg = dict(cfg)
+    cfg["api"] = dict(cfg.get("api") or {})
+    cfg["api"]["max_order_quote_usdt_micros"] = 5_000_000
+    cfg["auto_trade"] = dict(cfg["auto_trade"])
+    cfg["auto_trade"]["sizing_mode"] = "equal_sleeves"
+    cfg["auto_trade"]["quote_usdt_micros_per_buy"] = 10_000_000
+    validate_config(cfg)  # unused fixed quote must not block sleeve mode
 
 
 def test_rejects_allowlist_hosts_wildcard():

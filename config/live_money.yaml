@@ -2,6 +2,9 @@
 # Merged onto config/default.yaml. Requires .env keys (see docs/LIVE_MONEY.md).
 # Futures NEVER in auto_trade.allowed_sectors (engine also hard-blocks FUTURES_BLOCK).
 # Do NOT commit secrets. Lab default.yaml stays dry_run: true.
+#
+# 2026-11-21: shared_pool — one USDT cash pool, any spot/meme/listing buy up to max_open.
+# No 1-position-per-sleeve lock (idle memes/listings cash can fund alts and vice versa).
 
 deployment_mode: prod
 
@@ -15,23 +18,56 @@ native:
 # API key gate is env: RADAR_API_KEY + RADAR_REQUIRE_API_KEY=1 (see go_live_money.ps1)
 api:
   snapshot_require_api_key: true
-  # Hard ceiling per order (sleeve size can be 1/N of balance; this is fat-finger only)
+  # Hard ceiling per order (fat-finger only)
   max_order_quote_usdt_micros: 500000000   # 500 USDT
 
 auto_trade:
   dry_run: false
   enabled_default: false                  # operator must flip Автоисполнение ON after dry cycle
-  sizing_mode: equal_sleeves              # buy = equal share of free USDT per sector
-  # quote_usdt_micros_per_buy unused in equal_sleeves (kept for fixed_quote fallback)
-  quote_usdt_micros_per_buy: 25000000
-  max_open_positions: 4                   # hard cap; equal_sleeves also 1 open per sector
-  max_buys_per_cycle: 1
+  sizing_mode: shared_pool                # one free-USDT pool; buy best eligible across sectors
+  quote_usdt_micros_per_buy: 15000000     # max ~15 USDT per buy (fair-share may be smaller)
+  shared_pool_reserve_usdt_micros: 2000000  # keep ~2 USDT free on account
+  max_open_positions: 4
+  max_buys_per_cycle: 2
   max_sells_per_cycle: 3
   max_daily_buys: 12
-  max_daily_notional_usdt_micros: 500000000  # 500 USDT/day (room for larger sleeve buys)
-  signal_cooldown_sec: 900                # 15m same symbol+side
-  min_score_centi: 4200                   # 42.00 — matches current board tops (~40–45)
-  # Spot / CEX memes / listings only — never futures*
+  max_daily_notional_usdt_micros: 500000000  # 500 USDT/day
+  signal_cooldown_sec: 300                # 5m same symbol+side
+  min_score_centi: 3500                   # 35.00
+  exec_venues:
+    - kucoin
+  require_no_risk_flags: true
+  spot_alts_soft_risk_flags:
+    - wide_range_24h
+    - vol_surge_1h
+    - vol_dry_1h
+    - below_vol_floor
+    - mtf_proxy_ws_1m
+    - mtf_diverge_1h
+    - mtf_diverge_15m
+    - mtf_diverge_5m
+    - mtf_diverge_4h
+    - wide_spread_*
+  memes_soft_risk_flags:
+    - below_vol_floor
+    - wide_range_24h
+    - vol_surge_1h
+    - mtf_diverge_1h
+    - mtf_diverge_15m
+    - mtf_diverge_5m
+    - mtf_diverge_4h
+    - wide_spread_*
+  listings_soft_risk_flags:
+    - cross_venue_live
+    - wide_range_24h
+    - vol_surge_1h
+    - mtf_diverge_1h
+    - mtf_diverge_15m
+    - wide_spread_*
+  buy_setups:
+    - buy-watch
+    - new-listing-watch
+    - long
   allowed_sectors:
     - spot_alts
     - memes

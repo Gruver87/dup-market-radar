@@ -262,9 +262,18 @@ def validate_config(cfg: Dict[str, Any]) -> None:
                 if not isinstance(sizing, str) or sizing.strip().lower() not in {
                     "equal_sleeves",
                     "fixed_quote",
+                    "shared_pool",
+                    "shared",
+                    "pool",
                 }:
                     errors.append(
-                        "auto_trade.sizing_mode must be equal_sleeves or fixed_quote"
+                        "auto_trade.sizing_mode must be equal_sleeves|fixed_quote|shared_pool"
+                    )
+            if "shared_pool_reserve_usdt_micros" in auto:
+                resv = auto["shared_pool_reserve_usdt_micros"]
+                if not isinstance(resv, int) or resv < 0 or resv > 100_000_000_000:
+                    errors.append(
+                        "auto_trade.shared_pool_reserve_usdt_micros must be int 0..1e11"
                     )
             if "sleeve_paper_seed_usdt_micros" in auto:
                 seed = auto["sleeve_paper_seed_usdt_micros"]

@@ -1,9 +1,10 @@
 """Auto buy/sell engine — off by default; never trades futures.
 
 Runtime toggle ``enabled`` is the opt-in **auto_execute** / autonomous mode.
-When armed (enabled + keys + dry_run=false), qualifying buy-watch / new-listing
-buys and fade-watch / stop-loss sells place KuCoin spot market orders without a
-browser confirm dialog. Manual Buy/Sell buttons keep their own preview/confirm.
+When armed (enabled + keys + dry_run=false), qualifying buy setups (config
+``buy_setups``, e.g. buy-watch / new-listing-watch / long) and fade-watch /
+stop-loss sells place KuCoin spot market orders without a browser confirm
+dialog. Manual Buy/Sell buttons keep their own preview/confirm.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from radar.money import (
     apply_fee_bps,
     drop_bps,
     mul_div,
+    notional_i_from_price_qty,
     pct_to_bps,
     quote_i,
 )
@@ -46,12 +48,31 @@ LOG_PATH = ROOT / "data" / "auto_trade_log.jsonl"
 
 FUTURES_BLOCK = frozenset({"futures", "futures_long", "futures_short"})
 
+
+def _hard_risk_flags(flags: set[str], soft: set[str]) -> set[str]:
+    """Return flags that are not soft-allowed (exact or ``prefix*`` patterns)."""
+    hard: set[str] = set()
+    for f in flags:
+        if f in soft:
+            continue
+        matched = False
+        for s in soft:
+            if s.endswith("*") and len(s) > 1 and f.startswith(s[:-1]):
+                matched = True
+                break
+        if not matched:
+            hard.add(f)
+    return hard
+
+
 # Conservative lab defaults when config omits rails.
 _DEFAULT_MAX_DAILY_BUYS = 20
 _DEFAULT_MAX_DAILY_NOTIONAL_MICROS = 200 * QUOTE_SCALE  # 200 USDT
 _DEFAULT_SIGNAL_COOLDOWN_SEC = 900  # 15m same symbol+side
 _DEFAULT_PAPER_SEED_MICROS = 90 * QUOTE_SCALE  # dry-run seed when no KuCoin USDT
 _SIZING_EQUAL = "equal_sleeves"
+_SIZING_SHARED = "shared_pool"
+_MIN_SHARED_BUY_MICROS = 1_000_000  # 1 USDT — refuse dust orders
 _SIZING_FIXED = "fixed_quote"
 
 
@@ -206,6 +227,178 @@ class AutoTradeEngine:
 
     def loop_alive(self) -> bool:
         return bool(self._thread and self._thread.is_alive())
+
+    @staticmethod
+    def _norm_symbol(symbol: str) -> str:
+        return str(symbol or "").upper().replace("-", "").replace("/", "")
+
+    def register_live_buy(
+        self,
+        *,
+        symbol: str,
+        quote_usdt_micros: int,
+        base_size_i: int,
+        entry_price_i: Optional[int] = None,
+        order_id: Optional[str] = None,
+        deal_funds_micros: Optional[int] = None,
+        size_basis: str = "kucoin_fill",
+        sector: str = "spot_alts",
+        dry_run: bool = False,
+        source: str = "manual",
+        replace: bool = False,
+    ) -> Dict[str, Any]:
+        """Track a live spot buy in the open-position book (manual/TG/orphan recovery)."""
+        if not self._persist_ok:
+            return {
+                "ok": False,
+                "message": f"persistence degraded: {self._persist_error}",
+            }
+        sym = self._norm_symbol(symbol)
+        if not sym.endswith("USDT"):
+            return {"ok": False, "message": "only USDT spot pairs tracked"}
+        q = int(quote_usdt_micros or 0)
+        b = int(base_size_i or 0)
+        if q <= 0 or b <= 0:
+            return {"ok": False, "message": "need quote_usdt_micros and base_size_i > 0"}
+        entry = int(entry_price_i or 0)
+        if entry <= 0:
+            entry = int(mul_div(q, 10_000_000_000, b))
+        funds = int(deal_funds_micros or q)
+        with self._lock:
+            if sym in self._positions and not replace:
+                return {
+                    "ok": True,
+                    "skipped": True,
+                    "symbol": sym,
+                    "message": "already tracked",
+                }
+            pos: Dict[str, Any] = {
+                "symbol": sym,
+                "entry_price_i": entry,
+                "quote_usdt_micros": q,
+                "deal_funds_micros": funds,
+                "base_size_i": b,
+                "size_basis": str(size_basis or "kucoin_fill")[:64],
+                "sector": str(sector or "spot_alts")[:32],
+                "opened_at_ms": int(time.time() * 1000),
+                "dry_run": bool(dry_run),
+                "source": str(source or "manual")[:32],
+            }
+            if order_id:
+                pos["order_id"] = str(order_id)[:64]
+            self._positions[sym] = pos
+            self._save_positions_locked()
+        logger.info(
+            "registered live buy %s qty_i=%s cost_micros=%s source=%s",
+            sym,
+            b,
+            funds,
+            source,
+        )
+        return {"ok": True, "symbol": sym, "position": dict(pos)}
+
+    def forget_position(self, symbol: str) -> Dict[str, Any]:
+        """Drop a tracked bag after a live sell (manual/TG)."""
+        sym = self._norm_symbol(symbol)
+        with self._lock:
+            if sym not in self._positions:
+                return {"ok": True, "skipped": True, "symbol": sym}
+            self._positions.pop(sym, None)
+            self._save_positions_locked()
+        return {"ok": True, "symbol": sym, "removed": True}
+
+    def recover_untracked_buys(self, *, limit_events: int = 200) -> Dict[str, Any]:
+        """Adopt live buys still on KuCoin that are missing from the position book.
+
+        Manual buys historically only hit the event log — orphan recovery closes that gap
+        when trade-account balance still holds the base asset.
+        """
+        from radar.trade.events import read_trade_events
+
+        if not self._persist_ok:
+            return {"ok": False, "adopted": [], "message": "persistence degraded"}
+        if not self._trader.ready:
+            return {"ok": False, "adopted": [], "message": "keys not ready"}
+        events = read_trade_events(limit=max(1, min(500, int(limit_events))))
+        open_lots: Dict[str, Dict[str, Any]] = {}
+        for ev in events:
+            if ev.get("ok") is not True or ev.get("dry_run") or ev.get("skipped"):
+                continue
+            side = str(ev.get("side") or "").lower()
+            sym = self._norm_symbol(str(ev.get("symbol") or ""))
+            if not sym:
+                continue
+            if side == "buy":
+                q = int(ev.get("quote_usdt_micros") or ev.get("deal_funds_micros") or 0)
+                b = int(ev.get("base_size_i") or 0)
+                if q <= 0 or b <= 0:
+                    continue
+                open_lots[sym] = {
+                    "quote_usdt_micros": q,
+                    "base_size_i": b,
+                    "entry_price_i": int(ev.get("entry_price_i") or 0),
+                    "order_id": ev.get("order_id"),
+                    "deal_funds_micros": int(
+                        ev.get("deal_funds_micros") or q
+                    ),
+                    "size_basis": str(ev.get("size_basis") or "kucoin_fill"),
+                    "source": str(ev.get("source") or "manual"),
+                }
+            elif side == "sell":
+                open_lots.pop(sym, None)
+
+        adopted: List[str] = []
+        skipped: List[Dict[str, str]] = []
+        for sym, lot in open_lots.items():
+            with self._lock:
+                if sym in self._positions:
+                    skipped.append({"symbol": sym, "reason": "already_tracked"})
+                    continue
+            base_ccy = resolve_base_asset(sym)
+            try:
+                bal_i = int(self._trader.get_available_base_i(base_ccy))
+            except Exception as exc:  # noqa: BLE001
+                skipped.append(
+                    {
+                        "symbol": sym,
+                        "reason": redact_exc(exc, max_len=96),
+                    }
+                )
+                continue
+            need = int(lot["base_size_i"])
+            # Still holding at least half the recorded fill (fees / partials).
+            if bal_i <= 0 or bal_i * 2 < need:
+                skipped.append(
+                    {
+                        "symbol": sym,
+                        "reason": f"balance_i={bal_i} below tracked={need}",
+                    }
+                )
+                continue
+            # Prefer live balance as size (honest remaining bag).
+            use_size = bal_i if bal_i <= need * 2 else need
+            res = self.register_live_buy(
+                symbol=sym,
+                quote_usdt_micros=int(lot["quote_usdt_micros"]),
+                base_size_i=int(use_size),
+                entry_price_i=int(lot["entry_price_i"] or 0) or None,
+                order_id=str(lot["order_id"]) if lot.get("order_id") else None,
+                deal_funds_micros=int(lot["deal_funds_micros"]),
+                size_basis=str(lot["size_basis"]),
+                sector="spot_alts",
+                dry_run=False,
+                source=f"recover:{lot.get('source') or 'manual'}",
+            )
+            if res.get("ok") and not res.get("skipped"):
+                adopted.append(sym)
+            else:
+                skipped.append(
+                    {
+                        "symbol": sym,
+                        "reason": str(res.get("message") or "register failed"),
+                    }
+                )
+        return {"ok": True, "adopted": adopted, "skipped": skipped}
 
     def set_enabled(self, enabled: bool) -> Dict[str, Any]:
         enabled = bool(enabled)
@@ -430,12 +623,23 @@ class AutoTradeEngine:
             for x in (cfg.get("memes_soft_risk_flags") or ["below_vol_floor"])
             if x
         }
+        spot_alts_soft = {
+            str(x)
+            for x in (cfg.get("spot_alts_soft_risk_flags") or [])
+            if x
+        }
+        exec_venues = {
+            str(v).strip().lower()
+            for v in (cfg.get("exec_venues") or ["kucoin"])
+            if v and str(v).strip()
+        }
         fixed_quote_micros = int(
             cfg.get("quote_usdt_micros_per_buy")
             or quote_i(cfg.get("quote_usdt_per_buy") or 10)
             or (10 * QUOTE_SCALE)
         )
         equal_sleeves = self._sizing_equal(cfg)
+        shared_pool = self._sizing_shared(cfg)
         max_open = int(cfg.get("max_open_positions") or 5)
         max_buys = int(cfg.get("max_buys_per_cycle") or 2)
         max_sells = int(cfg.get("max_sells_per_cycle") or 5)
@@ -515,9 +719,38 @@ class AutoTradeEngine:
             size_i = int(pos.get("base_size_i") or 0)
             if size_i <= 0:
                 continue
-            result = self._exec_sell(sym, size_i, reason, dry)
+            mark_i = int((row or {}).get("price_i") or 0)
+            result = self._exec_sell(
+                sym, size_i, reason, dry, mark_price_i=mark_i if mark_i > 0 else None
+            )
             actions.append(result)
-            self._emit_action({**result, "source": "auto", "entry_price_i": pos.get("entry_price_i")})
+            cost_m = int(
+                pos.get("deal_funds_micros") or pos.get("quote_usdt_micros") or 0
+            )
+            proceeds_m = int(
+                result.get("quote_usdt_micros")
+                or result.get("deal_funds_micros")
+                or 0
+            )
+            sell_ev: Dict[str, Any] = {
+                **result,
+                "source": "auto",
+                "entry_price_i": pos.get("entry_price_i"),
+                "base_size_i": int(result.get("base_size_i") or size_i),
+                "cost_usdt_micros": cost_m if cost_m > 0 else None,
+            }
+            if proceeds_m > 0:
+                sell_ev["quote_usdt_micros"] = proceeds_m
+            if (
+                cost_m > 0
+                and proceeds_m > 0
+                and result.get("ok")
+                and not result.get("skipped")
+            ):
+                sell_ev["realized_pnl_usdt_micros"] = int(proceeds_m) - int(cost_m)
+            if not sell_ev.get("exit_price_i") and mark_i > 0:
+                sell_ev["exit_price_i"] = mark_i
+            self._emit_action(sell_ev)
             sells += 1
             # Fail-closed: forget bag only after successful sell
             if result.get("ok"):
@@ -564,7 +797,9 @@ class AutoTradeEngine:
             soft_flags_by_sector={
                 "listings": listings_soft,
                 "memes": memes_soft,
+                "spot_alts": spot_alts_soft,
             },
+            exec_venues=exec_venues,
         )
         for row in candidates:
             if buys >= max_buys or open_n >= max_open:
@@ -595,6 +830,22 @@ class AutoTradeEngine:
                             "symbol": sym,
                             "skipped": True,
                             "message": sleeve_err or f"sleeve {sector} empty",
+                        }
+                    )
+                    continue
+            elif shared_pool:
+                # One cash pool (KuCoin free USDT) — any allowed sector, no 1-per-sleeve lock.
+                quote_micros, pool_err = self._shared_pool_buy_quote(
+                    cfg, open_n=open_n, max_open=max_open
+                )
+                if pool_err or quote_micros <= 0:
+                    actions.append(
+                        {
+                            "ok": False,
+                            "side": "buy",
+                            "symbol": sym,
+                            "skipped": True,
+                            "message": pool_err or "shared pool empty",
                         }
                     )
                     continue
@@ -743,11 +994,31 @@ class AutoTradeEngine:
             if drop < stop_loss_bps:
                 continue
             sell_reason = f"stop_loss_degraded drop_bps={drop} ({reason})"
-            result = self._exec_sell(sym, size_i, sell_reason, dry)
-            actions.append(result)
-            self._emit_action(
-                {**result, "source": "auto", "entry_price_i": pos.get("entry_price_i")}
+            result = self._exec_sell(
+                sym, size_i, sell_reason, dry, mark_price_i=int(price_i)
             )
+            actions.append(result)
+            cost_m = int(
+                pos.get("deal_funds_micros") or pos.get("quote_usdt_micros") or 0
+            )
+            proceeds_m = int(
+                result.get("quote_usdt_micros")
+                or result.get("deal_funds_micros")
+                or 0
+            )
+            sell_ev: Dict[str, Any] = {
+                **result,
+                "source": "auto",
+                "entry_price_i": pos.get("entry_price_i"),
+                "exit_price_i": int(price_i),
+                "base_size_i": int(result.get("base_size_i") or size_i),
+                "cost_usdt_micros": cost_m if cost_m > 0 else None,
+            }
+            if proceeds_m > 0:
+                sell_ev["quote_usdt_micros"] = proceeds_m
+            if cost_m > 0 and proceeds_m > 0 and result.get("ok"):
+                sell_ev["realized_pnl_usdt_micros"] = int(proceeds_m) - int(cost_m)
+            self._emit_action(sell_ev)
             sells += 1
             if result.get("ok"):
                 credit = self._sell_credit_micros(
@@ -810,6 +1081,7 @@ class AutoTradeEngine:
         soft_flags_by_sector: dict | None = None,
         symbol_blacklist: set | None = None,
         symbol_whitelist: set | None = None,
+        exec_venues: set | None = None,
     ) -> List[Dict[str, Any]]:
         # Back-compat: listings_soft_flags alone still works.
         soft_map: Dict[str, set] = {}
@@ -818,6 +1090,12 @@ class AutoTradeEngine:
         elif listings_soft_flags:
             soft_map["listings"] = set(listings_soft_flags)
         cfg = load_config().get("auto_trade") or {}
+        if exec_venues is None:
+            exec_venues = {
+                str(v).strip().lower()
+                for v in (cfg.get("exec_venues") or ["kucoin"])
+                if v and str(v).strip()
+            }
         if symbol_blacklist is None:
             blacklist = {
                 str(s).upper().replace("-", "").replace("/", "")
@@ -850,7 +1128,10 @@ class AutoTradeEngine:
             for row in sectors.get(sector) or []:
                 if row.get("market") == "futures":
                     continue
-                if row.get("venue") in {"dexscreener", "coingecko"}:
+                venue = str(row.get("venue") or "").strip().lower()
+                if venue in {"dexscreener", "coingecko"}:
+                    continue
+                if exec_venues and venue and venue not in exec_venues:
                     continue
                 sym = row.get("symbol")
                 if not sym or sym in positions:
@@ -867,8 +1148,7 @@ class AutoTradeEngine:
                 if require_clean:
                     flags = {str(f) for f in (row.get("risk_flags") or []) if f}
                     soft = soft_map.get(sector, set())
-                    hard = flags - soft
-                    if hard:
+                    if _hard_risk_flags(flags, soft):
                         continue
                 item = dict(row)
                 item["sector"] = sector
@@ -929,6 +1209,45 @@ class AutoTradeEngine:
     def _sizing_equal(self, cfg: Dict[str, Any]) -> bool:
         mode = str(cfg.get("sizing_mode") or _SIZING_FIXED).strip().lower()
         return mode == _SIZING_EQUAL
+
+    def _sizing_shared(self, cfg: Dict[str, Any]) -> bool:
+        mode = str(cfg.get("sizing_mode") or _SIZING_FIXED).strip().lower()
+        return mode in {_SIZING_SHARED, "shared", "pool"}
+
+    def _shared_pool_buy_quote(
+        self,
+        cfg: Dict[str, Any],
+        *,
+        open_n: int,
+        max_open: int,
+    ) -> Tuple[int, Optional[str]]:
+        """Size one buy from free USDT: min(per-buy cap, fair share of remaining slots)."""
+        free, err = self._read_free_usdt_micros(cfg)
+        if err:
+            return 0, err
+        reserve = int(cfg.get("shared_pool_reserve_usdt_micros") or 0)
+        if reserve < 0:
+            reserve = 0
+        usable = int(free) - int(reserve)
+        if usable < _MIN_SHARED_BUY_MICROS:
+            return 0, f"shared pool usable={usable} < 1 USDT"
+        cap = int(
+            cfg.get("quote_usdt_micros_per_buy")
+            or quote_i(cfg.get("quote_usdt_per_buy") or 15)
+            or (15 * QUOTE_SCALE)
+        )
+        if cap <= 0:
+            return 0, "quote_usdt_micros_per_buy must be > 0"
+        max_q = int(
+            (load_config().get("api") or {}).get("max_order_quote_usdt_micros")
+            or 500_000_000
+        )
+        slots = max(1, int(max_open) - int(open_n))
+        fair = usable // slots
+        quote = min(int(cap), int(fair), int(usable), int(max_q))
+        if quote < _MIN_SHARED_BUY_MICROS:
+            return 0, f"shared pool quote={quote} < 1 USDT"
+        return int(quote), None
 
     def _sleeve_sectors(self, cfg: Dict[str, Any]) -> List[str]:
         raw = [str(s) for s in (cfg.get("allowed_sectors") or []) if s]
@@ -1158,11 +1477,33 @@ class AutoTradeEngine:
                 )
         return {"updated": updated, "failed": failed, "skipped": skipped}
 
-    def _exec_sell(self, symbol: str, size_i: int, reason: str, dry: bool) -> Dict[str, Any]:
+    def _exec_sell(
+        self,
+        symbol: str,
+        size_i: int,
+        reason: str,
+        dry: bool,
+        *,
+        mark_price_i: Optional[int] = None,
+    ) -> Dict[str, Any]:
         if dry:
             msg = f"DRY sell {symbol} base_size_i={size_i} reason={reason}"
             logger.info(msg)
-            return {"ok": True, "dry_run": True, "side": "sell", "symbol": symbol, "message": msg}
+            out_dry: Dict[str, Any] = {
+                "ok": True,
+                "dry_run": True,
+                "side": "sell",
+                "symbol": symbol,
+                "message": msg,
+                "reason": reason,
+                "base_size_i": int(size_i),
+            }
+            if mark_price_i and int(mark_price_i) > 0 and int(size_i) > 0:
+                q = int(notional_i_from_price_qty(int(mark_price_i), int(size_i)))
+                out_dry["quote_usdt_micros"] = q
+                out_dry["exit_price_i"] = int(mark_price_i)
+                out_dry["size_basis"] = "estimated_mark"
+            return out_dry
         client_oid = str(uuid.uuid4())
         result = self._trader.place(
             TradeRequest(
@@ -1183,6 +1524,7 @@ class AutoTradeEngine:
             "reason": reason,
             "exchange": sanitize_exchange_surface(result.exchange),
             "client_oid": client_oid,
+            "base_size_i": int(size_i),
         }
         if oid:
             out_sell["order_id"] = oid
@@ -1191,7 +1533,30 @@ class AutoTradeEngine:
             if bool(cfg.get("fill_reconcile", True)):
                 fill = self._reconcile_buy_fill(symbol, str(oid), cfg)
                 if int(fill.get("deal_funds_micros") or 0) > 0:
-                    out_sell["deal_funds_micros"] = int(fill["deal_funds_micros"])
+                    funds = int(fill["deal_funds_micros"])
+                    out_sell["deal_funds_micros"] = funds
+                    out_sell["quote_usdt_micros"] = funds
+                if int(fill.get("base_size_i") or 0) > 0:
+                    out_sell["base_size_i"] = int(fill["base_size_i"])
+                    out_sell["size_basis"] = str(fill.get("size_basis") or "kucoin_fill")
+                qty = int(out_sell.get("base_size_i") or 0)
+                funds_m = int(out_sell.get("deal_funds_micros") or 0)
+                if qty > 0 and funds_m > 0:
+                    # inverse of notional_i_from_price_qty: price = quote * 1e10 / qty
+                    out_sell["exit_price_i"] = int(mul_div(funds_m, 10_000_000_000, qty))
+        if (
+            result.ok
+            and not int(out_sell.get("quote_usdt_micros") or 0)
+            and mark_price_i
+            and int(mark_price_i) > 0
+            and int(size_i) > 0
+        ):
+            # Fill poll missed funds — honest mark estimate (not invented edge).
+            out_sell["quote_usdt_micros"] = int(
+                notional_i_from_price_qty(int(mark_price_i), int(size_i))
+            )
+            out_sell["exit_price_i"] = int(mark_price_i)
+            out_sell["size_basis"] = str(out_sell.get("size_basis") or "estimated_mark")
         return out_sell
 
     def _ensure_daily_locked(self) -> Dict[str, Any]:

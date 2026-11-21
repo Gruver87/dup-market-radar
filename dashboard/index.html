@@ -157,6 +157,30 @@
     }
     .trades-wrap .trades-block { margin-bottom: 18px; }
     .trades-wrap .side-buy { color: var(--pos); font-weight: 650; }
+    .trades-wrap .pnl-pos { color: var(--pos); font-weight: 650; }
+    .trades-wrap .pnl-neg { color: var(--neg); font-weight: 650; }
+    .trades-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+      gap: 8px;
+      margin: 0 0 14px;
+    }
+    .trades-summary .chip {
+      background: var(--panel2, #161b22);
+      border: 1px solid var(--border, #30363d);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .trades-summary .chip .lbl {
+      display: block;
+      color: var(--muted);
+      font-size: 0.72rem;
+      margin-bottom: 2px;
+    }
+    .trades-summary .chip .val {
+      font-variant-numeric: tabular-nums;
+      font-size: 0.95rem;
+    }
     .trades-wrap .side-sell { color: var(--neg); font-weight: 650; }
     .trades-wrap .ok-false { color: var(--warn); }
     .errors {
@@ -465,9 +489,14 @@
       <div class="trades-wrap">
         <h2 data-i18n="trades_title">Сделки · купил / продал</h2>
         <p class="trades-meta" id="tradesMeta" data-i18n="trades_note">Открытые позиции + последние события (ручные и авто). Не прогноз будущих входов.</p>
+        <div class="trades-summary" id="tradesSummary" aria-live="polite"></div>
         <div class="trades-block">
           <h2 data-i18n="trades_open">Открытые позиции</h2>
           <div id="tradesOpenWrap"><div class="empty">…</div></div>
+        </div>
+        <div class="trades-block">
+          <h2 data-i18n="trades_closed">Закрытые сделки (купить → продать)</h2>
+          <div id="tradesClosedWrap"><div class="empty">…</div></div>
         </div>
         <div class="trades-block">
           <h2 data-i18n="trades_log">Журнал</h2>
@@ -513,6 +542,18 @@
             <button class="ghost" type="button" id="fxGo" data-i18n="fx_go">Конвертировать</button>
           </div>
           <div class="fx-out" id="fxOut"></div>
+        </div>
+        <div class="ops-card">
+          <h2 data-i18n="api_key_title">Radar API key (для вкладки Сделки)</h2>
+          <p class="note" style="color:var(--muted);font-size:0.75rem;margin:0 0 8px" data-i18n="api_key_note">
+            Тот же RADAR_API_KEY из .env. Без него позиции в UI скрыты. Ключ только в браузере (localStorage), на сервер как секрет не уходит кроме заголовка запросов.
+          </p>
+          <div class="fx-row">
+            <input id="apiKeyInput" type="password" autocomplete="off" placeholder="RADAR_API_KEY" aria-label="radar api key" style="min-width:12rem;flex:1" />
+            <button class="ghost" type="button" id="apiKeySave" data-i18n="api_key_save">Сохранить</button>
+            <button class="ghost" type="button" id="apiKeyClear" data-i18n="api_key_clear">Очистить</button>
+          </div>
+          <div class="fx-out" id="apiKeyOut"></div>
         </div>
         <div class="ops-card">
           <h2 data-i18n="pnl_title">Paper PnL journal</h2>
@@ -576,6 +617,14 @@
         fx_go: "Конвертировать",
         pnl_title: "Paper PnL journal",
         pnl_refresh: "Обновить",
+        api_key_title: "Radar API key (для вкладки Сделки)",
+        api_key_note: "Тот же RADAR_API_KEY из .env. Без него позиции в UI скрыты. Хранится в браузере (localStorage).",
+        api_key_save: "Сохранить",
+        api_key_clear: "Очистить",
+        api_key_saved: "Ключ сохранён. Открой «Сделки» или нажми Обновить.",
+        api_key_cleared: "Ключ очищен.",
+        api_key_bad: "Ключ слишком короткий (нужно ≥8 символов).",
+        api_key_present: "Ключ уже задан (маскирован).",
         nav_watchlist: "Watchlist",
         nav_trades: "Сделки",
         nav_markets: "Markets ~6m",
@@ -588,6 +637,21 @@
         trades_empty_pos: "Нет открытых позиций.",
         trades_empty_log: "Пока нет записей buy/sell.",
         trades_need_key: "Нужен radar_api_key в Local Storage (как для snapshot).",
+        trades_closed: "Закрытые сделки (купить → продать)",
+        trades_empty_closed: "Пока нет закрытых пар buy→sell.",
+        trades_sum_bought: "Куплено",
+        trades_sum_sold: "Продано",
+        trades_sum_earned: "Заработано",
+        trades_sum_lost: "Потеряно",
+        trades_sum_open: "В позициях",
+        trades_sum_net: "Нетто (закрытые)",
+        trades_col_qty: "КОЛ-ВО",
+        trades_col_buy_px: "ЦЕНА ПОКУПКИ",
+        trades_col_buy_usdt: "КУПИЛ USDT",
+        trades_col_sell_px: "ЦЕНА ПРОДАЖИ",
+        trades_col_sell_usdt: "ПРОДАЛ USDT",
+        trades_col_pnl: "ПРИБЫЛЬ USDT",
+        trades_sum_note: "Пример: купил 3 SOL по 2$ (=6 USDT), продал по 2.5$ (=7.5 USDT) → прибыль +1.5 USDT. Dry/preview не считаются.",
         markets_title: "Markets · топ-100 · ~6м",
         help_title: "Как читать / ручная торговля",
         help_1: "<span class=\"key\">Score</span> — насколько монета выделяется. Не гарантия прибыли.",
@@ -620,6 +684,14 @@
         fx_go: "Convert",
         pnl_title: "Paper PnL journal",
         pnl_refresh: "Refresh",
+        api_key_title: "Radar API key (for Trades tab)",
+        api_key_note: "Same RADAR_API_KEY from .env. Without it, positions stay hidden in the UI. Stored in browser localStorage.",
+        api_key_save: "Save",
+        api_key_clear: "Clear",
+        api_key_saved: "Key saved. Open Trades or hit Refresh.",
+        api_key_cleared: "Key cleared.",
+        api_key_bad: "Key too short (need ≥8 characters).",
+        api_key_present: "Key already set (masked).",
         nav_watchlist: "Watchlist",
         nav_trades: "Trades",
         nav_markets: "Markets ~6m",
@@ -632,6 +704,21 @@
         trades_empty_pos: "No open positions.",
         trades_empty_log: "No buy/sell records yet.",
         trades_need_key: "Need radar_api_key in Local Storage (same as snapshot).",
+        trades_closed: "Closed trades (buy → sell)",
+        trades_empty_closed: "No closed buy→sell pairs yet.",
+        trades_sum_bought: "Bought",
+        trades_sum_sold: "Sold",
+        trades_sum_earned: "Earned",
+        trades_sum_lost: "Lost",
+        trades_sum_open: "In positions",
+        trades_sum_net: "Net (closed)",
+        trades_col_qty: "QTY",
+        trades_col_buy_px: "BUY PRICE",
+        trades_col_buy_usdt: "BUY USDT",
+        trades_col_sell_px: "SELL PRICE",
+        trades_col_sell_usdt: "SELL USDT",
+        trades_col_pnl: "PROFIT USDT",
+        trades_sum_note: "Example: bought 3 SOL @ $2 (=6 USDT), sold @ $2.5 (=7.5 USDT) → profit +1.5 USDT. Dry/preview excluded.",
         markets_title: "Markets · top-100 · ~6m",
         help_title: "How to read / manual trade",
         help_1: "<span class=\"key\">Score</span> — how unusual the coin looks. Not a profit guarantee.",
@@ -1603,6 +1690,149 @@
       }
     }
 
+    function fmtBaseI(bi) {
+      return scaledToStr(bi, BASE_SCALE);
+    }
+
+    function baseAsset(sym) {
+      return String(sym || "").replace(/USDT$/i, "").replace(/USDC$/i, "") || "—";
+    }
+
+    function positionCostMicros(p) {
+      const deal = Number(p && p.deal_funds_micros);
+      if (Number.isFinite(deal) && deal > 0) return Math.trunc(deal);
+      const q = Number(p && p.quote_usdt_micros);
+      if (Number.isFinite(q) && q > 0) return Math.trunc(q);
+      return 0;
+    }
+
+    /** price_i from quote micros + base size (inverse of notional). */
+    function priceFromQuoteQty(quoteMicros, baseSizeI) {
+      const q = Math.trunc(Number(quoteMicros) || 0);
+      const b = Math.trunc(Number(baseSizeI) || 0);
+      if (q <= 0 || b <= 0) return null;
+      return Math.trunc((q * 10000000000) / b);
+    }
+
+    function eventProceedsMicros(ev) {
+      const a = Number(ev.quote_usdt_micros || 0);
+      if (Number.isFinite(a) && a > 0) return Math.trunc(a);
+      const b = Number(ev.deal_funds_micros || 0);
+      if (Number.isFinite(b) && b > 0) return Math.trunc(b);
+      return 0;
+    }
+
+    /** Live fills: FIFO lots with qty/price → closed rounds + PnL. */
+    function analyzeTradeEvents(events) {
+      const chron = Array.isArray(events) ? events.slice() : [];
+      let bought = 0;
+      let sold = 0;
+      let earned = 0;
+      let lost = 0;
+      const lots = Object.create(null);
+      const closed = [];
+      const annotated = [];
+      for (let i = 0; i < chron.length; i++) {
+        const ev = chron[i] || {};
+        let pnl = null;
+        const side = String(ev.side || "").toLowerCase();
+        const sym = String(ev.symbol || "").toUpperCase();
+        const liveOk = ev.ok === true && !ev.dry_run && !ev.skipped;
+        const qty = Math.trunc(Number(ev.base_size_i) || 0);
+        const proceeds = eventProceedsMicros(ev);
+        if (liveOk && side === "buy" && sym && proceeds > 0) {
+          bought += proceeds;
+          let entry = Number(ev.entry_price_i || 0);
+          if (!(entry > 0) && qty > 0) entry = priceFromQuoteQty(proceeds, qty) || 0;
+          if (!lots[sym]) lots[sym] = [];
+          lots[sym].push({
+            cost_micros: proceeds,
+            base_size_i: qty > 0 ? qty : null,
+            entry_price_i: entry > 0 ? Math.trunc(entry) : null,
+            at_ms: ev.at_ms,
+            source: ev.source,
+          });
+        } else if (liveOk && side === "sell" && sym) {
+          const queue = lots[sym] || [];
+          const lot = queue.length ? queue.shift() : null;
+          const cost = lot
+            ? Math.trunc(Number(lot.cost_micros) || 0)
+            : Math.trunc(Number(ev.cost_usdt_micros) || 0);
+          let sellQ = proceeds;
+          if (!(sellQ > 0) && ev.realized_pnl_usdt_micros != null && cost > 0) {
+            sellQ = cost + Math.trunc(Number(ev.realized_pnl_usdt_micros) || 0);
+          }
+          if (sellQ > 0) sold += sellQ;
+          if (ev.realized_pnl_usdt_micros != null && Number.isFinite(Number(ev.realized_pnl_usdt_micros))) {
+            pnl = Math.trunc(Number(ev.realized_pnl_usdt_micros));
+          } else if (lot && sellQ > 0 && cost > 0) {
+            pnl = sellQ - cost;
+          }
+          if (pnl != null) {
+            if (pnl >= 0) earned += pnl;
+            else lost += -pnl;
+          }
+          let exitPx = Number(ev.exit_price_i || 0);
+          const sellQty = qty > 0 ? qty : (lot && lot.base_size_i ? lot.base_size_i : null);
+          if (!(exitPx > 0) && sellQ > 0 && sellQty > 0) {
+            exitPx = priceFromQuoteQty(sellQ, sellQty) || 0;
+          }
+          if (lot || sellQ > 0 || pnl != null) {
+            closed.push({
+              at_ms: ev.at_ms,
+              symbol: sym,
+              source: ev.source,
+              base_size_i: sellQty,
+              entry_price_i: lot && lot.entry_price_i ? lot.entry_price_i : (ev.entry_price_i || null),
+              cost_micros: cost > 0 ? cost : null,
+              exit_price_i: exitPx > 0 ? Math.trunc(exitPx) : null,
+              sell_micros: sellQ > 0 ? sellQ : null,
+              pnl_micros: pnl,
+              reason: ev.reason || ev.message || "",
+            });
+          }
+        }
+        annotated.push({ ev, pnl_micros: pnl });
+      }
+      return {
+        bought_micros: bought,
+        sold_micros: sold,
+        earned_micros: earned,
+        lost_micros: lost,
+        net_micros: earned - lost,
+        closed,
+        annotated,
+      };
+    }
+
+    function openPositionsCostMicros(at) {
+      const positions = (at && at.positions) || {};
+      let total = 0;
+      Object.keys(positions).forEach((sym) => {
+        total += positionCostMicros(positions[sym] || {});
+      });
+      return total;
+    }
+
+    function renderTradesSummary(stats, openCostMicros) {
+      const el = document.getElementById("tradesSummary");
+      if (!el) return;
+      const chip = (lbl, val, cls) =>
+        `<div class="chip"><span class="lbl">${esc(lbl)}</span>` +
+        `<span class="val ${cls || ""}">${esc(val)}</span></div>`;
+      const u = (m) => fmtUsdtMicros(m, 1000000) + " USDT";
+      const net = Number(stats.net_micros || 0);
+      const netCls = net > 0 ? "pnl-pos" : (net < 0 ? "pnl-neg" : "");
+      el.innerHTML =
+        chip(t("trades_sum_bought"), u(stats.bought_micros)) +
+        chip(t("trades_sum_sold"), u(stats.sold_micros)) +
+        chip(t("trades_sum_earned"), u(stats.earned_micros), "pnl-pos") +
+        chip(t("trades_sum_lost"), u(stats.lost_micros), "pnl-neg") +
+        chip(t("trades_sum_open"), u(openCostMicros)) +
+        chip(t("trades_sum_net"), u(net), netCls) +
+        `<div class="chip" style="grid-column:1/-1"><span class="lbl">${esc(t("trades_sum_note"))}</span></div>`;
+    }
+
     function renderTradesOpen(at) {
       const wrap = document.getElementById("tradesOpenWrap");
       if (!wrap) return;
@@ -1614,55 +1844,129 @@
       }
       const head =
         "<table><thead><tr>" +
-        "<th>SYMBOL</th><th>SIZE</th><th>BASIS</th><th>ORDER</th><th>ENTRY</th>" +
+        "<th>SYMBOL</th>" +
+        "<th>" + esc(t("trades_col_qty")) + "</th>" +
+        "<th>" + esc(t("trades_col_buy_px")) + "</th>" +
+        "<th>" + esc(t("trades_col_buy_usdt")) + "</th>" +
+        "<th>BASIS</th><th>ORDER</th>" +
         "</tr></thead><tbody>";
       const body = keys.map((sym) => {
         const p = positions[sym] || {};
         const basis = String(p.size_basis || "—");
         const cls = basis.indexOf("kucoin_fill") >= 0 ? "basis-fill"
           : (basis.indexOf("estimat") >= 0 || basis.indexOf("unreconcil") >= 0 ? "basis-est" : "");
-        const size = p.base_size_i != null ? String(p.base_size_i) : "—";
+        const qtyI = Number(p.base_size_i || 0);
+        const qty = qtyI > 0
+          ? (fmtBaseI(qtyI) + " " + baseAsset(sym))
+          : "—";
         const oid = p.order_id ? String(p.order_id).slice(0, 14) : "—";
         const entry = p.entry_price_i != null ? fmtPriceI(p.entry_price_i) : "—";
+        const costM = positionCostMicros(p);
+        const cost = costM > 0 ? fmtUsdtMicros(costM, 1000000) : "—";
         return `<tr>
           <td>${esc(sym)}</td>
-          <td class="num ${cls}">${esc(size)}</td>
+          <td class="num ${cls}">${esc(qty)}</td>
+          <td class="num">${esc(entry)}</td>
+          <td class="num">${esc(cost)}</td>
           <td class="${cls}">${esc(basis)}</td>
           <td class="num">${esc(oid)}</td>
-          <td class="num">${esc(entry)}</td>
         </tr>`;
       }).join("");
       wrap.innerHTML = head + body + "</tbody></table>";
     }
 
-    function renderTradesLog(events) {
+    function renderTradesClosed(closed) {
+      const wrap = document.getElementById("tradesClosedWrap");
+      if (!wrap) return;
+      const rows = Array.isArray(closed) ? closed.slice().reverse() : [];
+      if (!rows.length) {
+        wrap.innerHTML = `<div class="empty">${esc(t("trades_empty_closed"))}</div>`;
+        return;
+      }
+      const head =
+        "<table><thead><tr>" +
+        "<th>TIME</th><th>SYMBOL</th>" +
+        "<th>" + esc(t("trades_col_qty")) + "</th>" +
+        "<th>" + esc(t("trades_col_buy_px")) + "</th>" +
+        "<th>" + esc(t("trades_col_buy_usdt")) + "</th>" +
+        "<th>" + esc(t("trades_col_sell_px")) + "</th>" +
+        "<th>" + esc(t("trades_col_sell_usdt")) + "</th>" +
+        "<th>" + esc(t("trades_col_pnl")) + "</th>" +
+        "<th>NOTE</th>" +
+        "</tr></thead><tbody>";
+      const body = rows.map((r) => {
+        const qty = r.base_size_i
+          ? (fmtBaseI(r.base_size_i) + " " + baseAsset(r.symbol))
+          : "—";
+        const buyPx = r.entry_price_i != null ? fmtPriceI(r.entry_price_i) : "—";
+        const buyU = r.cost_micros != null ? fmtUsdtMicros(r.cost_micros, 1000000) : "—";
+        const sellPx = r.exit_price_i != null ? fmtPriceI(r.exit_price_i) : "—";
+        const sellU = r.sell_micros != null ? fmtUsdtMicros(r.sell_micros, 1000000) : "—";
+        let pnlTxt = "—";
+        let pnlCls = "";
+        if (r.pnl_micros != null && Number.isFinite(Number(r.pnl_micros))) {
+          const p = Number(r.pnl_micros);
+          pnlTxt = (p > 0 ? "+" : "") + fmtUsdtMicros(p, 1000000);
+          pnlCls = p > 0 ? "pnl-pos" : (p < 0 ? "pnl-neg" : "");
+        }
+        return `<tr>
+          <td class="num">${esc(fmtEventTime(r.at_ms))}</td>
+          <td>${esc(String(r.symbol || "—"))}</td>
+          <td class="num">${esc(qty)}</td>
+          <td class="num">${esc(buyPx)}</td>
+          <td class="num">${esc(buyU)}</td>
+          <td class="num">${esc(sellPx)}</td>
+          <td class="num">${esc(sellU)}</td>
+          <td class="num ${pnlCls}">${esc(pnlTxt)}</td>
+          <td class="flags">${esc(String(r.reason || "").slice(0, 80))}</td>
+        </tr>`;
+      }).join("");
+      wrap.innerHTML = head + body + "</tbody></table>";
+    }
+
+    function renderTradesLog(annotatedChron) {
       const wrap = document.getElementById("tradesLogWrap");
       if (!wrap) return;
-      const rows = Array.isArray(events) ? events.slice().reverse() : [];
+      const rows = Array.isArray(annotatedChron) ? annotatedChron.slice().reverse() : [];
       if (!rows.length) {
         wrap.innerHTML = `<div class="empty">${esc(t("trades_empty_log"))}</div>`;
         return;
       }
       const head =
         "<table><thead><tr>" +
-        "<th>TIME</th><th>SIDE</th><th>SYMBOL</th><th>SRC</th><th>USDT</th><th>OK</th><th>NOTE</th>" +
+        "<th>TIME</th><th>SIDE</th><th>SYMBOL</th><th>SRC</th>" +
+        "<th>" + esc(t("trades_col_qty")) + "</th>" +
+        "<th>USDT</th>" +
+        "<th>" + esc(t("trades_col_pnl")) + "</th><th>OK</th><th>NOTE</th>" +
         "</tr></thead><tbody>";
-      const body = rows.map((ev) => {
+      const body = rows.map((row) => {
+        const ev = row.ev || row;
         const side = String(ev.side || "—").toLowerCase();
         const sideCls = side === "buy" ? "side-buy" : (side === "sell" ? "side-sell" : "");
         const ok = ev.ok === true ? "yes" : (ev.ok === false ? "no" : "—");
         const okCls = ev.ok === false ? "ok-false" : "";
-        const usdt = ev.quote_usdt_micros != null
-          ? fmtUsdtMicros(ev.quote_usdt_micros, 1000000)
+        const usdt = eventProceedsMicros(ev) > 0
+          ? fmtUsdtMicros(eventProceedsMicros(ev), 1000000)
           : "—";
+        const qtyI = Number(ev.base_size_i || 0);
+        const qty = qtyI > 0 ? (fmtBaseI(qtyI) + " " + baseAsset(ev.symbol)) : "—";
         const note = ev.message || ev.reason || "";
         const dry = ev.dry_run ? " dry" : "";
+        let pnlTxt = "—";
+        let pnlCls = "";
+        if (row.pnl_micros != null && Number.isFinite(Number(row.pnl_micros))) {
+          const p = Number(row.pnl_micros);
+          pnlTxt = (p > 0 ? "+" : "") + fmtUsdtMicros(p, 1000000);
+          pnlCls = p > 0 ? "pnl-pos" : (p < 0 ? "pnl-neg" : "");
+        }
         return `<tr>
           <td class="num">${esc(fmtEventTime(ev.at_ms))}</td>
           <td class="${sideCls}">${esc(side)}</td>
           <td>${esc(String(ev.symbol || "—"))}</td>
           <td>${esc(String(ev.source || "—"))}${dry ? " · dry" : ""}</td>
+          <td class="num">${esc(qty)}</td>
           <td class="num">${esc(usdt)}</td>
+          <td class="num ${pnlCls}">${esc(pnlTxt)}</td>
           <td class="${okCls}">${esc(ok)}</td>
           <td class="flags">${esc(String(note).slice(0, 120))}</td>
         </tr>`;
@@ -1673,6 +1977,8 @@
     async function loadTrades() {
       const openWrap = document.getElementById("tradesOpenWrap");
       const logWrap = document.getElementById("tradesLogWrap");
+      const closedWrap = document.getElementById("tradesClosedWrap");
+      const sumEl = document.getElementById("tradesSummary");
       if (!openWrap || !logWrap) return;
       let hasKey = false;
       try { hasKey = !!(localStorage.getItem("radar_api_key") || "").trim(); } catch (_) {}
@@ -1680,23 +1986,36 @@
         const msg = `<div class="empty">${esc(t("trades_need_key"))}</div>`;
         openWrap.innerHTML = msg;
         logWrap.innerHTML = msg;
+        if (closedWrap) closedWrap.innerHTML = msg;
+        if (sumEl) sumEl.innerHTML = msg;
         return;
       }
+      // Always fetch /api/trade/auto here — public snapshot redacts positions to {}.
+      let at = {};
       try {
-        await enrichTradeDetail();
-        const at = (state.snap && state.snap.auto_trade) || {};
+        const resAuto = await fetchTimeout("/api/trade/auto", { headers: apiHeaders(false) }, 15000);
+        if (resAuto.ok) {
+          at = await resAuto.json();
+          if (state.snap) state.snap.auto_trade = at;
+        } else {
+          openWrap.innerHTML = `<div class="empty">HTTP ${resAuto.status} /api/trade/auto</div>`;
+        }
         renderTradesOpen(at);
-      } catch (_) {
-        openWrap.innerHTML = `<div class="empty">${esc(t("trades_empty_pos"))}</div>`;
+      } catch (e) {
+        openWrap.innerHTML = `<div class="empty">${esc(String(e))}</div>`;
       }
       try {
-        const res = await fetchTimeout("/api/trade/events?limit=80", { headers: apiHeaders(false) }, 15000);
+        const res = await fetchTimeout("/api/trade/events?limit=200", { headers: apiHeaders(false) }, 15000);
         if (!res.ok) {
           logWrap.innerHTML = `<div class="empty">HTTP ${res.status}</div>`;
+          if (sumEl) sumEl.innerHTML = "";
           return;
         }
         const data = await res.json();
-        renderTradesLog(data.events || []);
+        const stats = analyzeTradeEvents(data.events || []);
+        renderTradesSummary(stats, openPositionsCostMicros(at));
+        renderTradesClosed(stats.closed);
+        renderTradesLog(stats.annotated);
       } catch (e) {
         logWrap.innerHTML = `<div class="empty">${esc(String(e))}</div>`;
       }
@@ -1753,6 +2072,41 @@
     document.getElementById("fxGo").onclick = () => runFx();
     const pnlBtn = document.getElementById("pnlRefresh");
     if (pnlBtn) pnlBtn.onclick = () => loadPnlJournal();
+    function refreshApiKeyHint() {
+      const out = document.getElementById("apiKeyOut");
+      if (!out) return;
+      let has = false;
+      try { has = !!(localStorage.getItem("radar_api_key") || "").trim(); } catch (_) {}
+      out.textContent = has ? t("api_key_present") : "";
+    }
+    const apiSave = document.getElementById("apiKeySave");
+    if (apiSave) {
+      apiSave.onclick = () => {
+        const inp = document.getElementById("apiKeyInput");
+        const out = document.getElementById("apiKeyOut");
+        const v = ((inp && inp.value) || "").trim();
+        if (v.length < 8) {
+          if (out) out.textContent = t("api_key_bad");
+          return;
+        }
+        try { localStorage.setItem("radar_api_key", v); } catch (_) {}
+        if (inp) inp.value = "";
+        if (out) out.textContent = t("api_key_saved");
+        load(true);
+        loadTrades();
+      };
+    }
+    const apiClear = document.getElementById("apiKeyClear");
+    if (apiClear) {
+      apiClear.onclick = () => {
+        try { localStorage.removeItem("radar_api_key"); } catch (_) {}
+        const inp = document.getElementById("apiKeyInput");
+        if (inp) inp.value = "";
+        const out = document.getElementById("apiKeyOut");
+        if (out) out.textContent = t("api_key_cleared");
+      };
+    }
+    refreshApiKeyHint();
     document.querySelectorAll(".nav-btn").forEach((b) => {
       b.onclick = () => setView(b.dataset.view || "watchlist");
     });

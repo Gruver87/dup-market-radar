@@ -23,7 +23,7 @@ Runtime toggle = **auto_execute** (`enabled` in API / dashboard «Автоисп
 | Dry run | `dry_run: true` → cycle may log actions; status `armed=false` (no live auto orders) |
 | Manual buttons | Always keep Preview → Confirm (independent of auto-execute) |
 | Sectors | `spot_alts` / `memes` (CEX only) / `listings` — futures blocked; DEX memes skipped |
-| Buys | `buy_setups` (default `buy-watch`, `new-listing-watch`) + min score + risk flags; equal sleeves seed from KuCoin free USDT (or `sleeve_paper_seed_usdt_micros` in dry_run) |
+| Buys | `buy_setups` (default `buy-watch`, `new-listing-watch`; live-money also `long`) + min score + risk flags; sizing: `equal_sleeves` (1 open/sector) or live-money `shared_pool` (one free-USDT pool, any sector up to `max_open_positions`); `exec_venues` defaults to KuCoin |
 | Sells | `sell_setups` (default `fade-watch`) **or** `stop_loss_bps` from entry |
 | Quote size | **`sizing_mode: equal_sleeves`** (default): free USDT split equally across `allowed_sectors`; buy = that sleeve’s cash; sell credits the same sleeve. Legacy: `fixed_quote` + `quote_usdt_micros_per_buy`. Hard cap: `api.max_order_quote_usdt_micros` |
 | Open bags | `max_open_positions`; equal_sleeves also **one open per sector** |
@@ -61,6 +61,8 @@ Trade events → `data/trade_events.jsonl` (gitignored). Messages redacted.
 ## Listings soft risk flags
 
 `auto_trade.listings_soft_risk_flags` (default: `cross_venue_live`) may appear on listing rows without blocking auto-buy when `require_no_risk_flags` is true. Any other flag still blocks.
+
+`auto_trade.spot_alts_soft_risk_flags` (live-money overlay) soft-allows common tape flags (`wide_range_24h`, `mtf_diverge_*`, `wide_spread_*` prefix). Unknown flags still block.
 
 ## Outside-top Telegram stops + fade
 

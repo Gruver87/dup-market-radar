@@ -528,6 +528,7 @@ def _tg_trade_place(
                 redact_exc(exc, max_len=256),
             )
     record_trade_event(trade_ev)
+    _track_manual_fill(trade_ev)
     _mirror_trade_side_channels(trade_ev)
     if _tg is not None:
         _tg.notify_trade(trade_ev)
@@ -659,6 +660,59 @@ def _on_auto_action(event: Dict[str, Any]) -> None:
     _tg_apply_position_hooks(event)
 
 
+def _track_manual_fill(trade_ev: Dict[str, Any]) -> None:
+    """Keep open-position book in sync for manual/TG live fills (not dry-run)."""
+    if not trade_ev.get("ok") or trade_ev.get("dry_run"):
+        return
+    side = str(trade_ev.get("side") or "").lower()
+    sym = str(trade_ev.get("symbol") or "")
+    if not sym:
+        return
+    if side == "buy":
+        fill = trade_ev.get("fill") if isinstance(trade_ev.get("fill"), dict) else {}
+        base_i = int(
+            trade_ev.get("base_size_i")
+            or (fill or {}).get("base_size_i")
+            or 0
+        )
+        quote_m = int(
+            trade_ev.get("quote_usdt_micros")
+            or (fill or {}).get("deal_funds_micros")
+            or 0
+        )
+        deal_m = int((fill or {}).get("deal_funds_micros") or quote_m or 0)
+        if base_i <= 0 or quote_m <= 0:
+            return
+        sector = "spot_alts"
+        try:
+            snap = _cache.peek() or {}
+            row = find_row_public(snap, sym)
+            if row and row.get("_sector"):
+                sector = str(row.get("_sector"))
+            elif row and row.get("sector"):
+                sector = str(row.get("sector"))
+        except Exception:  # noqa: BLE001
+            sector = "spot_alts"
+        _auto.register_live_buy(
+            symbol=sym,
+            quote_usdt_micros=quote_m,
+            base_size_i=base_i,
+            entry_price_i=int(trade_ev.get("entry_price_i") or 0) or None,
+            order_id=str(trade_ev.get("order_id") or "") or None,
+            deal_funds_micros=deal_m if deal_m > 0 else None,
+            size_basis=str(
+                trade_ev.get("size_basis")
+                or (fill or {}).get("size_basis")
+                or "kucoin_fill"
+            ),
+            sector=sector,
+            dry_run=False,
+            source=str(trade_ev.get("source") or "manual"),
+        )
+    elif side == "sell":
+        _auto.forget_position(sym)
+
+
 def _redact_fs_paths(obj: Any) -> Any:
     """Strip absolute filesystem paths from public JSON surfaces."""
     if isinstance(obj, dict):
@@ -714,6 +768,17 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     _auto.start()
     _tg = _build_telegram()
     _auto.set_on_action(_on_auto_action)
+    try:
+        recovered = _auto.recover_untracked_buys(limit_events=200)
+        logger.info(
+            "recover_untracked_buys adopted=%s skipped=%s",
+            recovered.get("adopted"),
+            len(recovered.get("skipped") or []),
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "recover_untracked_buys failed: %s", redact_exc(exc, max_len=256)
+        )
     _tg_start_error = None
     try:
         started = _tg.start()
@@ -1338,7 +1403,12 @@ def trade_order(request: Request, body: ManualOrderBody) -> Dict[str, Any]:
                 body.symbol,
                 redact_exc(exc, max_len=256),
             )
+    if payload.get("fill") and isinstance(payload["fill"], dict):
+        if payload["fill"].get("deal_funds_micros"):
+            trade_ev["deal_funds_micros"] = payload["fill"]["deal_funds_micros"]
+        trade_ev["fill"] = payload["fill"]
     record_trade_event(trade_ev)
+    _track_manual_fill(trade_ev)
     _mirror_trade_side_channels(trade_ev)
     if _tg is not None and (result.ok or not result.dry_run):
         _tg.notify_trade(trade_ev)

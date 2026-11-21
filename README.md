@@ -26,6 +26,8 @@ Companion to industrial L1 work ([`dup-protocol`](https://github.com/Gruver87/du
 
 **Repo:** https://github.com/Gruver87/dup-market-radar
 
+**Новичок / first open?** → [`docs/START_HERE.md`](docs/START_HERE.md) (простым языком: смотреть → ручная покупка → авто).
+
 ---
 
 ## Features (honest)
@@ -97,6 +99,7 @@ Full index: [`docs/README.md`](docs/README.md).
 
 | Doc | Contents |
 |-----|----------|
+| [`docs/START_HERE.md`](docs/START_HERE.md) | **Beginner** — plain-language path (RU) |
 | [`docs/DISCLAIMER.md`](docs/DISCLAIMER.md) | **No liability** — read before enabling trade |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layers, MTF ensure, hybrid native, ingest phases |
 | [`docs/ARCHITECTURE_BLUEPRINT.md`](docs/ARCHITECTURE_BLUEPRINT.md) | Column constructor / module assembly drawing |
@@ -119,7 +122,7 @@ Full index: [`docs/README.md`](docs/README.md).
 
 [`config/default.yaml`](config/default.yaml) — venues (KuCoin first), thresholds, `top_n`, ingest (`max_kline_gets`, `secondary_http_timeout_ms`, …), `auto_trade`, Telegram. Validated fail-closed (no futures in `auto_trade.allowed_sectors`).
 
-**Auto-execute (opt-in):** `auto_trade.enabled_default: false`, lab `dry_run: true`. Enable from the dashboard (**Автоисполнение**) or `POST /api/trade/auto` after keys + (for live) `RADAR_PROFILE=live-money`. Safety defaults: 10 USDT buys, max 5 open, 20 buys/day, 200 USDT daily notional, 15m signal cooldown, kill-switch latch. Details: [`docs/TRADE.md`](docs/TRADE.md) · risks: [`docs/LIVE_MONEY.md`](docs/LIVE_MONEY.md).
+**Auto-execute (opt-in):** `auto_trade.enabled_default: false`, lab `dry_run: true`. Enable from the dashboard (**Автоисполнение**) or `POST /api/trade/auto` after keys + (for live) `RADAR_PROFILE=live-money`. Default sizing **`equal_sleeves`** (free USDT split across spot_alts/memes/listings); kill-switch; daily/cooldown rails. Details: [`docs/TRADE.md`](docs/TRADE.md) · risks: [`docs/LIVE_MONEY.md`](docs/LIVE_MONEY.md) · beginner: [`docs/START_HERE.md`](docs/START_HERE.md).
 
 Copy [`.env.example`](.env.example) → `.env`. **Never commit `.env`.**
 

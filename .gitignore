@@ -29,3 +29,5 @@ data/evidence/*.err
 
 *.egg-info/
 
+
+data/.radar_dashboard_key.local

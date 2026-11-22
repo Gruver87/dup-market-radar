@@ -77,6 +77,7 @@ def test_network_recovered_after_consecutive_fails(monkeypatch):
 
 def test_auto_restart_when_dead(monkeypatch):
     restarts = {"n": 0}
+    events = []
 
     monkeypatch.setattr(
         "radar.recovery.load_config",
@@ -86,6 +87,7 @@ def test_auto_restart_when_dead(monkeypatch):
                 "background_scan": False,
                 "restart_auto_thread": True,
                 "restart_telegram": False,
+                "notify_on_worker_restart": True,
                 "max_restarts_per_hour": 20,
                 "restart_backoff_ms": 50,
             },
@@ -100,6 +102,9 @@ def test_auto_restart_when_dead(monkeypatch):
         alive["v"] = True
         return True
 
+    def on_ops(payload):
+        events.append(payload)
+
     sup = RecoverySupervisor(
         snapshot_fn=lambda: {"ok": True},
         ensure_auto=ensure,
@@ -107,6 +112,7 @@ def test_auto_restart_when_dead(monkeypatch):
         auto_alive=lambda: alive["v"],
         telegram_wanted=lambda: False,
         telegram_alive=lambda: True,
+        on_network_recovered=on_ops,
     )
     cfg = {
         "enabled": True,
@@ -115,14 +121,18 @@ def test_auto_restart_when_dead(monkeypatch):
         "restart_telegram": False,
         "restart_backoff_ms": 50,
         "max_restarts_per_hour": 20,
+        "notify_on_worker_restart": True,
     }
     sup._tick(cfg)
     assert restarts["n"] == 1
     assert alive["v"] is True
     assert sup.status()["stats"]["auto_restarts"] == 1
+    assert len(events) == 1
+    assert events[0]["kind"] == "auto_restart"
     # Second tick — already alive, no restart
     sup._tick(cfg)
     assert restarts["n"] == 1
+    assert len(events) == 1
 
 
 def test_restart_budget_soft_refuse(monkeypatch):

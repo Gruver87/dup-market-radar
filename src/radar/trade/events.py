@@ -46,6 +46,8 @@ def record_trade_event(event: Dict[str, Any]) -> None:
         "entry_price_i": event.get("entry_price_i"),
         "exit_price_i": event.get("exit_price_i"),
         "realized_pnl_usdt_micros": event.get("realized_pnl_usdt_micros"),
+        "realized_pnl_gross_usdt_micros": event.get("realized_pnl_gross_usdt_micros"),
+        "fee_usdt_micros": event.get("fee_usdt_micros"),
         "size_basis": event.get("size_basis"),
         "reason": (
             redact_text(str(event["reason"]))[:512]

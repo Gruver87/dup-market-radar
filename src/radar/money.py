@@ -174,6 +174,13 @@ def drop_bps(entry_price_i: int, mark_price_i: int) -> int:
     return mul_div(entry_price_i - mark_price_i, 10_000, entry_price_i)
 
 
+def rise_bps(entry_price_i: int, mark_price_i: int) -> int:
+    """How many bps price rose from entry (positive = gain)."""
+    if entry_price_i <= 0:
+        return 0
+    return mul_div(mark_price_i - entry_price_i, 10_000, entry_price_i)
+
+
 def display_price(price_i_val: Optional[int]) -> str:
     if price_i_val is None:
         return "—"

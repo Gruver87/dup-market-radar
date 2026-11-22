@@ -181,6 +181,15 @@
       font-variant-numeric: tabular-nums;
       font-size: 0.95rem;
     }
+    .trades-summary .chip.chip-net {
+      grid-column: 1 / -1;
+      border-color: var(--border, #30363d);
+      background: var(--panel, #0d1117);
+    }
+    .trades-summary .chip.chip-net .val {
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
     .trades-wrap .side-sell { color: var(--neg); font-weight: 650; }
     .trades-wrap .ok-false { color: var(--warn); }
     .errors {
@@ -265,6 +274,80 @@
     button.buy { border-color: #2a4a38; color: var(--pos); }
     button.sell { border-color: #4a2a2a; color: var(--neg); }
     button.buy:disabled, button.sell:disabled { opacity: 0.35; cursor: not-allowed; }
+    .trades-wrap button.sell-now {
+      padding: 4px 10px;
+      font-size: 0.78rem;
+      font-weight: 650;
+      min-width: 4.5rem;
+    }
+    .trades-find-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin: 0 0 10px;
+    }
+    .trades-find-label {
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    #tradesFindInput {
+      flex: 1 1 10rem;
+      min-width: 8rem;
+      max-width: 18rem;
+      background: var(--panel2, #161b22);
+      border: 1px solid var(--border, #30363d);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font: inherit;
+      font-size: 0.95rem;
+    }
+    .trades-find-out {
+      border: 1px solid var(--border, #30363d);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: var(--panel2, #161b22);
+      min-height: 3rem;
+    }
+    .trades-find-card {
+      display: grid;
+      gap: 8px;
+    }
+    .trades-find-card .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 16px;
+      align-items: baseline;
+    }
+    .trades-find-card .sym {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .trades-find-card .meta { color: var(--muted); font-size: 0.82rem; }
+    .trades-find-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-top: 4px;
+    }
+    .trades-find-actions input[type="text"],
+    .trades-find-actions input[type="number"] {
+      width: 6.5rem;
+      background: #0d1117;
+      border: 1px solid var(--border, #30363d);
+      color: var(--text);
+      border-radius: 4px;
+      padding: 6px 8px;
+      font: inherit;
+    }
+    .trades-find-status {
+      font-size: 0.8rem;
+      color: var(--muted);
+      min-height: 1.2em;
+    }
     a { color: var(--accent); }
     .empty { color: var(--muted); padding: 24px 0; }
     .modal-bg {
@@ -490,9 +573,24 @@
         <h2 data-i18n="trades_title">Сделки · купил / продал</h2>
         <p class="trades-meta" id="tradesMeta" data-i18n="trades_note">Открытые позиции + последние события (ручные и авто). Не прогноз будущих входов.</p>
         <div class="trades-summary" id="tradesSummary" aria-live="polite"></div>
+        <div class="trades-block trades-find-block">
+          <h2 data-i18n="trades_find_title">Найти монету · купить / продать</h2>
+          <div class="trades-find-bar">
+            <label class="trades-find-label" for="tradesFindInput" data-i18n="trades_find_label">Найти</label>
+            <input id="tradesFindInput" type="search" autocomplete="off" spellcheck="false"
+              placeholder="DOT / SOL / PIEVERSE…" data-i18n-placeholder="trades_find_ph" />
+            <button type="button" class="primary" id="tradesFindBtn" data-i18n="trades_find_go">Показать</button>
+          </div>
+          <div id="tradesFindOut" class="trades-find-out"><div class="empty" data-i18n="trades_find_empty">Введи тикер — покажем mark и кнопки.</div></div>
+        </div>
         <div class="trades-block">
           <h2 data-i18n="trades_open">Открытые позиции</h2>
           <div id="tradesOpenWrap"><div class="empty">…</div></div>
+        </div>
+        <div class="trades-block">
+          <h2 data-i18n="trades_daily_title">Отчёт по суткам (UTC)</h2>
+          <p class="trades-meta" data-i18n="trades_daily_note">Вложено = сумма покупок за день. P/L = закрытые сделки в этот день.</p>
+          <div id="tradesDailyWrap"><div class="empty">…</div></div>
         </div>
         <div class="trades-block">
           <h2 data-i18n="trades_closed">Закрытые сделки (купить → продать)</h2>
@@ -644,14 +742,45 @@
         trades_sum_earned: "Заработано",
         trades_sum_lost: "Потеряно",
         trades_sum_open: "В позициях",
-        trades_sum_net: "Нетто (закрытые)",
+        trades_sum_net: "Сейчас (закрытые)",
         trades_col_qty: "КОЛ-ВО",
         trades_col_buy_px: "ЦЕНА ПОКУПКИ",
         trades_col_buy_usdt: "КУПИЛ USDT",
         trades_col_sell_px: "ЦЕНА ПРОДАЖИ",
         trades_col_sell_usdt: "ПРОДАЛ USDT",
         trades_col_pnl: "ПРИБЫЛЬ USDT",
-        trades_sum_note: "Пример: купил 3 SOL по 2$ (=6 USDT), продал по 2.5$ (=7.5 USDT) → прибыль +1.5 USDT. Dry/preview не считаются.",
+        trades_col_cum: "ИТОГО USDT",
+        trades_col_mark: "СЕЙЧАС",
+        trades_col_upnl: "P/L СЕЙЧАС",
+        trades_col_act: "ДЕЙСТВИЕ",
+        trades_sell_now: "Продать",
+        trades_selling: "Продаю…",
+        trades_sold_ok: "Продано",
+        trades_sell_fail: "Ошибка продажи",
+        trades_find_title: "Найти монету · купить / продать",
+        trades_find_label: "Найти",
+        trades_find_ph: "DOT / SOL / PIEVERSE…",
+        trades_find_go: "Показать",
+        trades_find_empty: "Введи тикер — покажем mark и кнопки.",
+        trades_find_buy_usdt: "USDT",
+        trades_find_buy: "Купить",
+        trades_find_sell: "Продать всё",
+        trades_find_buying: "Покупаю…",
+        trades_find_bought: "Куплено",
+        trades_find_no_mark: "Mark не найден — проверь тикер (спот USDT).",
+        trades_find_bal: "Баланс",
+        trades_find_open: "В сумке",
+        trades_sum_open_upnl: "Открытые P/L",
+        trades_sum_note: "ИТОГО — накопительный результат с старта live-денег. Найти = быстрый buy/sell без диалога.",
+        trades_daily_title: "Отчёт по суткам (UTC)",
+        trades_daily_note: "Вложено = сумма покупок за день. P/L = закрытые сделки в этот день.",
+        trades_daily_empty: "Пока нет суточных данных.",
+        trades_daily_day: "ДЕНЬ",
+        trades_daily_invested: "ВЛОЖЕНО USDT",
+        trades_daily_sold: "ПРОДАНО USDT",
+        trades_daily_pnl: "P/L USDT",
+        trades_daily_rounds: "СДЕЛОК",
+        trades_daily_wl: "W/L",
         markets_title: "Markets · топ-100 · ~6м",
         help_title: "Как читать / ручная торговля",
         help_1: "<span class=\"key\">Score</span> — насколько монета выделяется. Не гарантия прибыли.",
@@ -711,14 +840,45 @@
         trades_sum_earned: "Earned",
         trades_sum_lost: "Lost",
         trades_sum_open: "In positions",
-        trades_sum_net: "Net (closed)",
+        trades_sum_net: "Now (closed)",
         trades_col_qty: "QTY",
         trades_col_buy_px: "BUY PRICE",
         trades_col_buy_usdt: "BUY USDT",
         trades_col_sell_px: "SELL PRICE",
         trades_col_sell_usdt: "SELL USDT",
         trades_col_pnl: "PROFIT USDT",
-        trades_sum_note: "Example: bought 3 SOL @ $2 (=6 USDT), sold @ $2.5 (=7.5 USDT) → profit +1.5 USDT. Dry/preview excluded.",
+        trades_col_cum: "TOTAL USDT",
+        trades_col_mark: "MARK NOW",
+        trades_col_upnl: "P/L NOW",
+        trades_col_act: "ACTION",
+        trades_sell_now: "Sell",
+        trades_selling: "Selling…",
+        trades_sold_ok: "Sold",
+        trades_sell_fail: "Sell failed",
+        trades_find_title: "Find coin · buy / sell",
+        trades_find_label: "Find",
+        trades_find_ph: "DOT / SOL / PIEVERSE…",
+        trades_find_go: "Show",
+        trades_find_empty: "Type a ticker — mark + trade buttons.",
+        trades_find_buy_usdt: "USDT",
+        trades_find_buy: "Buy",
+        trades_find_sell: "Sell all",
+        trades_find_buying: "Buying…",
+        trades_find_bought: "Bought",
+        trades_find_no_mark: "Mark not found — check ticker (spot USDT).",
+        trades_find_bal: "Balance",
+        trades_find_open: "Open bag",
+        trades_sum_open_upnl: "Open P/L",
+        trades_sum_note: "TOTAL — running closed P/L since live-money start. Find = instant buy/sell, no dialog.",
+        trades_daily_title: "Daily report (UTC)",
+        trades_daily_note: "Invested = buys that day. P/L = closed rounds that day.",
+        trades_daily_empty: "No daily rows yet.",
+        trades_daily_day: "DAY",
+        trades_daily_invested: "INVESTED USDT",
+        trades_daily_sold: "SOLD USDT",
+        trades_daily_pnl: "P/L USDT",
+        trades_daily_rounds: "ROUNDS",
+        trades_daily_wl: "W/L",
         markets_title: "Markets · top-100 · ~6m",
         help_title: "How to read / manual trade",
         help_1: "<span class=\"key\">Score</span> — how unusual the coin looks. Not a profit guarantee.",
@@ -773,6 +933,10 @@
       document.querySelectorAll("[data-i18n-title]").forEach((el) => {
         const k = el.getAttribute("data-i18n-title");
         if (pack[k] != null) el.title = pack[k];
+      });
+      document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+        const k = el.getAttribute("data-i18n-placeholder");
+        if (pack[k] != null) el.setAttribute("placeholder", pack[k]);
       });
       document.getElementById("langRu").classList.toggle("active", lg === "ru");
       document.getElementById("langEn").classList.toggle("active", lg === "en");
@@ -1722,7 +1886,36 @@
       return 0;
     }
 
-    /** Live fills: FIFO lots with qty/price → closed rounds + PnL. */
+    /**
+     * Pick open lot for a sell: prefer exact base_size_i match, else FIFO.
+     * Avoids orphan quote-only buys (e.g. 5 USDT stub) stealing a ~15 USDT exit.
+     */
+    function takeLotForSell(queue, sellQty) {
+      if (!queue || !queue.length) return null;
+      const q = Math.trunc(Number(sellQty) || 0);
+      if (q > 0) {
+        for (let j = 0; j < queue.length; j++) {
+          const b = Math.trunc(Number(queue[j].base_size_i) || 0);
+          if (b > 0 && b === q) return queue.splice(j, 1)[0];
+        }
+        // Within 2% size tolerance (fee dust)
+        let best = -1;
+        let bestDiff = Infinity;
+        for (let j = 0; j < queue.length; j++) {
+          const b = Math.trunc(Number(queue[j].base_size_i) || 0);
+          if (!(b > 0)) continue;
+          const diff = Math.abs(b - q);
+          if (diff <= Math.max(1, Math.trunc(q * 0.02)) && diff < bestDiff) {
+            best = j;
+            bestDiff = diff;
+          }
+        }
+        if (best >= 0) return queue.splice(best, 1)[0];
+      }
+      return queue.shift();
+    }
+
+    /** Live fills: size-aware lots with qty/price → closed rounds + PnL. */
     function analyzeTradeEvents(events) {
       const chron = Array.isArray(events) ? events.slice() : [];
       let bought = 0;
@@ -1737,37 +1930,60 @@
         let pnl = null;
         const side = String(ev.side || "").toLowerCase();
         const sym = String(ev.symbol || "").toUpperCase();
-        const liveOk = ev.ok === true && !ev.dry_run && !ev.skipped;
+        const msg = String(ev.message || "");
+        const liveOk =
+          ev.ok === true &&
+          !ev.dry_run &&
+          !ev.skipped &&
+          msg.indexOf("preview") < 0;
         const qty = Math.trunc(Number(ev.base_size_i) || 0);
         const proceeds = eventProceedsMicros(ev);
         if (liveOk && side === "buy" && sym && proceeds > 0) {
+          // Quote-only stubs (no fill size) must not enter the lot queue —
+          // they caused fake ~100% ETH PnL when a later ~15 USDT sell matched a 5 USDT buy.
+          if (!(qty > 0)) {
+            annotated.push({ ev, pnl_micros: null });
+            continue;
+          }
           bought += proceeds;
           let entry = Number(ev.entry_price_i || 0);
-          if (!(entry > 0) && qty > 0) entry = priceFromQuoteQty(proceeds, qty) || 0;
+          if (!(entry > 0)) entry = priceFromQuoteQty(proceeds, qty) || 0;
           if (!lots[sym]) lots[sym] = [];
           lots[sym].push({
             cost_micros: proceeds,
-            base_size_i: qty > 0 ? qty : null,
+            base_size_i: qty,
             entry_price_i: entry > 0 ? Math.trunc(entry) : null,
             at_ms: ev.at_ms,
             source: ev.source,
           });
         } else if (liveOk && side === "sell" && sym) {
           const queue = lots[sym] || [];
-          const lot = queue.length ? queue.shift() : null;
-          const cost = lot
+          const lot = takeLotForSell(queue, qty);
+          let cost = lot
             ? Math.trunc(Number(lot.cost_micros) || 0)
             : Math.trunc(Number(ev.cost_usdt_micros) || 0);
           let sellQ = proceeds;
           if (!(sellQ > 0) && ev.realized_pnl_usdt_micros != null && cost > 0) {
             sellQ = cost + Math.trunc(Number(ev.realized_pnl_usdt_micros) || 0);
           }
-          if (sellQ > 0) sold += sellQ;
+          // Engine/manual audited PnL wins over reconstructed FIFO when present.
           if (ev.realized_pnl_usdt_micros != null && Number.isFinite(Number(ev.realized_pnl_usdt_micros))) {
             pnl = Math.trunc(Number(ev.realized_pnl_usdt_micros));
+            if (cost <= 0 && sellQ > 0) cost = sellQ - pnl;
           } else if (lot && sellQ > 0 && cost > 0) {
             pnl = sellQ - cost;
           }
+          // Refuse absurd reconstructed PnL (>50% on cost) without audited field —
+          // usually mismatched lot; leave pnl unknown rather than paint fake wins.
+          if (
+            pnl != null &&
+            ev.realized_pnl_usdt_micros == null &&
+            cost > 0 &&
+            Math.abs(pnl) > Math.trunc(cost * 0.5)
+          ) {
+            pnl = null;
+          }
+          if (sellQ > 0) sold += sellQ;
           if (pnl != null) {
             if (pnl >= 0) earned += pnl;
             else lost += -pnl;
@@ -1777,7 +1993,7 @@
           if (!(exitPx > 0) && sellQ > 0 && sellQty > 0) {
             exitPx = priceFromQuoteQty(sellQ, sellQty) || 0;
           }
-          if (lot || sellQ > 0 || pnl != null) {
+          if (lot || sellQ > 0 || pnl != null || ev.reason) {
             closed.push({
               at_ms: ev.at_ms,
               symbol: sym,
@@ -1793,6 +2009,13 @@
           }
         }
         annotated.push({ ev, pnl_micros: pnl });
+      }
+      // Running total after each closed round (chronological).
+      let cum = 0;
+      for (let i = 0; i < closed.length; i++) {
+        const p = closed[i].pnl_micros;
+        if (p != null && Number.isFinite(Number(p))) cum += Math.trunc(Number(p));
+        closed[i].cum_pnl_micros = cum;
       }
       return {
         bought_micros: bought,
@@ -1814,22 +2037,32 @@
       return total;
     }
 
-    function renderTradesSummary(stats, openCostMicros) {
+    function renderTradesSummary(stats, openCostMicros, openUpnlMicros) {
       const el = document.getElementById("tradesSummary");
       if (!el) return;
-      const chip = (lbl, val, cls) =>
-        `<div class="chip"><span class="lbl">${esc(lbl)}</span>` +
+      const chip = (lbl, val, cls, extra) =>
+        `<div class="chip${extra ? " " + extra : ""}"><span class="lbl">${esc(lbl)}</span>` +
         `<span class="val ${cls || ""}">${esc(val)}</span></div>`;
+      const uSigned = (m) => {
+        const n = Number(m || 0);
+        const body = fmtUsdtMicros(Math.abs(n), 1000000) + " USDT";
+        if (n > 0) return "+" + body;
+        if (n < 0) return "−" + body;
+        return body;
+      };
       const u = (m) => fmtUsdtMicros(m, 1000000) + " USDT";
       const net = Number(stats.net_micros || 0);
       const netCls = net > 0 ? "pnl-pos" : (net < 0 ? "pnl-neg" : "");
+      const upnl = Number(openUpnlMicros || 0);
+      const upnlCls = upnl > 0 ? "pnl-pos" : (upnl < 0 ? "pnl-neg" : "");
       el.innerHTML =
+        chip(t("trades_sum_net"), uSigned(net), netCls, "chip-net") +
+        chip(t("trades_sum_open_upnl"), uSigned(upnl), upnlCls) +
         chip(t("trades_sum_bought"), u(stats.bought_micros)) +
         chip(t("trades_sum_sold"), u(stats.sold_micros)) +
         chip(t("trades_sum_earned"), u(stats.earned_micros), "pnl-pos") +
         chip(t("trades_sum_lost"), u(stats.lost_micros), "pnl-neg") +
         chip(t("trades_sum_open"), u(openCostMicros)) +
-        chip(t("trades_sum_net"), u(net), netCls) +
         `<div class="chip" style="grid-column:1/-1"><span class="lbl">${esc(t("trades_sum_note"))}</span></div>`;
     }
 
@@ -1848,6 +2081,9 @@
         "<th>" + esc(t("trades_col_qty")) + "</th>" +
         "<th>" + esc(t("trades_col_buy_px")) + "</th>" +
         "<th>" + esc(t("trades_col_buy_usdt")) + "</th>" +
+        "<th>" + esc(t("trades_col_mark")) + "</th>" +
+        "<th>" + esc(t("trades_col_upnl")) + "</th>" +
+        "<th>" + esc(t("trades_col_act")) + "</th>" +
         "<th>BASIS</th><th>ORDER</th>" +
         "</tr></thead><tbody>";
       const body = keys.map((sym) => {
@@ -1863,16 +2099,98 @@
         const entry = p.entry_price_i != null ? fmtPriceI(p.entry_price_i) : "—";
         const costM = positionCostMicros(p);
         const cost = costM > 0 ? fmtUsdtMicros(costM, 1000000) : "—";
+        const markPx = p.mark_price_i != null && Number(p.mark_price_i) > 0
+          ? fmtPriceI(p.mark_price_i)
+          : "—";
+        const markVal = p.mark_value_usdt_micros != null && Number(p.mark_value_usdt_micros) > 0
+          ? fmtUsdtMicros(p.mark_value_usdt_micros, 1000000)
+          : "—";
+        const markCell = markPx !== "—" ? (markPx + " · " + markVal) : "—";
+        let upnlTxt = "—";
+        let upnlCls = "";
+        if (p.unrealized_pnl_usdt_micros != null && Number.isFinite(Number(p.unrealized_pnl_usdt_micros))) {
+          const u = Number(p.unrealized_pnl_usdt_micros);
+          upnlTxt = (u > 0 ? "+" : "") + fmtUsdtMicros(u, 1000000);
+          upnlCls = u > 0 ? "pnl-pos" : (u < 0 ? "pnl-neg" : "");
+          const bps = p.unrealized_pnl_bps;
+          if (bps != null && Number.isFinite(Number(bps))) {
+            const b = Number(bps);
+            upnlTxt += " (" + (b > 0 ? "+" : "") + (b / 100).toFixed(2) + "%)";
+          }
+        }
+        const canSell = qtyI > 0 && !p.dry_run;
+        const sellBtn = canSell
+          ? (`<button class="sell sell-now" type="button" data-sym="${esc(sym)}" data-size="${esc(String(qtyI))}">` +
+             esc(t("trades_sell_now")) + "</button>")
+          : "—";
         return `<tr>
           <td>${esc(sym)}</td>
           <td class="num ${cls}">${esc(qty)}</td>
           <td class="num">${esc(entry)}</td>
           <td class="num">${esc(cost)}</td>
+          <td class="num">${esc(markCell)}</td>
+          <td class="num ${upnlCls}"><b>${esc(upnlTxt)}</b></td>
+          <td>${sellBtn}</td>
           <td class="${cls}">${esc(basis)}</td>
           <td class="num">${esc(oid)}</td>
         </tr>`;
       }).join("");
       wrap.innerHTML = head + body + "</tbody></table>";
+      wrap.querySelectorAll("button.sell-now").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const sym = btn.getAttribute("data-sym") || "";
+          const size = Math.trunc(Number(btn.getAttribute("data-size") || 0));
+          sellOpenPositionNow(sym, size, btn);
+        });
+      });
+    }
+
+    /**
+     * One-tap market sell for an open bag — no preview/confirm dialog.
+     * Server still requires API key + confirm=true on the order payload.
+     */
+    async function sellOpenPositionNow(symbol, baseSizeI, btn) {
+      const sym = String(symbol || "").toUpperCase();
+      const size = Math.trunc(Number(baseSizeI) || 0);
+      if (!sym || !(size > 0)) return;
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = t("trades_selling");
+      }
+      const body = {
+        symbol: sym,
+        side: "sell",
+        confirm: true,
+        reconcile: true,
+        base_size_i: size,
+        client_oid: newClientOid(),
+      };
+      try {
+        const res = await fetchTimeout("/api/trade/order", {
+          method: "POST",
+          headers: apiHeaders(true),
+          body: JSON.stringify(body),
+        }, 45000);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) {
+          const detail = data.detail || data.message || data;
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = t("trades_sell_fail");
+            btn.title = typeof detail === "string" ? detail : JSON.stringify(detail);
+          }
+          return;
+        }
+        if (btn) btn.textContent = t("trades_sold_ok");
+        // Refresh book + journal (forget_position already ran server-side).
+        try { await loadTrades(); } catch (_) {}
+      } catch (e) {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = t("trades_sell_fail");
+          btn.title = String(e);
+        }
+      }
     }
 
     function renderTradesClosed(closed) {
@@ -1892,6 +2210,7 @@
         "<th>" + esc(t("trades_col_sell_px")) + "</th>" +
         "<th>" + esc(t("trades_col_sell_usdt")) + "</th>" +
         "<th>" + esc(t("trades_col_pnl")) + "</th>" +
+        "<th>" + esc(t("trades_col_cum")) + "</th>" +
         "<th>NOTE</th>" +
         "</tr></thead><tbody>";
       const body = rows.map((r) => {
@@ -1909,6 +2228,13 @@
           pnlTxt = (p > 0 ? "+" : "") + fmtUsdtMicros(p, 1000000);
           pnlCls = p > 0 ? "pnl-pos" : (p < 0 ? "pnl-neg" : "");
         }
+        let cumTxt = "—";
+        let cumCls = "";
+        if (r.cum_pnl_micros != null && Number.isFinite(Number(r.cum_pnl_micros))) {
+          const c = Number(r.cum_pnl_micros);
+          cumTxt = (c > 0 ? "+" : "") + fmtUsdtMicros(c, 1000000);
+          cumCls = c > 0 ? "pnl-pos" : (c < 0 ? "pnl-neg" : "");
+        }
         return `<tr>
           <td class="num">${esc(fmtEventTime(r.at_ms))}</td>
           <td>${esc(String(r.symbol || "—"))}</td>
@@ -1918,6 +2244,7 @@
           <td class="num">${esc(sellPx)}</td>
           <td class="num">${esc(sellU)}</td>
           <td class="num ${pnlCls}">${esc(pnlTxt)}</td>
+          <td class="num ${cumCls}"><b>${esc(cumTxt)}</b></td>
           <td class="flags">${esc(String(r.reason || "").slice(0, 80))}</td>
         </tr>`;
       }).join("");
@@ -1974,10 +2301,262 @@
       wrap.innerHTML = head + body + "</tbody></table>";
     }
 
+    let _findLookup = null;
+    let _findTimer = null;
+
+    function renderFindCard(data) {
+      const out = document.getElementById("tradesFindOut");
+      if (!out) return;
+      if (!data || !data.ok) {
+        out.innerHTML = `<div class="empty">${esc(t("trades_find_empty"))}</div>`;
+        return;
+      }
+      _findLookup = data;
+      const mark = data.mark_price_i != null ? fmtPriceI(data.mark_price_i) : "—";
+      const bal = Number(data.available_base_i || 0) > 0
+        ? (fmtBaseI(data.available_base_i) + " " + (data.base || baseAsset(data.symbol)))
+        : "0";
+      let openTxt = "—";
+      const op = data.open_position;
+      if (op && Number(op.base_size_i || 0) > 0) {
+        openTxt = fmtBaseI(op.base_size_i) + " @ " +
+          (op.entry_price_i != null ? fmtPriceI(op.entry_price_i) : "—");
+      }
+      const board = data.board || {};
+      const boardMeta = board.setup
+        ? (`setup=${board.setup}` + (board.score_centi != null ? ` · score=${(Number(board.score_centi)/100).toFixed(2)}` : ""))
+        : "";
+      const defU = Number(data.default_buy_usdt_micros || 15000000) / 1000000;
+      const warn = data.found_mark ? "" : `<div class="empty">${esc(t("trades_find_no_mark"))}</div>`;
+      out.innerHTML =
+        `<div class="trades-find-card">` +
+        `<div class="row"><span class="sym">${esc(data.symbol)}</span>` +
+        `<span class="meta">mark ${esc(mark)}</span></div>` +
+        `<div class="row meta">${esc(t("trades_find_bal"))}: ${esc(bal)} · ${esc(t("trades_find_open"))}: ${esc(openTxt)}` +
+        (boardMeta ? ` · ${esc(boardMeta)}` : "") + `</div>` +
+        warn +
+        `<div class="trades-find-actions">` +
+        `<label>${esc(t("trades_find_buy_usdt"))}</label>` +
+        `<input id="tradesFindBuyUsdt" type="text" inputmode="decimal" value="${esc(String(defU))}" />` +
+        `<button type="button" class="buy" id="tradesFindBuyBtn">${esc(t("trades_find_buy"))}</button>` +
+        `<button type="button" class="sell" id="tradesFindSellBtn">${esc(t("trades_find_sell"))}</button>` +
+        `</div>` +
+        `<div class="trades-find-status" id="tradesFindStatus"></div>` +
+        `</div>`;
+      const buyBtn = document.getElementById("tradesFindBuyBtn");
+      const sellBtn = document.getElementById("tradesFindSellBtn");
+      if (buyBtn) buyBtn.onclick = () => findBuyNow();
+      if (sellBtn) {
+        sellBtn.disabled = !(Number(data.available_base_i || 0) > 0 ||
+          (op && Number(op.base_size_i || 0) > 0));
+        sellBtn.onclick = () => findSellNow();
+      }
+    }
+
+    async function lookupTradeSymbol(q) {
+      const out = document.getElementById("tradesFindOut");
+      const raw = String(q || "").trim();
+      if (!raw) {
+        _findLookup = null;
+        if (out) out.innerHTML = `<div class="empty">${esc(t("trades_find_empty"))}</div>`;
+        return;
+      }
+      let hasKey = false;
+      try { hasKey = !!(localStorage.getItem("radar_api_key") || "").trim(); } catch (_) {}
+      if (!hasKey) {
+        if (out) out.innerHTML = `<div class="empty">${esc(t("trades_need_key"))}</div>`;
+        return;
+      }
+      if (out) out.innerHTML = `<div class="empty">…</div>`;
+      try {
+        const res = await fetchTimeout(
+          "/api/trade/lookup?symbol=" + encodeURIComponent(raw),
+          { headers: apiHeaders(false) },
+          15000
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const detail = data.detail || data.message || ("HTTP " + res.status);
+          if (out) out.innerHTML = `<div class="empty">${esc(String(detail))}</div>`;
+          return;
+        }
+        renderFindCard(data);
+      } catch (e) {
+        if (out) out.innerHTML = `<div class="empty">${esc(String(e))}</div>`;
+      }
+    }
+
+    async function findBuyNow() {
+      const data = _findLookup;
+      const st = document.getElementById("tradesFindStatus");
+      const btn = document.getElementById("tradesFindBuyBtn");
+      if (!data || !data.symbol) return;
+      const inp = document.getElementById("tradesFindBuyUsdt");
+      const micros = parseScaled(inp ? inp.value : "", 6);
+      if (micros == null) {
+        if (st) st.textContent = "USDT > 0";
+        return;
+      }
+      if (btn) { btn.disabled = true; btn.textContent = t("trades_find_buying"); }
+      if (st) st.textContent = t("trades_find_buying");
+      try {
+        const res = await fetchTimeout("/api/trade/order", {
+          method: "POST",
+          headers: apiHeaders(true),
+          body: JSON.stringify({
+            symbol: data.symbol,
+            side: "buy",
+            confirm: true,
+            reconcile: true,
+            quote_usdt_micros: micros,
+            client_oid: newClientOid(),
+          }),
+        }, 45000);
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok || !body.ok) {
+          const detail = body.detail || body.message || body;
+          if (st) st.textContent = t("trades_sell_fail") + ": " +
+            (typeof detail === "string" ? detail : JSON.stringify(detail));
+          if (btn) { btn.disabled = false; btn.textContent = t("trades_find_buy"); }
+          return;
+        }
+        if (st) st.textContent = t("trades_find_bought") + " · " + data.symbol;
+        if (btn) { btn.disabled = false; btn.textContent = t("trades_find_buy"); }
+        await lookupTradeSymbol(data.symbol);
+        try { await loadTrades(); } catch (_) {}
+      } catch (e) {
+        if (st) st.textContent = String(e);
+        if (btn) { btn.disabled = false; btn.textContent = t("trades_find_buy"); }
+      }
+    }
+
+    async function findSellNow() {
+      const data = _findLookup;
+      const st = document.getElementById("tradesFindStatus");
+      const btn = document.getElementById("tradesFindSellBtn");
+      if (!data || !data.symbol) return;
+      const fromPos = data.open_position && Number(data.open_position.base_size_i || 0) > 0
+        ? Number(data.open_position.base_size_i)
+        : 0;
+      const fromBal = Number(data.available_base_i || 0);
+      const size = fromBal > 0 ? fromBal : fromPos;
+      if (!(size > 0)) {
+        if (st) st.textContent = "size=0";
+        return;
+      }
+      if (btn) { btn.disabled = true; btn.textContent = t("trades_selling"); }
+      if (st) st.textContent = t("trades_selling");
+      try {
+        const res = await fetchTimeout("/api/trade/order", {
+          method: "POST",
+          headers: apiHeaders(true),
+          body: JSON.stringify({
+            symbol: data.symbol,
+            side: "sell",
+            confirm: true,
+            reconcile: true,
+            base_size_i: Math.trunc(size),
+            client_oid: newClientOid(),
+          }),
+        }, 45000);
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok || !body.ok) {
+          const detail = body.detail || body.message || body;
+          if (st) st.textContent = t("trades_sell_fail") + ": " +
+            (typeof detail === "string" ? detail : JSON.stringify(detail));
+          if (btn) { btn.disabled = false; btn.textContent = t("trades_find_sell"); }
+          return;
+        }
+        if (st) st.textContent = t("trades_sold_ok") + " · " + data.symbol;
+        if (btn) { btn.disabled = false; btn.textContent = t("trades_find_sell"); }
+        await lookupTradeSymbol(data.symbol);
+        try { await loadTrades(); } catch (_) {}
+      } catch (e) {
+        if (st) st.textContent = String(e);
+        if (btn) { btn.disabled = false; btn.textContent = t("trades_find_sell"); }
+      }
+    }
+
+    function bindTradesFind() {
+      const inp = document.getElementById("tradesFindInput");
+      const btn = document.getElementById("tradesFindBtn");
+      if (btn) btn.onclick = () => lookupTradeSymbol(inp ? inp.value : "");
+      if (inp) {
+        inp.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            lookupTradeSymbol(inp.value);
+          }
+        });
+        inp.addEventListener("input", () => {
+          if (_findTimer) clearTimeout(_findTimer);
+          const v = inp.value;
+          _findTimer = setTimeout(() => {
+            if (String(v || "").trim().length >= 2) lookupTradeSymbol(v);
+          }, 350);
+        });
+      }
+    }
+
+    function fmtDayUtc(day) {
+      const s = String(day || "");
+      const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!m) return s || "—";
+      return m[3] + "." + m[2] + "." + m[1];
+    }
+
+    function renderTradesDaily(report) {
+      const wrap = document.getElementById("tradesDailyWrap");
+      if (!wrap) return;
+      const rows = (report && report.days) || [];
+      if (!rows.length) {
+        wrap.innerHTML = `<div class="empty">${esc(t("trades_daily_empty"))}</div>`;
+        return;
+      }
+      const head =
+        "<table><thead><tr>" +
+        "<th>" + esc(t("trades_daily_day")) + "</th>" +
+        "<th>" + esc(t("trades_daily_invested")) + "</th>" +
+        "<th>" + esc(t("trades_daily_sold")) + "</th>" +
+        "<th>" + esc(t("trades_daily_pnl")) + "</th>" +
+        "<th>" + esc(t("trades_daily_rounds")) + "</th>" +
+        "<th>" + esc(t("trades_daily_wl")) + "</th>" +
+        "</tr></thead><tbody>";
+      const body = rows.map((r) => {
+        const pnl = Number(r.realized_pnl_usdt_micros || 0);
+        const pnlTxt = (pnl > 0 ? "+" : "") + fmtUsdtMicros(pnl, 1000000);
+        const pnlCls = pnl > 0 ? "pnl-pos" : (pnl < 0 ? "pnl-neg" : "");
+        const inv = fmtUsdtMicros(r.buy_usdt_micros || 0, 1000000);
+        const sold = fmtUsdtMicros(r.sell_usdt_micros || 0, 1000000);
+        const rounds = String(r.closed_rounds || 0);
+        const wl = String(r.wins || 0) + "/" + String(r.losses || 0);
+        return `<tr>
+          <td class="num"><b>${esc(fmtDayUtc(r.day_utc))}</b></td>
+          <td class="num">${esc(inv)}</td>
+          <td class="num">${esc(sold)}</td>
+          <td class="num ${pnlCls}"><b>${esc(pnlTxt)}</b></td>
+          <td class="num">${esc(rounds)}</td>
+          <td class="num">${esc(wl)}</td>
+        </tr>`;
+      }).join("");
+      const totP = Number((report && report.total_realized_pnl_usdt_micros) || 0);
+      const totCls = totP > 0 ? "pnl-pos" : (totP < 0 ? "pnl-neg" : "");
+      const foot =
+        `<tr>
+          <td><b>Σ</b></td>
+          <td class="num"><b>${esc(fmtUsdtMicros((report && report.total_buy_usdt_micros) || 0, 1000000))}</b></td>
+          <td class="num">—</td>
+          <td class="num ${totCls}"><b>${esc((totP > 0 ? "+" : "") + fmtUsdtMicros(totP, 1000000))}</b></td>
+          <td></td><td></td>
+        </tr>`;
+      wrap.innerHTML = head + body + foot + "</tbody></table>";
+    }
+
     async function loadTrades() {
       const openWrap = document.getElementById("tradesOpenWrap");
       const logWrap = document.getElementById("tradesLogWrap");
       const closedWrap = document.getElementById("tradesClosedWrap");
+      const dailyWrap = document.getElementById("tradesDailyWrap");
       const sumEl = document.getElementById("tradesSummary");
       if (!openWrap || !logWrap) return;
       let hasKey = false;
@@ -1987,6 +2566,7 @@
         openWrap.innerHTML = msg;
         logWrap.innerHTML = msg;
         if (closedWrap) closedWrap.innerHTML = msg;
+        if (dailyWrap) dailyWrap.innerHTML = msg;
         if (sumEl) sumEl.innerHTML = msg;
         return;
       }
@@ -2013,9 +2593,27 @@
         }
         const data = await res.json();
         const stats = analyzeTradeEvents(data.events || []);
-        renderTradesSummary(stats, openPositionsCostMicros(at));
+        renderTradesSummary(
+          stats,
+          openPositionsCostMicros(at),
+          at.open_unrealized_pnl_usdt_micros
+        );
         renderTradesClosed(stats.closed);
         renderTradesLog(stats.annotated);
+        try {
+          const resD = await fetchTimeout(
+            "/api/trade/daily_report?days=30",
+            { headers: apiHeaders(false) },
+            15000
+          );
+          if (resD.ok) {
+            renderTradesDaily(await resD.json());
+          } else if (dailyWrap) {
+            dailyWrap.innerHTML = `<div class="empty">HTTP ${resD.status}</div>`;
+          }
+        } catch (e2) {
+          if (dailyWrap) dailyWrap.innerHTML = `<div class="empty">${esc(String(e2))}</div>`;
+        }
       } catch (e) {
         logWrap.innerHTML = `<div class="empty">${esc(String(e))}</div>`;
       }
@@ -2116,6 +2714,7 @@
     });
 
     applyI18n();
+    bindTradesFind();
     loadWorldClock();
     setInterval(() => loadWorldClock(), 30000);
     loadMarkets(false);

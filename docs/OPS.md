@@ -10,6 +10,17 @@
 
 Default UI: `http://127.0.0.1:8787/` — pages `#watchlist` / `#markets` / `#ops` / `#help` (see [`DASHBOARD.md`](DASHBOARD.md)).
 
+## Windows autostart (reboot)
+
+Live-money process after user logon (Task Scheduler `DUP-Market-Radar-Live`):
+
+```powershell
+.\scripts\install_autostart.ps1 -StartNow
+.\scripts\uninstall_autostart.ps1
+```
+
+See [`RECOVERY.md`](RECOVERY.md). Autostart loads `.env` + `RADAR_PROFILE=live-money`; does **not** enable auto-trade by itself.
+
 **Reload / `~adar_native`:** bare `--reload` watches the whole tree including `.venv`. A locked `radar_native` `.pyd` + pip rename creates `~adar_native` and can cascade reloads. Default `run_radar.ps1` is reload-off; `-Reload` scopes watch dirs and excludes `.venv`.
 
 ## Profiles

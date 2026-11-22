@@ -1,5 +1,43 @@
 # Changelog - DUP Market Radar
 
+## 0.2.113
+
+- Windows autostart: `install_autostart.ps1` / `start_radar_autostart.ps1` (AtLogOn, live-money, `.env`)
+- Recovery Telegram: `notify_on_worker_restart` on auto/telegram thread revive (plus existing network_recovered)
+- Docs: `RECOVERY.md` / `OPS.md` autostart + UPS honesty
+- Package / `__version__` `0.2.113`
+- Soak / 48h: **not** claimed this pin
+
+## 0.2.112
+
+- Exit practice pin (no profit claim): **trailing stop**, **ROI ladder**, **fade_min_abs_bps**, **max_hold_sec**
+- Live-money: stricter entry (`min_score` 45, cooldown 10m, drop `long` setup)
+- Live-money measurement: **unlimited** daily/cycle buy&sell caps (`0`); keep `max_open_positions`
+- Anti-chase: skip buy if `change_bps_1h ≥ max_chase_change_bps_1h` (500)
+- PnL net of estimated round-trip fees (`fee_bps_per_side`); loss-streak pause buys (3 / 1h)
+- Sell priority: SL → max-hold → trail → TP → ROI → fade(guarded)
+- Tests: fade/ROI/trailing + fee/streak guards
+- Package / `__version__` `0.2.112`
+- Soak / 48h: **not** claimed this pin
+
+## 0.2.111
+
+- Sell monitor: every open bag checked each cycle via KuCoin **mark** (even outside top-N); priority stop-loss → take-profit → fade-watch
+- Live-money: `take_profit_bps: 800` (8%), `stop_loss_bps: 1000` (10%), `cycle_sec: 45`
+- Live-money: blacklist **BTCUSDT** / **ETHUSDT** (majors out of short-cycle auto buys)
+- Live-money: `max_daily_buys` 12 → **36** (short-cycle was stalling at daily cap)
+- PnL UI honesty: size-aware lot match; skip quote-only buy stubs (fake ~100% ETH win was FIFO mismatch vs 5 USDT orphan)
+- Manual sell journal: attach cost/realized PnL from open book before drop
+- Journal prune: `trade_events.jsonl` kept from first live auto buy (2026-11-21); UI column **ИТОГО USDT** = running closed P/L + big «Сейчас» chip
+- Open positions: KuCoin **mark** + **P/L СЕЙЧАС** (+/− USDT and %) on `/api/trade/auto` + Trades tab
+- Open positions: one-tap **Продать** (instant market sell, no confirm dialog; needs API key)
+- Trades: **Найти монету** panel + `GET /api/trade/lookup` — type ticker, see mark/balance, instant Купить/Продать без диалога
+- Trades: **Отчёт по суткам** (`GET /api/trade/daily_report`) — вложено / P/L / W-L per UTC day
+- External phone/web sells: `drop_externally_closed` clears flat bags so Radar does not hold ghosts
+- Tests: `test_sell_monitor.py` (mark TP/SL outside board)
+- Package / `__version__` `0.2.111`
+- Soak / 48h: **not** claimed this pin
+
 ## 0.2.110
 
 - Auto sizing **`equal_sleeves`**: free USDT split equally across `spot_alts` / `memes` / `listings`; buy = sleeve cash; sell credits same sleeve (bot-style books)

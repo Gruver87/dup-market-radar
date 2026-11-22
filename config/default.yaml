@@ -73,6 +73,7 @@ recovery:
   max_restarts_per_hour: 20            # soft refuse thrash
   restart_backoff_ms: 2000
   notify_on_network_recovered: true    # Telegram broadcast when scan OK after ≥2 fails
+  notify_on_worker_restart: true       # Telegram when auto/telegram threads revived
 
 # Markets table payload — top N by mcap, ~6m change via CoinGecko 200d (no exact 180d)
 bubbles:
@@ -143,16 +144,21 @@ auto_trade:
   cycle_sec: 90
   # equal_sleeves: split free USDT equally across allowed_sectors; buy = that sleeve's cash;
   # sell credits the same sleeve (P&L stays in-sector). fixed_quote: legacy flat size.
+  # shared_pool: one free-USDT pool across sectors (live-money default).
   sizing_mode: equal_sleeves
   sleeve_paper_seed_usdt_micros: 90000000  # dry-run seed (90 USDT → 30 per sector)
   quote_usdt_micros_per_buy: 10000000   # only used when sizing_mode=fixed_quote
   max_open_positions: 5
-  max_buys_per_cycle: 2
-  max_sells_per_cycle: 5
+  max_buys_per_cycle: 2                  # 0 = unlimited this cycle
+  max_sells_per_cycle: 5                 # 0 = unlimited this cycle
   max_daily_buys: 20                     # 0 = unlimited; UTC day roll
   max_daily_notional_usdt_micros: 200000000  # 200 USDT/day buys; 0 = unlimited
   signal_cooldown_sec: 900               # 15m no re-fire same symbol+side (stops exempt)
   min_score_centi: 5500                  # 55.00
+  max_chase_change_bps_1h: 0             # 0=off; skip buy if 1h change_bps >= N
+  fee_bps_per_side: 0                    # 0=off; live-money ~10 (0.10% taker)
+  loss_streak_pause_buys: 0              # 0=off; pause buys after N losing sells
+  loss_streak_pause_sec: 3600
   positions_backup_keep: 5               # rotating copies under data/backups/
   fill_reconcile: true                   # base_size_i from KuCoin dealSize after buy
   fill_reconcile_attempts: 8
@@ -186,7 +192,13 @@ auto_trade:
     - new-listing-watch
   sell_setups:
     - fade-watch
-  stop_loss_bps: 1200                    # 12%
+  stop_loss_bps: 1200                    # 12% drop from entry → market sell
+  take_profit_bps: 0                     # 0=off in lab; live-money sets e.g. 800 (8%)
+  trailing_stop_bps: 0                   # 0=off; live-money e.g. 200 (2% off peak)
+  trailing_offset_bps: 0                 # arm trailing after this gain (bps)
+  fade_min_abs_bps: 0                    # 0=off; ignore fade when |move| < N bps
+  max_hold_sec: 0                        # 0=off; force exit after N seconds
+  roi_ladder: []                         # [{after_sec, min_rise_bps}, ...] live overlay
   # Empty whitelist = all symbols allowed (minus blacklist). Non-empty = only listed.
   symbol_blacklist: []
   symbol_whitelist: []

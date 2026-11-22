@@ -31,9 +31,26 @@ def test_live_money_overlay_spot_only_small_size(monkeypatch):
     sectors = list(auto.get("allowed_sectors") or [])
     assert "spot_alts" in sectors
     assert not (set(sectors) & FUTURES_BLOCK)
-    assert str(auto.get("sizing_mode") or "") == "equal_sleeves"
+    assert str(auto.get("sizing_mode") or "") == "shared_pool"
     assert int(auto.get("max_open_positions") or 0) == 4
-    assert int(auto.get("max_daily_buys") or 0) == 12
+    assert int(auto.get("max_daily_buys") or 0) == 0  # unlimited for measurement
+    assert int(auto.get("max_daily_notional_usdt_micros") or 0) == 0
+    assert int(auto.get("max_buys_per_cycle") or 0) == 0
+    assert int(auto.get("max_sells_per_cycle") or 0) == 0
+    assert int(auto.get("min_score_centi") or 0) == 4500
+    assert int(auto.get("max_chase_change_bps_1h") or 0) == 500
+    assert int(auto.get("fee_bps_per_side") or 0) == 10
+    assert int(auto.get("loss_streak_pause_buys") or 0) == 3
+    assert int(auto.get("trailing_stop_bps") or 0) == 200
+    assert int(auto.get("trailing_offset_bps") or 0) == 300
+    assert int(auto.get("fade_min_abs_bps") or 0) == 100
+    assert int(auto.get("max_hold_sec") or 0) == 14400
+    ladder = auto.get("roi_ladder") or []
+    assert isinstance(ladder, list) and len(ladder) >= 4
+    setups = list(auto.get("buy_setups") or [])
+    assert "buy-watch" in setups
+    assert "long" not in setups
+    assert "BTCUSDT" in (auto.get("symbol_blacklist") or [])
     assert int((cfg.get("api") or {}).get("max_order_quote_usdt_micros") or 0) == 500_000_000
     assert (cfg.get("secrets") or {}).get("backend") == "env"
     native = cfg.get("native") or {}

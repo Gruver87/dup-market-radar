@@ -234,6 +234,7 @@ def validate_config(cfg: Dict[str, Any]) -> None:
                 "quote_usdt_micros_per_buy",
                 "min_score_centi",
                 "stop_loss_bps",
+                "take_profit_bps",
                 "max_open_positions",
                 "max_daily_buys",
                 "max_daily_notional_usdt_micros",
@@ -248,9 +249,95 @@ def validate_config(cfg: Dict[str, Any]) -> None:
                 "client_oid_max_entries",
                 "client_oid_write_behind_ms",
                 "symbol_meta_ttl_sec",
+                "shared_pool_reserve_usdt_micros",
             ):
                 if k in auto and not isinstance(auto[k], int):
                     errors.append(f"auto_trade.{k} must be int")
+            if "take_profit_bps" in auto and (
+                auto["take_profit_bps"] < 0 or auto["take_profit_bps"] > 50_000
+            ):
+                errors.append("auto_trade.take_profit_bps must be int 0..50000 (0=off)")
+            for k in (
+                "trailing_stop_bps",
+                "trailing_offset_bps",
+                "fade_min_abs_bps",
+                "max_hold_sec",
+                "max_chase_change_bps_1h",
+                "fee_bps_per_side",
+                "loss_streak_pause_buys",
+                "loss_streak_pause_sec",
+                "max_buys_per_cycle",
+                "max_sells_per_cycle",
+            ):
+                if k in auto and not isinstance(auto[k], int):
+                    errors.append(f"auto_trade.{k} must be int")
+            if "max_chase_change_bps_1h" in auto and (
+                auto["max_chase_change_bps_1h"] < 0
+                or auto["max_chase_change_bps_1h"] > 50_000
+            ):
+                errors.append(
+                    "auto_trade.max_chase_change_bps_1h must be int 0..50000 (0=off)"
+                )
+            if "fee_bps_per_side" in auto and (
+                auto["fee_bps_per_side"] < 0 or auto["fee_bps_per_side"] > 500
+            ):
+                errors.append("auto_trade.fee_bps_per_side must be int 0..500")
+            if "loss_streak_pause_buys" in auto and (
+                auto["loss_streak_pause_buys"] < 0
+                or auto["loss_streak_pause_buys"] > 100
+            ):
+                errors.append(
+                    "auto_trade.loss_streak_pause_buys must be int 0..100 (0=off)"
+                )
+            if "loss_streak_pause_sec" in auto and (
+                auto["loss_streak_pause_sec"] < 0
+                or auto["loss_streak_pause_sec"] > 86_400
+            ):
+                errors.append(
+                    "auto_trade.loss_streak_pause_sec must be int 0..86400"
+                )
+            if "trailing_stop_bps" in auto and (
+                auto["trailing_stop_bps"] < 0 or auto["trailing_stop_bps"] > 50_000
+            ):
+                errors.append("auto_trade.trailing_stop_bps must be int 0..50000 (0=off)")
+            if "trailing_offset_bps" in auto and (
+                auto["trailing_offset_bps"] < 0 or auto["trailing_offset_bps"] > 50_000
+            ):
+                errors.append(
+                    "auto_trade.trailing_offset_bps must be int 0..50000 (0=off)"
+                )
+            if "fade_min_abs_bps" in auto and (
+                auto["fade_min_abs_bps"] < 0 or auto["fade_min_abs_bps"] > 50_000
+            ):
+                errors.append("auto_trade.fade_min_abs_bps must be int 0..50000 (0=off)")
+            if "max_hold_sec" in auto and (
+                auto["max_hold_sec"] < 0 or auto["max_hold_sec"] > 7 * 86_400
+            ):
+                errors.append("auto_trade.max_hold_sec must be int 0..604800 (0=off)")
+            if "roi_ladder" in auto:
+                ladder = auto["roi_ladder"]
+                if not isinstance(ladder, list):
+                    errors.append("auto_trade.roi_ladder must be a list")
+                else:
+                    for i, step in enumerate(ladder):
+                        if not isinstance(step, dict):
+                            errors.append(f"auto_trade.roi_ladder[{i}] must be mapping")
+                            continue
+                        if "after_sec" in step and (
+                            not isinstance(step["after_sec"], int)
+                            or step["after_sec"] < 0
+                        ):
+                            errors.append(
+                                f"auto_trade.roi_ladder[{i}].after_sec must be int >= 0"
+                            )
+                        if "min_rise_bps" in step and (
+                            not isinstance(step["min_rise_bps"], int)
+                            or step["min_rise_bps"] < -10_000
+                            or step["min_rise_bps"] > 50_000
+                        ):
+                            errors.append(
+                                f"auto_trade.roi_ladder[{i}].min_rise_bps must be int -10000..50000"
+                            )
             if "positions_backup_keep" in auto and (
                 auto["positions_backup_keep"] < 0 or auto["positions_backup_keep"] > 50
             ):
@@ -751,6 +838,7 @@ def validate_config(cfg: Dict[str, Any]) -> None:
                 "restart_auto_thread",
                 "restart_telegram",
                 "notify_on_network_recovered",
+                "notify_on_worker_restart",
             ):
                 if bk in recovery and not isinstance(recovery[bk], bool):
                     errors.append(f"recovery.{bk} must be bool")

@@ -44,6 +44,7 @@ class RecoverySupervisor:
         self._auto_alive = auto_alive
         self._telegram_wanted = telegram_wanted
         self._telegram_alive = telegram_alive
+        # Ops notify callback (network_recovered / auto_restart / telegram_restart).
         self._on_network_recovered = on_network_recovered
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
@@ -161,6 +162,31 @@ class RecoverySupervisor:
             self._events.append({"at_ms": now, "kind": kind})
             if len(self._events) > 64:
                 self._events = self._events[-64:]
+        self._emit_ops_notify(kind, {"at_ms": now})
+
+    def _emit_ops_notify(self, kind: str, payload: Dict[str, Any]) -> None:
+        """Telegram/WS notify for recovery events (gated by config flags)."""
+        cfg = load_config().get("recovery") or {}
+        if kind == "network_recovered":
+            if cfg.get("notify_on_network_recovered") is False:
+                return
+        elif kind in ("auto_restart", "telegram_restart"):
+            if cfg.get("notify_on_worker_restart") is False:
+                return
+        else:
+            return
+        if not self._on_network_recovered:
+            return
+        body = dict(payload)
+        body.setdefault("kind", kind)
+        try:
+            self._on_network_recovered(body)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "recovery ops notify failed kind=%s: %s",
+                kind,
+                redact_exc(exc, max_len=128),
+            )
 
     def _backoff_wait(self, cfg: Dict[str, Any]) -> None:
         ms = int(cfg.get("restart_backoff_ms") or 2000)
@@ -279,15 +305,4 @@ class RecoverySupervisor:
             payload.get("ok"),
             payload.get("mtf_ensure_ok"),
         )
-        cfg = load_config().get("recovery") or {}
-        if cfg.get("notify_on_network_recovered") is False:
-            return
-        if not self._on_network_recovered:
-            return
-        try:
-            self._on_network_recovered(payload)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "network recovery notify failed: %s",
-                redact_exc(exc, max_len=128),
-            )
+        self._emit_ops_notify("network_recovered", payload)

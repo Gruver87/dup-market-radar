@@ -29,6 +29,7 @@ from radar.money import (
     notional_i_from_price_qty,
     pct_to_bps,
     quote_i,
+    rise_bps,
 )
 from radar.persist import atomic_write_json, read_json_object
 from radar.secrets_redact import redact_exc, redact_text
@@ -223,7 +224,86 @@ class AutoTradeEngine:
                     or pct_to_bps(cfg.get("stop_loss_pct") or 12)
                     or 1200
                 ),
+                "take_profit_bps": int(
+                    cfg.get("take_profit_bps")
+                    if cfg.get("take_profit_bps") is not None
+                    else (
+                        pct_to_bps(cfg.get("take_profit_pct") or 0) or 0
+                    )
+                ),
+                "trailing_stop_bps": int(cfg.get("trailing_stop_bps") or 0),
+                "trailing_offset_bps": int(cfg.get("trailing_offset_bps") or 0),
+                "fade_min_abs_bps": int(
+                    cfg.get("fade_min_abs_bps")
+                    if cfg.get("fade_min_abs_bps") is not None
+                    else 0
+                ),
+                "max_hold_sec": int(cfg.get("max_hold_sec") or 0),
+                "roi_ladder": [
+                    {"after_sec": a, "min_rise_bps": n}
+                    for a, n in self._parse_roi_ladder(cfg)
+                ],
+                "fee_bps_per_side": int(cfg.get("fee_bps_per_side") or 0),
+                "max_chase_change_bps_1h": int(
+                    cfg.get("max_chase_change_bps_1h") or 0
+                ),
+                "loss_streak": int(self._state.get("loss_streak") or 0),
+                "loss_streak_pause_buys": int(
+                    cfg.get("loss_streak_pause_buys") or 0
+                ),
+                "pause_buys_until": int(self._state.get("pause_buys_until") or 0),
+                "cycle_sec": int(cfg.get("cycle_sec") or 90),
             }
+
+    def status_with_marks(self) -> Dict[str, Any]:
+        """Status plus KuCoin mark / unrealized PnL on each open bag (USDT micros)."""
+        st = self.status()
+        positions = st.get("positions") or {}
+        if not isinstance(positions, dict) or not positions:
+            st["open_unrealized_pnl_usdt_micros"] = 0
+            return st
+        enriched: Dict[str, Any] = {}
+        total_u = 0
+        marks_ok = 0
+        for sym, raw in positions.items():
+            if not isinstance(raw, dict):
+                continue
+            row = dict(raw)
+            cost = int(row.get("deal_funds_micros") or row.get("quote_usdt_micros") or 0)
+            base = int(row.get("base_size_i") or 0)
+            entry = int(row.get("entry_price_i") or 0)
+            mark = 0
+            try:
+                mi = self._trader.get_spot_mark_price_i(str(sym))
+                if mi and int(mi) > 0:
+                    mark = int(mi)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "mark for open pnl failed %s: %s",
+                    sym,
+                    redact_exc(exc, max_len=96),
+                )
+            row["mark_price_i"] = mark if mark > 0 else None
+            mark_val = 0
+            if mark > 0 and base > 0:
+                mark_val = int(notional_i_from_price_qty(mark, base))
+            row["mark_value_usdt_micros"] = mark_val if mark_val > 0 else None
+            upnl = None
+            if mark_val > 0 and cost > 0:
+                upnl = int(mark_val) - int(cost)
+                total_u += upnl
+                marks_ok += 1
+            row["unrealized_pnl_usdt_micros"] = upnl
+            if entry > 0 and mark > 0:
+                # Signed bps vs entry: + = in profit for long spot bag.
+                row["unrealized_pnl_bps"] = int(rise_bps(entry, mark))
+            else:
+                row["unrealized_pnl_bps"] = None
+            enriched[str(sym)] = row
+        st["positions"] = enriched
+        st["open_unrealized_pnl_usdt_micros"] = int(total_u) if marks_ok else 0
+        st["open_marks_ok"] = int(marks_ok)
+        return st
 
     def loop_alive(self) -> bool:
         return bool(self._thread and self._thread.is_alive())
@@ -306,6 +386,71 @@ class AutoTradeEngine:
             self._positions.pop(sym, None)
             self._save_positions_locked()
         return {"ok": True, "symbol": sym, "removed": True}
+
+    def drop_externally_closed(self) -> Dict[str, Any]:
+        """Forget bags whose KuCoin trade balance is flat (sold outside Radar).
+
+        Honest: no invented sell USDT/PnL — emit a sync event so the UI drops the
+        open row. Operator sold on phone/web; Radar only tracked the buy.
+        """
+        if not self._persist_ok or not self._trader.ready:
+            return {
+                "ok": False,
+                "dropped": [],
+                "message": "persist or keys not ready",
+            }
+        with self._lock:
+            tracked = {
+                sym: dict(pos)
+                for sym, pos in self._positions.items()
+                if isinstance(pos, dict)
+            }
+        dropped: List[str] = []
+        kept: List[str] = []
+        errors: List[Dict[str, str]] = []
+        for sym, pos in tracked.items():
+            if pos.get("dry_run"):
+                kept.append(sym)
+                continue
+            base_ccy = resolve_base_asset(sym)
+            try:
+                bal_i = int(self._trader.get_available_base_i(base_ccy))
+            except Exception as exc:  # noqa: BLE001
+                errors.append({"symbol": sym, "reason": redact_exc(exc, max_len=96)})
+                continue
+            need = int(pos.get("base_size_i") or 0)
+            # Flat or dust relative to tracked size (<1%).
+            flat = bal_i <= 0 or (need > 0 and bal_i * 100 < need)
+            if not flat:
+                kept.append(sym)
+                continue
+            self.forget_position(sym)
+            dropped.append(sym)
+            self._emit_action(
+                {
+                    "ok": True,
+                    "side": "sell",
+                    "symbol": sym,
+                    "source": "external_sync",
+                    "dry_run": False,
+                    "message": "KuCoin balance flat — sold outside Radar (PnL unknown)",
+                    "reason": "external_balance_flat",
+                    "base_size_i": need if need > 0 else None,
+                    "cost_usdt_micros": int(
+                        pos.get("deal_funds_micros")
+                        or pos.get("quote_usdt_micros")
+                        or 0
+                    )
+                    or None,
+                    "entry_price_i": pos.get("entry_price_i"),
+                }
+            )
+        return {
+            "ok": True,
+            "dropped": dropped,
+            "kept": kept,
+            "errors": errors,
+        }
 
     def recover_untracked_buys(self, *, limit_events: int = 200) -> Dict[str, Any]:
         """Adopt live buys still on KuCoin that are missing from the position book.
@@ -641,8 +786,17 @@ class AutoTradeEngine:
         equal_sleeves = self._sizing_equal(cfg)
         shared_pool = self._sizing_shared(cfg)
         max_open = int(cfg.get("max_open_positions") or 5)
-        max_buys = int(cfg.get("max_buys_per_cycle") or 2)
-        max_sells = int(cfg.get("max_sells_per_cycle") or 5)
+        # 0 = unlimited per cycle (operator may open daily caps for measurement).
+        max_buys = int(
+            cfg.get("max_buys_per_cycle")
+            if cfg.get("max_buys_per_cycle") is not None
+            else 2
+        )
+        max_sells = int(
+            cfg.get("max_sells_per_cycle")
+            if cfg.get("max_sells_per_cycle") is not None
+            else 5
+        )
         max_daily_buys = int(
             cfg.get("max_daily_buys")
             if cfg.get("max_daily_buys") is not None
@@ -661,6 +815,20 @@ class AutoTradeEngine:
         stop_loss_bps = int(
             cfg.get("stop_loss_bps") or pct_to_bps(cfg.get("stop_loss_pct") or 12) or 1200
         )
+        take_profit_bps = int(
+            cfg.get("take_profit_bps")
+            if cfg.get("take_profit_bps") is not None
+            else (pct_to_bps(cfg.get("take_profit_pct") or 0) or 0)
+        )
+        trailing_stop_bps = int(cfg.get("trailing_stop_bps") or 0)
+        trailing_offset_bps = int(cfg.get("trailing_offset_bps") or 0)
+        fade_min_abs_bps = int(
+            cfg.get("fade_min_abs_bps")
+            if cfg.get("fade_min_abs_bps") is not None
+            else 0
+        )
+        max_hold_sec = int(cfg.get("max_hold_sec") or 0)
+        roi_ladder = self._parse_roi_ladder(cfg)
         dry = bool(cfg.get("dry_run"))
 
         actions: List[Dict[str, Any]] = []
@@ -678,32 +846,63 @@ class AutoTradeEngine:
                     }
                 )
 
+        # Drop bags sold on phone/web (balance flat) — not only Radar-path sells.
+        if not dry and self._trader.ready:
+            sync = self.drop_externally_closed()
+            if sync.get("dropped"):
+                actions.append(
+                    {
+                        "ok": True,
+                        "side": "external_sync",
+                        "message": f"dropped flat bags {sync.get('dropped')}",
+                        "dropped": sync.get("dropped"),
+                    }
+                )
+
         with self._lock:
             positions = dict(self._positions)
 
         # --- sells first (free slots) ---
-        # Triggers: sell_setups (default fade-watch) OR stop_loss_bps from entry.
+        # Every open bag: mark each cycle. Priority: SL → max-hold → trail → TP → ROI → fade.
         sells = 0
         for sym, pos in list(positions.items()):
-            if sells >= max_sells:
+            if max_sells > 0 and sells >= max_sells:
                 break
             row = self._find_row(sectors, allowed, sym)
-            reason = None
-            if row:
-                setup = row.get("setup")
-                if setup in sell_setups:
-                    reason = f"setup={setup}"
-                price_i = row.get("price_i")
-                entry_i = pos.get("entry_price_i")
-                if price_i and entry_i and int(entry_i) > 0:
-                    drop = drop_bps(int(entry_i), int(price_i))
-                    if drop >= stop_loss_bps:
-                        reason = f"stop_loss drop_bps={drop}"
+            reason, mark_i, pos_updates = self._evaluate_sell_reason(
+                sym,
+                pos,
+                row=row,
+                sell_setups=sell_setups,
+                stop_loss_bps=stop_loss_bps,
+                take_profit_bps=take_profit_bps,
+                prefer_mark=bool(not dry and self._trader.ready),
+                trailing_stop_bps=trailing_stop_bps,
+                trailing_offset_bps=trailing_offset_bps,
+                fade_min_abs_bps=fade_min_abs_bps,
+                max_hold_sec=max_hold_sec,
+                roi_ladder=roi_ladder,
+            )
+            if pos_updates:
+                self._apply_pos_updates(sym, pos_updates)
+                # Keep local copy coherent for this cycle.
+                pos = dict(pos)
+                pos.update(pos_updates)
+                positions[sym] = pos
             if not reason:
                 continue
-            # Fade/setup sells respect cooldown; hard stop-loss always may fire.
-            is_stop = str(reason).startswith("stop_loss")
-            if not is_stop:
+            # Fade/setup cooldown; hard exits (SL/TP/trail/ROI/max-hold) always may fire.
+            is_hard = any(
+                str(reason).startswith(p)
+                for p in (
+                    "stop_loss",
+                    "take_profit",
+                    "trailing_stop",
+                    "roi_ladder",
+                    "max_hold",
+                )
+            )
+            if not is_hard:
                 blocked, block_msg = self._cooldown_blocked(sym, "sell", cooldown_sec)
                 if blocked:
                     actions.append(
@@ -719,7 +918,6 @@ class AutoTradeEngine:
             size_i = int(pos.get("base_size_i") or 0)
             if size_i <= 0:
                 continue
-            mark_i = int((row or {}).get("price_i") or 0)
             result = self._exec_sell(
                 sym, size_i, reason, dry, mark_price_i=mark_i if mark_i > 0 else None
             )
@@ -747,7 +945,10 @@ class AutoTradeEngine:
                 and result.get("ok")
                 and not result.get("skipped")
             ):
-                sell_ev["realized_pnl_usdt_micros"] = int(proceeds_m) - int(cost_m)
+                gross, fee_m, net = self._pnl_after_fees(cost_m, proceeds_m, cfg)
+                sell_ev["realized_pnl_gross_usdt_micros"] = gross
+                sell_ev["fee_usdt_micros"] = fee_m
+                sell_ev["realized_pnl_usdt_micros"] = net
             if not sell_ev.get("exit_price_i") and mark_i > 0:
                 sell_ev["exit_price_i"] = mark_i
             self._emit_action(sell_ev)
@@ -762,7 +963,9 @@ class AutoTradeEngine:
                     positions = dict(self._positions)
                     if equal_sleeves and sector and credit > 0:
                         self._credit_sleeve_locked(sector, credit)
-                        self._save_state()
+                    pnl_net = sell_ev.get("realized_pnl_usdt_micros")
+                    if isinstance(pnl_net, int):
+                        self._note_sell_pnl_locked(pnl_net, cfg)
                     self._record_fire_locked(sym, "sell", notional_micros=0, is_buy=False)
             else:
                 logger.warning(
@@ -802,13 +1005,36 @@ class AutoTradeEngine:
             exec_venues=exec_venues,
         )
         for row in candidates:
-            if buys >= max_buys or open_n >= max_open:
+            if (max_buys > 0 and buys >= max_buys) or open_n >= max_open:
                 break
             sym = row["symbol"]
             price_i = int(row.get("price_i") or 0)
             sector = str(row.get("sector") or "")
             if price_i <= 0:
                 continue
+            chase_cap = int(cfg.get("max_chase_change_bps_1h") or 0)
+            if chase_cap > 0:
+                metrics = row.get("metrics") if isinstance(row.get("metrics"), dict) else {}
+                chg_1h = row.get("change_bps_1h")
+                if chg_1h is None:
+                    chg_1h = metrics.get("change_bps_1h")
+                try:
+                    chg_i = int(chg_1h) if chg_1h is not None else None
+                except (TypeError, ValueError):
+                    chg_i = None
+                if chg_i is not None and chg_i >= chase_cap:
+                    actions.append(
+                        {
+                            "ok": False,
+                            "side": "buy",
+                            "symbol": sym,
+                            "skipped": True,
+                            "message": (
+                                f"anti_chase change_bps_1h={chg_i} >= {chase_cap}"
+                            ),
+                        }
+                    )
+                    continue
             if equal_sleeves:
                 if self._sector_has_open(sector, positions):
                     actions.append(
@@ -960,40 +1186,69 @@ class AutoTradeEngine:
     def _run_stop_only_unlocked(
         self, cfg: Dict[str, Any], *, reason: str
     ) -> Dict[str, Any]:
-        """Sell-only on degraded snap: stop-loss via KuCoin mark; no buys / no fade."""
+        """Sell-only on degraded snap: stop/TP via KuCoin mark; no buys / no fade."""
         dry = bool(cfg.get("dry_run"))
         stop_loss_bps = int(
             cfg.get("stop_loss_bps") or pct_to_bps(cfg.get("stop_loss_pct") or 12) or 1200
         )
-        max_sells = int(cfg.get("max_sells_per_cycle") or 5)
+        take_profit_bps = int(
+            cfg.get("take_profit_bps")
+            if cfg.get("take_profit_bps") is not None
+            else (pct_to_bps(cfg.get("take_profit_pct") or 0) or 0)
+        )
+        trailing_stop_bps = int(cfg.get("trailing_stop_bps") or 0)
+        trailing_offset_bps = int(cfg.get("trailing_offset_bps") or 0)
+        max_hold_sec = int(cfg.get("max_hold_sec") or 0)
+        roi_ladder = self._parse_roi_ladder(cfg)
+        max_sells = int(
+            cfg.get("max_sells_per_cycle")
+            if cfg.get("max_sells_per_cycle") is not None
+            else 5
+        )
         actions: List[Dict[str, Any]] = []
         with self._lock:
             positions = dict(self._positions)
         sells = 0
         mark_miss = 0
         for sym, pos in list(positions.items()):
-            if sells >= max_sells:
+            if max_sells > 0 and sells >= max_sells:
                 break
             entry_i = int(pos.get("entry_price_i") or 0)
             size_i = int(pos.get("base_size_i") or 0)
             if entry_i <= 0 or size_i <= 0:
                 continue
-            try:
-                price_i = self._trader.get_spot_mark_price_i(str(sym))
-            except Exception as exc:  # noqa: BLE001
-                logger.warning(
-                    "stop-only mark failed %s: %s",
-                    sym,
-                    redact_exc(exc, max_len=128),
-                )
-                price_i = None
+            sell_reason, price_i, pos_updates = self._evaluate_sell_reason(
+                sym,
+                pos,
+                row=None,
+                sell_setups=set(),
+                stop_loss_bps=stop_loss_bps,
+                take_profit_bps=take_profit_bps,
+                prefer_mark=True,
+                trailing_stop_bps=trailing_stop_bps,
+                trailing_offset_bps=trailing_offset_bps,
+                fade_min_abs_bps=0,
+                max_hold_sec=max_hold_sec,
+                roi_ladder=roi_ladder,
+            )
+            if pos_updates:
+                self._apply_pos_updates(sym, pos_updates)
             if not price_i:
                 mark_miss += 1
                 continue
-            drop = drop_bps(entry_i, int(price_i))
-            if drop < stop_loss_bps:
+            if not sell_reason:
                 continue
-            sell_reason = f"stop_loss_degraded drop_bps={drop} ({reason})"
+            # Tag degraded path for audit honesty.
+            if str(sell_reason).startswith("stop_loss"):
+                sell_reason = f"stop_loss_degraded drop_bps={drop_bps(entry_i, int(price_i))} ({reason})"
+            elif str(sell_reason).startswith("take_profit"):
+                sell_reason = (
+                    f"take_profit_degraded rise_bps={rise_bps(entry_i, int(price_i))} ({reason})"
+                )
+            elif str(sell_reason).startswith(
+                ("trailing_stop", "roi_ladder", "max_hold")
+            ):
+                sell_reason = f"{sell_reason}_degraded ({reason})"
             result = self._exec_sell(
                 sym, size_i, sell_reason, dry, mark_price_i=int(price_i)
             )
@@ -1017,7 +1272,10 @@ class AutoTradeEngine:
             if proceeds_m > 0:
                 sell_ev["quote_usdt_micros"] = proceeds_m
             if cost_m > 0 and proceeds_m > 0 and result.get("ok"):
-                sell_ev["realized_pnl_usdt_micros"] = int(proceeds_m) - int(cost_m)
+                gross, fee_m, net = self._pnl_after_fees(cost_m, proceeds_m, cfg)
+                sell_ev["realized_pnl_gross_usdt_micros"] = gross
+                sell_ev["fee_usdt_micros"] = fee_m
+                sell_ev["realized_pnl_usdt_micros"] = net
             self._emit_action(sell_ev)
             sells += 1
             if result.get("ok"):
@@ -1034,7 +1292,9 @@ class AutoTradeEngine:
                     positions = dict(self._positions)
                     if self._sizing_equal(cfg) and sector and credit > 0:
                         self._credit_sleeve_locked(sector, credit)
-                        self._save_state()
+                    pnl_net = sell_ev.get("realized_pnl_usdt_micros")
+                    if isinstance(pnl_net, int):
+                        self._note_sell_pnl_locked(pnl_net, cfg)
                     self._record_fire_locked(sym, "sell", notional_micros=0, is_buy=False)
             else:
                 logger.warning(
@@ -1156,13 +1416,173 @@ class AutoTradeEngine:
         out.sort(key=lambda r: int(r.get("score_centi") or 0), reverse=True)
         return out
 
+    @staticmethod
+    def _parse_roi_ladder(cfg: Dict[str, Any]) -> List[Tuple[int, int]]:
+        """Return ``[(after_sec, min_rise_bps), ...]`` sorted by after_sec ascending."""
+        raw = cfg.get("roi_ladder")
+        if not raw:
+            return []
+        if not isinstance(raw, list):
+            return []
+        out: List[Tuple[int, int]] = []
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            try:
+                after = int(item.get("after_sec"))
+                need = int(item.get("min_rise_bps"))
+            except (TypeError, ValueError):
+                continue
+            if after < 0 or need < -10_000 or need > 50_000:
+                continue
+            out.append((after, need))
+        out.sort(key=lambda x: x[0])
+        return out
+
+    @staticmethod
+    def _roi_min_rise_bps(ladder: List[Tuple[int, int]], hold_sec: int) -> Optional[int]:
+        """Best (latest) ladder step whose after_sec <= hold_sec."""
+        if not ladder:
+            return None
+        chosen: Optional[int] = None
+        for after, need in ladder:
+            if hold_sec >= after:
+                chosen = need
+        return chosen
+
+    def _evaluate_sell_reason(
+        self,
+        sym: str,
+        pos: Dict[str, Any],
+        *,
+        row: Optional[Dict[str, Any]],
+        sell_setups: set,
+        stop_loss_bps: int,
+        take_profit_bps: int,
+        prefer_mark: bool,
+        trailing_stop_bps: int = 0,
+        trailing_offset_bps: int = 0,
+        fade_min_abs_bps: int = 0,
+        max_hold_sec: int = 0,
+        roi_ladder: Optional[List[Tuple[int, int]]] = None,
+        now_ms: Optional[int] = None,
+    ) -> Tuple[Optional[str], int, Dict[str, Any]]:
+        """Decide whether to sell an open bag. Always tries KuCoin mark when live.
+
+        Returns ``(reason, mark_price_i, pos_updates)``.
+
+        Priority: stop-loss → max-hold → trailing → take-profit → ROI ladder →
+        board sell_setups (fade-watch, with min-move guard).
+        """
+        entry_i = int(pos.get("entry_price_i") or 0)
+        mark_i = 0
+        updates: Dict[str, Any] = {}
+        if prefer_mark:
+            try:
+                mi = self._trader.get_spot_mark_price_i(str(sym))
+                if mi and int(mi) > 0:
+                    mark_i = int(mi)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "mark for sell eval failed %s: %s",
+                    sym,
+                    redact_exc(exc, max_len=96),
+                )
+        if mark_i <= 0 and row and int(row.get("price_i") or 0) > 0:
+            mark_i = int(row["price_i"])
+
+        ts = int(now_ms if now_ms is not None else time.time() * 1000)
+        opened = int(pos.get("opened_at_ms") or 0)
+        hold_sec = max(0, (ts - opened) // 1000) if opened > 0 else 0
+
+        if entry_i > 0 and mark_i > 0:
+            drop = drop_bps(entry_i, mark_i)
+            if stop_loss_bps > 0 and drop >= int(stop_loss_bps):
+                return f"stop_loss drop_bps={drop}", mark_i, updates
+
+            if max_hold_sec > 0 and hold_sec >= int(max_hold_sec):
+                return f"max_hold hold_sec={hold_sec}", mark_i, updates
+
+            gain = rise_bps(entry_i, mark_i)
+
+            # Trailing: arm after offset gain; track peak; sell on pullback from peak.
+            trail_bps = int(trailing_stop_bps or 0)
+            trail_off = int(trailing_offset_bps or 0)
+            if trail_bps > 0 and trail_off > 0:
+                peak = int(pos.get("peak_mark_price_i") or 0)
+                armed = bool(pos.get("trailing_armed")) or gain >= trail_off
+                if armed:
+                    if not pos.get("trailing_armed"):
+                        updates["trailing_armed"] = True
+                    if mark_i > peak:
+                        peak = mark_i
+                        updates["peak_mark_price_i"] = peak
+                    elif peak <= 0:
+                        peak = mark_i
+                        updates["peak_mark_price_i"] = peak
+                    if peak > 0:
+                        pull = drop_bps(peak, mark_i)
+                        if pull >= trail_bps:
+                            return (
+                                f"trailing_stop pull_bps={pull} peak={peak}",
+                                mark_i,
+                                updates,
+                            )
+                elif mark_i > peak:
+                    # Still track peak before arm for honesty (optional).
+                    updates["peak_mark_price_i"] = mark_i
+
+            if take_profit_bps > 0 and gain >= int(take_profit_bps):
+                return f"take_profit rise_bps={gain}", mark_i, updates
+
+            ladder = roi_ladder if roi_ladder is not None else []
+            need = self._roi_min_rise_bps(ladder, hold_sec)
+            if need is not None and gain >= int(need):
+                return (
+                    f"roi_ladder hold_sec={hold_sec} need_bps={need} rise_bps={gain}",
+                    mark_i,
+                    updates,
+                )
+
+        if row:
+            setup = row.get("setup")
+            if setup in sell_setups:
+                # Guard: ignore fade/setup noise when |move| from entry is tiny (fee drag).
+                min_abs = int(fade_min_abs_bps or 0)
+                if min_abs > 0 and entry_i > 0 and mark_i > 0:
+                    move = abs(int(rise_bps(entry_i, mark_i)))
+                    if move < min_abs:
+                        return None, mark_i, updates
+                return f"setup={setup}", mark_i, updates
+        return None, mark_i, updates
+
+    def _apply_pos_updates(self, sym: str, updates: Dict[str, Any]) -> None:
+        if not updates:
+            return
+        want = self._norm_symbol(sym)
+        with self._lock:
+            cur = self._positions.get(want)
+            if not isinstance(cur, dict):
+                return
+            changed = False
+            for k, v in updates.items():
+                if cur.get(k) != v:
+                    cur[k] = v
+                    changed = True
+            if changed:
+                self._positions[want] = cur
+                self._save_positions_locked()
+
     def _find_row(
         self, sectors: Dict[str, Any], allowed: List[str], symbol: str
     ) -> Optional[Dict[str, Any]]:
+        want = self._norm_symbol(symbol)
         for sector in allowed:
             for row in sectors.get(sector) or []:
-                if row.get("symbol") == symbol:
-                    return row
+                if self._norm_symbol(str(row.get("symbol") or "")) == want:
+                    out = dict(row)
+                    out["sector"] = sector
+                    return out
         return None
 
     def _exec_buy(
@@ -1606,6 +2026,49 @@ class AutoTradeEngine:
             return True, f"signal cooldown {remain}s left for {key}"
         return False, ""
 
+    @staticmethod
+    def _pnl_after_fees(
+        cost_m: int, proceeds_m: int, cfg: Dict[str, Any]
+    ) -> Tuple[int, int, int]:
+        """Gross PnL, estimated round-trip fee micros, net PnL (integer)."""
+        gross = int(proceeds_m) - int(cost_m)
+        fee_side = int(cfg.get("fee_bps_per_side") or 0)
+        if fee_side <= 0:
+            return gross, 0, gross
+        fee_m = mul_div(int(cost_m), fee_side, 10_000) + mul_div(
+            int(proceeds_m), fee_side, 10_000
+        )
+        return gross, int(fee_m), int(gross) - int(fee_m)
+
+    def _note_sell_pnl_locked(self, pnl_net: int, cfg: Dict[str, Any]) -> None:
+        """Track consecutive losing sells; pause new buys after streak (exits continue)."""
+        need = int(cfg.get("loss_streak_pause_buys") or 0)
+        if pnl_net >= 0:
+            self._state["loss_streak"] = 0
+            return
+        streak = int(self._state.get("loss_streak") or 0) + 1
+        self._state["loss_streak"] = streak
+        if need > 0 and streak >= need:
+            pause = int(cfg.get("loss_streak_pause_sec") or 3600)
+            until = int(time.time()) + max(60, pause)
+            self._state["pause_buys_until"] = until
+            logger.warning(
+                "loss streak=%s — pause buys until %s (%ss)",
+                streak,
+                until,
+                pause,
+            )
+
+    def _buys_paused(self) -> Tuple[bool, str]:
+        with self._lock:
+            until = int(self._state.get("pause_buys_until") or 0)
+        if until <= 0:
+            return False, ""
+        now = int(time.time())
+        if now >= until:
+            return False, ""
+        return True, f"loss_streak pause buys {until - now}s left"
+
     def _buy_gates_ok(
         self,
         symbol: str,
@@ -1615,6 +2078,9 @@ class AutoTradeEngine:
         max_daily_notional: int,
         cooldown_sec: int,
     ) -> Tuple[bool, str]:
+        paused, pause_msg = self._buys_paused()
+        if paused:
+            return False, pause_msg
         blocked, msg = self._cooldown_blocked(symbol, "buy", cooldown_sec)
         if blocked:
             return False, msg

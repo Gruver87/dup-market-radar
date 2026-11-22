@@ -59,6 +59,7 @@ from radar.scan_cache import SnapshotCache
 from radar.logging_setup import configure_json_logging_if_enabled
 from radar.secret_mgmt import deployment_mode, secrets_status
 from radar.secrets_redact import configure_secure_logging, redact_exc, redact_text
+from radar.money import quote_i
 from radar.trade.auto_engine import AutoTradeEngine
 from radar.trade.kucoin_manual import (
     KuCoinManualTrader,
@@ -73,6 +74,7 @@ from radar.telegram.alerts import find_row_public
 from radar.api.ws_hub import HUB
 from radar.notify.webhook import get_webhook_notifier
 from radar.recovery import RecoverySupervisor
+from radar.trade.daily_report import build_daily_report
 from radar.trade.events import read_trade_events, record_trade_event
 from radar.trade.oid_ledger import ClientOidLedger
 from radar.trade.paper_ledger import PaperLedger
@@ -452,15 +454,27 @@ def _build_recovery() -> RecoverySupervisor:
         return bool(_tg.ensure_running())
 
     def _on_recovered(payload: Dict[str, Any]) -> None:
-        if _tg is None:
-            return
-        msg = (
-            "🌐 <b>Network recovered</b>\n"
-            f"prev_fails={payload.get('prev_consecutive_fails')}\n"
-            f"ok={payload.get('ok')} mtf={payload.get('mtf_ensure_ok')}\n"
-            f"universe={payload.get('universe_size')}"
-        )
-        _tg.broadcast(msg)
+        kind = str(payload.get("kind") or "network_recovered")
+        if kind == "auto_restart":
+            msg = (
+                "⚠️ <b>Auto-trade worker restarted</b>\n"
+                "radar-auto-trade thread was dead — supervisor revived it.\n"
+                "Trade enable state unchanged (fail-closed)."
+            )
+        elif kind == "telegram_restart":
+            msg = (
+                "⚠️ <b>Telegram workers restarted</b>\n"
+                "poll/alert threads were dead — supervisor revived them."
+            )
+        else:
+            msg = (
+                "🌐 <b>Network recovered</b>\n"
+                f"prev_fails={payload.get('prev_consecutive_fails')}\n"
+                f"ok={payload.get('ok')} mtf={payload.get('mtf_ensure_ok')}\n"
+                f"universe={payload.get('universe_size')}"
+            )
+        if _tg is not None:
+            _tg.broadcast(msg)
         try:
             HUB.publish({"type": "recovery", "event": payload})
         except Exception:  # noqa: BLE001
@@ -660,6 +674,46 @@ def _on_auto_action(event: Dict[str, Any]) -> None:
     _tg_apply_position_hooks(event)
 
 
+def _enrich_manual_sell_from_book(trade_ev: Dict[str, Any]) -> None:
+    """Attach cost / realized PnL from open bag before drop (honest journal)."""
+    if not trade_ev.get("ok") or trade_ev.get("dry_run"):
+        return
+    if str(trade_ev.get("side") or "").lower() != "sell":
+        return
+    sym = str(trade_ev.get("symbol") or "")
+    if not sym:
+        return
+    st = _auto.status()
+    positions = st.get("positions") or {}
+    want = str(sym).upper().replace("-", "").replace("/", "")
+    pos = None
+    for key, row in positions.items():
+        if str(key).upper().replace("-", "").replace("/", "") == want:
+            pos = row if isinstance(row, dict) else None
+            break
+    if not pos:
+        return
+    cost_m = int(pos.get("deal_funds_micros") or pos.get("quote_usdt_micros") or 0)
+    fill = trade_ev.get("fill") if isinstance(trade_ev.get("fill"), dict) else {}
+    proceeds_m = int(
+        (fill or {}).get("deal_funds_micros")
+        or trade_ev.get("deal_funds_micros")
+        or trade_ev.get("quote_usdt_micros")
+        or 0
+    )
+    if cost_m > 0 and not trade_ev.get("cost_usdt_micros"):
+        trade_ev["cost_usdt_micros"] = cost_m
+    if pos.get("entry_price_i") and not trade_ev.get("entry_price_i"):
+        trade_ev["entry_price_i"] = int(pos["entry_price_i"])
+    if proceeds_m > 0:
+        trade_ev["deal_funds_micros"] = proceeds_m
+        trade_ev["quote_usdt_micros"] = proceeds_m
+        if cost_m > 0 and trade_ev.get("realized_pnl_usdt_micros") is None:
+            trade_ev["realized_pnl_usdt_micros"] = int(proceeds_m) - int(cost_m)
+    if not trade_ev.get("reason"):
+        trade_ev["reason"] = "manual_sell"
+
+
 def _track_manual_fill(trade_ev: Dict[str, Any]) -> None:
     """Keep open-position book in sync for manual/TG live fills (not dry-run)."""
     if not trade_ev.get("ok") or trade_ev.get("dry_run"):
@@ -778,6 +832,17 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     except Exception as exc:  # noqa: BLE001
         logger.warning(
             "recover_untracked_buys failed: %s", redact_exc(exc, max_len=256)
+        )
+    try:
+        flat = _auto.drop_externally_closed()
+        logger.info(
+            "drop_externally_closed dropped=%s kept=%s",
+            flat.get("dropped"),
+            flat.get("kept"),
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "drop_externally_closed failed: %s", redact_exc(exc, max_len=256)
         )
     _tg_start_error = None
     try:
@@ -1245,11 +1310,109 @@ def trade_events(request: Request, limit: int = 50) -> Dict[str, Any]:
     return {"ok": True, "count": len(rows), "events": rows}
 
 
+@app.get("/api/trade/daily_report")
+def trade_daily_report(request: Request, days: int = 30) -> Dict[str, Any]:
+    """Per-UTC-day invested + realized P/L mini-report from live journal."""
+    _check_api_key(request)
+    _check_trade_rate(request)
+    return build_daily_report(days=days)
+
+
+def _coerce_spot_symbol(raw: str) -> str:
+    """DOT / dot-usdt / DOTUSDT → normalized compact pair (default quote USDT)."""
+    from radar.trade.symbol_validate import SymbolValidationError, normalize_trade_symbol
+
+    s = (raw or "").strip().upper().replace(" ", "").replace("_", "").replace("/", "")
+    if "-" in s:
+        parts = [p for p in s.split("-") if p]
+        if len(parts) == 2:
+            s = parts[0] + parts[1]
+        else:
+            s = s.replace("-", "")
+    if not s.endswith(("USDT", "USDC", "BTC", "ETH", "KCS")):
+        s = s + "USDT"
+    try:
+        return normalize_trade_symbol(s)
+    except SymbolValidationError as exc:
+        raise HTTPException(400, detail=str(exc)) from None
+
+
+@app.get("/api/trade/lookup")
+def trade_lookup(request: Request, symbol: str = "") -> Dict[str, Any]:
+    """Resolve a coin ticker → mark + balance + open bag (for Trades find panel)."""
+    _check_api_key(request)
+    _check_trade_rate(request)
+    if not str(symbol or "").strip():
+        raise HTTPException(400, detail="symbol required")
+    sym = _coerce_spot_symbol(symbol)
+    # Refuse futures-looking symbols on this surface.
+    if sym.endswith("USDTM") or "USDTM" in sym:
+        raise HTTPException(400, detail="futures symbols refused — spot only")
+    mark = None
+    try:
+        mi = _trader.get_spot_mark_price_i(sym)
+        if mi and int(mi) > 0:
+            mark = int(mi)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "lookup mark failed %s: %s", sym, redact_exc(exc, max_len=96)
+        )
+    base = resolve_base_asset(sym)
+    avail = 0
+    if _trader.ready and base:
+        try:
+            avail = int(_trader.get_available_base_i(base))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "lookup balance failed %s: %s", base, redact_exc(exc, max_len=96)
+            )
+            avail = 0
+    open_pos = None
+    st = _auto.status()
+    positions = st.get("positions") or {}
+    want = sym.upper().replace("-", "").replace("/", "")
+    for key, row in positions.items():
+        if str(key).upper().replace("-", "").replace("/", "") == want:
+            open_pos = row if isinstance(row, dict) else None
+            break
+    board = None
+    try:
+        snap = _cache.peek() or {}
+        row = find_row_public(snap, sym)
+        if row:
+            board = {
+                "setup": row.get("setup"),
+                "score_centi": row.get("score_centi"),
+                "sector": row.get("_sector") or row.get("sector"),
+                "venue": row.get("venue"),
+            }
+    except Exception:  # noqa: BLE001
+        board = None
+    cfg = load_config().get("auto_trade") or {}
+    default_buy = int(
+        cfg.get("quote_usdt_micros_per_buy")
+        or quote_i(cfg.get("quote_usdt_per_buy") or 15)
+        or 15_000_000
+    )
+    return {
+        "ok": True,
+        "symbol": sym,
+        "base": base,
+        "mark_price_i": mark,
+        "available_base_i": int(avail),
+        "keys_ready": bool(_trader.ready),
+        "open_position": open_pos,
+        "board": board,
+        "default_buy_usdt_micros": default_buy,
+        "found_mark": mark is not None,
+    }
+
+
 @app.get("/api/trade/auto")
 def auto_get(request: Request) -> Dict[str, Any]:
-    """Auto-trade status with full position book — API key when configured."""
+    """Auto-trade status with full position book + mark unrealized PnL."""
     _check_api_key(request)
-    return {"ok": True, **_redact_fs_paths(_auto.status())}
+    return {"ok": True, **_redact_fs_paths(_auto.status_with_marks())}
 
 
 @app.post("/api/trade/auto")
@@ -1406,7 +1569,11 @@ def trade_order(request: Request, body: ManualOrderBody) -> Dict[str, Any]:
     if payload.get("fill") and isinstance(payload["fill"], dict):
         if payload["fill"].get("deal_funds_micros"):
             trade_ev["deal_funds_micros"] = payload["fill"]["deal_funds_micros"]
+        if payload["fill"].get("base_size_i") and not trade_ev.get("base_size_i"):
+            trade_ev["base_size_i"] = payload["fill"]["base_size_i"]
         trade_ev["fill"] = payload["fill"]
+    # Cost/PnL from open book before drop — avoids fake UI wins on manual exits.
+    _enrich_manual_sell_from_book(trade_ev)
     record_trade_event(trade_ev)
     _track_manual_fill(trade_ev)
     _mirror_trade_side_channels(trade_ev)

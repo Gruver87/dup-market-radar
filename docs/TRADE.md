@@ -64,6 +64,14 @@ Trade events → `data/trade_events.jsonl` (gitignored). Messages redacted.
 
 `auto_trade.spot_alts_soft_risk_flags` (live-money overlay) soft-allows common tape flags (`wide_range_24h`, `mtf_diverge_*`, `wide_spread_*` prefix). Unknown flags still block.
 
+Open bags are monitored every cycle via KuCoin **mark** (even when the symbol leaves the top-N board).
+
+Sell priority: `stop_loss` → `max_hold_sec` → **trailing** → hard `take_profit` → **ROI ladder** → `sell_setups` (fade-watch, skipped when `|move| < fade_min_abs_bps`).
+
+Live-money defaults (practice pin — **no profit guarantee**): stop 10%, TP 8%, trail arm +3% / pull −2%, fade min 1%, ROI 4%→2%→1%→0 by hold time, max hold 4h, cycle 45s, `min_score` 45, no `long` setup.
+
+Also: daily / per-cycle buy&sell caps **0=unlimited** (measurement); anti-chase if `change_bps_1h ≥ 500`; PnL **net of** `fee_bps_per_side` (10); after **3** losing sells pause new buys 1h (exits continue). `max_open_positions` still caps concurrent bags.
+
 ## Outside-top Telegram stops + fade
 
 If a watched spot symbol drops out of top-N, alerts can still fire **stop-loss** using KuCoin mark (`telegram.outside_top_mark_alerts`, default true).
@@ -79,6 +87,20 @@ See [`LIVE_MONEY.md`](LIVE_MONEY.md) before disabling dry_run.
 ## Symbol blacklist / whitelist
 
 `auto_trade.symbol_blacklist` / `symbol_whitelist` (empty whitelist = all allowed). Applies to **auto buys only** — stops/sells are never blocked by lists.
+
+Live-money blacklists **BTCUSDT** / **ETHUSDT** (majors — long-horizon only; not for the short radar cycle).
+
+## One-tap sell (Trades → Open)
+
+Open-position **Sell** places a KuCoin spot market sell immediately (`confirm=true`, full `base_size_i`) — no preview dialog. Requires `RADAR_API_KEY` in the dashboard. Accidental taps are live orders.
+
+## Find coin (Trades → Найти)
+
+`GET /api/trade/lookup?symbol=DOT` resolves spot USDT pair + KuCoin mark + available balance + open bag. Dashboard **Найти** panel buys/sells with one tap (no preview dialog). Default buy size = `quote_usdt_micros_per_buy`.
+
+## Daily report (Trades → Отчёт)
+
+`GET /api/trade/daily_report?days=30` — per UTC day: invested (buy sum), sold, realized P/L (on sell day), W/L. Built from live `trade_events.jsonl` only.
 
 ## Paper ledger
 

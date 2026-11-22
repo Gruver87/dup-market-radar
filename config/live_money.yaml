@@ -27,13 +27,34 @@ auto_trade:
   sizing_mode: shared_pool                # one free-USDT pool; buy best eligible across sectors
   quote_usdt_micros_per_buy: 15000000     # max ~15 USDT per buy (fair-share may be smaller)
   shared_pool_reserve_usdt_micros: 2000000  # keep ~2 USDT free on account
-  max_open_positions: 4
-  max_buys_per_cycle: 2
-  max_sells_per_cycle: 3
-  max_daily_buys: 12
-  max_daily_notional_usdt_micros: 500000000  # 500 USDT/day
-  signal_cooldown_sec: 300                # 5m same symbol+side
-  min_score_centi: 3500                   # 35.00
+  max_open_positions: 4                   # still cap concurrent bags (risk)
+  max_buys_per_cycle: 0                   # 0=unlimited this cycle (clearer picture)
+  max_sells_per_cycle: 0                  # 0=unlimited this cycle
+  max_daily_buys: 0                       # 0=unlimited daily buys
+  max_daily_notional_usdt_micros: 0       # 0=unlimited daily notional
+  signal_cooldown_sec: 600                # 10m same symbol+side
+  cycle_sec: 45                           # tighter watch on open bags
+  min_score_centi: 4500                   # 45.00 — stricter entries
+  max_chase_change_bps_1h: 500            # skip buy if already +5% in 1h (no chase)
+  fee_bps_per_side: 10                    # ~0.10% KuCoin taker; PnL net of round-trip
+  loss_streak_pause_buys: 3               # after 3 losing sells → pause new buys
+  loss_streak_pause_sec: 3600             # pause 1h (exits still run)
+  stop_loss_bps: 1000                     # 10% hard stop
+  take_profit_bps: 800                    # 8% hard TP (backup)
+  # Freqtrade-style exits (learn from chop / fee drag — no profit guarantee)
+  trailing_offset_bps: 300                # arm trail after +3%
+  trailing_stop_bps: 200                  # sell on −2% from peak once armed
+  fade_min_abs_bps: 100                   # ignore fade if |move| < 1% (fees)
+  max_hold_sec: 14400                     # 4h force exit
+  roi_ladder:                             # time-decay profit targets
+    - after_sec: 0
+      min_rise_bps: 400                   # +4% anytime
+    - after_sec: 1800
+      min_rise_bps: 200                   # +2% after 30m
+    - after_sec: 5400
+      min_rise_bps: 100                   # +1% after 90m
+    - after_sec: 10800
+      min_rise_bps: 0                     # breakeven after 3h
   exec_venues:
     - kucoin
   require_no_risk_flags: true
@@ -67,7 +88,12 @@ auto_trade:
   buy_setups:
     - buy-watch
     - new-listing-watch
-    - long
+    # long removed — was chasing already-extended moves on short cycle
+  # Majors are long-horizon only — short radar cycle does not fit BTC/ETH.
+  # Blacklist blocks auto buys; open bags still monitored for stop/TP/fade sells.
+  symbol_blacklist:
+    - BTCUSDT
+    - ETHUSDT
   allowed_sectors:
     - spot_alts
     - memes

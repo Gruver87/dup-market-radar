@@ -21,6 +21,8 @@ native/radar_native/dist/
 *.so
 
 data/*.jsonl
+data/*.pre_live_bak
+data/logs/
 
 data/evidence/*.json
 data/evidence/*.log

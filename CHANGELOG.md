@@ -1,5 +1,14 @@
 # Changelog - DUP Market Radar
 
+## 0.2.114
+
+- Live-money: same-symbol **re-entry bans** after stop (3h) / fade (45m) / other loss (20m)
+- Live-money: `fade_min_abs_bps` 100→**250**; chase cap 500→**400**; buy cap ~15→**12** USDT; cooldown 15m
+- Stop **not** widened (still 10%); trail/ROI/TP unchanged
+- Status exposes active `reentry_until`; tests for ban gates
+- Package / `__version__` `0.2.114`
+- Soak / 48h: **not** claimed this pin
+
 ## 0.2.113
 
 - Windows autostart: `install_autostart.ps1` / `start_radar_autostart.ps1` (AtLogOn, live-money, `.env`)

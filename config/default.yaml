@@ -159,6 +159,9 @@ auto_trade:
   fee_bps_per_side: 0                    # 0=off; live-money ~10 (0.10% taker)
   loss_streak_pause_buys: 0              # 0=off; pause buys after N losing sells
   loss_streak_pause_sec: 3600
+  reentry_after_stop_sec: 0              # 0=off; ban same-symbol buy after stop_loss
+  reentry_after_fade_sec: 0              # 0=off; ban same-symbol buy after fade sell
+  reentry_after_loss_sec: 0              # 0=off; ban same-symbol buy after other losing sell
   positions_backup_keep: 5               # rotating copies under data/backups/
   fill_reconcile: true                   # base_size_i from KuCoin dealSize after buy
   fill_reconcile_attempts: 8

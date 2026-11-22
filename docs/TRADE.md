@@ -68,9 +68,9 @@ Open bags are monitored every cycle via KuCoin **mark** (even when the symbol le
 
 Sell priority: `stop_loss` → `max_hold_sec` → **trailing** → hard `take_profit` → **ROI ladder** → `sell_setups` (fade-watch, skipped when `|move| < fade_min_abs_bps`).
 
-Live-money defaults (practice pin — **no profit guarantee**): stop 10%, TP 8%, trail arm +3% / pull −2%, fade min 1%, ROI 4%→2%→1%→0 by hold time, max hold 4h, cycle 45s, `min_score` 45, no `long` setup.
+Live-money defaults (practice pin — **no profit guarantee**): stop 10%, TP 8%, trail arm +3% / pull −2%, fade min **2.5%**, ROI 4%→2%→1%→0 by hold time, max hold 4h, cycle 45s, `min_score` 45, no `long` setup, ~12 USDT max buy.
 
-Also: daily / per-cycle buy&sell caps **0=unlimited** (measurement); anti-chase if `change_bps_1h ≥ 500`; PnL **net of** `fee_bps_per_side` (10); after **3** losing sells pause new buys 1h (exits continue). `max_open_positions` still caps concurrent bags.
+Also: daily / per-cycle buy&sell caps **0=unlimited** (measurement); anti-chase if `change_bps_1h ≥ 400`; PnL **net of** `fee_bps_per_side` (10); after **3** losing sells pause new buys 1h (exits continue). Same-symbol **re-entry bans**: 3h after stop, 45m after fade, 20m after other loss. `max_open_positions` still caps concurrent bags. Stop width **not** widened after chop analysis.
 
 ## Outside-top Telegram stops + fade
 

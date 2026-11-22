@@ -25,26 +25,30 @@ auto_trade:
   dry_run: false
   enabled_default: false                  # operator must flip Автоисполнение ON after dry cycle
   sizing_mode: shared_pool                # one free-USDT pool; buy best eligible across sectors
-  quote_usdt_micros_per_buy: 15000000     # max ~15 USDT per buy (fair-share may be smaller)
+  quote_usdt_micros_per_buy: 12000000     # max ~12 USDT per buy (smaller after chop analysis)
   shared_pool_reserve_usdt_micros: 2000000  # keep ~2 USDT free on account
   max_open_positions: 4                   # still cap concurrent bags (risk)
   max_buys_per_cycle: 0                   # 0=unlimited this cycle (clearer picture)
   max_sells_per_cycle: 0                  # 0=unlimited this cycle
   max_daily_buys: 0                       # 0=unlimited daily buys
   max_daily_notional_usdt_micros: 0       # 0=unlimited daily notional
-  signal_cooldown_sec: 600                # 10m same symbol+side
+  signal_cooldown_sec: 900                # 15m same symbol+side
   cycle_sec: 45                           # tighter watch on open bags
   min_score_centi: 4500                   # 45.00 — stricter entries
-  max_chase_change_bps_1h: 500            # skip buy if already +5% in 1h (no chase)
+  max_chase_change_bps_1h: 400            # skip buy if already +4% in 1h (no chase)
   fee_bps_per_side: 10                    # ~0.10% KuCoin taker; PnL net of round-trip
   loss_streak_pause_buys: 3               # after 3 losing sells → pause new buys
   loss_streak_pause_sec: 3600             # pause 1h (exits still run)
-  stop_loss_bps: 1000                     # 10% hard stop
+  # Same-symbol revenge re-entry bans (analysis: IDOL/PIEVERSE/EVAA/AKE churn)
+  reentry_after_stop_sec: 10800           # 3h after stop_loss
+  reentry_after_fade_sec: 2700            # 45m after fade sell
+  reentry_after_loss_sec: 1200            # 20m after other losing sell
+  stop_loss_bps: 1000                     # 10% hard stop (not widened)
   take_profit_bps: 800                    # 8% hard TP (backup)
   # Freqtrade-style exits (learn from chop / fee drag — no profit guarantee)
   trailing_offset_bps: 300                # arm trail after +3%
   trailing_stop_bps: 200                  # sell on −2% from peak once armed
-  fade_min_abs_bps: 100                   # ignore fade if |move| < 1% (fees)
+  fade_min_abs_bps: 250                   # ignore fade if |move| < 2.5% (fee+noise)
   max_hold_sec: 14400                     # 4h force exit
   roi_ladder:                             # time-decay profit targets
     - after_sec: 0

@@ -268,9 +268,21 @@ def validate_config(cfg: Dict[str, Any]) -> None:
                 "loss_streak_pause_sec",
                 "max_buys_per_cycle",
                 "max_sells_per_cycle",
+                "reentry_after_stop_sec",
+                "reentry_after_fade_sec",
+                "reentry_after_loss_sec",
             ):
                 if k in auto and not isinstance(auto[k], int):
                     errors.append(f"auto_trade.{k} must be int")
+            for rk in (
+                "reentry_after_stop_sec",
+                "reentry_after_fade_sec",
+                "reentry_after_loss_sec",
+            ):
+                if rk in auto and (
+                    auto[rk] < 0 or auto[rk] > 86_400
+                ):
+                    errors.append(f"auto_trade.{rk} must be int 0..86400 (0=off)")
             if "max_chase_change_bps_1h" in auto and (
                 auto["max_chase_change_bps_1h"] < 0
                 or auto["max_chase_change_bps_1h"] > 50_000

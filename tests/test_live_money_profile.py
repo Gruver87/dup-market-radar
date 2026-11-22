@@ -38,13 +38,19 @@ def test_live_money_overlay_spot_only_small_size(monkeypatch):
     assert int(auto.get("max_buys_per_cycle") or 0) == 0
     assert int(auto.get("max_sells_per_cycle") or 0) == 0
     assert int(auto.get("min_score_centi") or 0) == 4500
-    assert int(auto.get("max_chase_change_bps_1h") or 0) == 500
     assert int(auto.get("fee_bps_per_side") or 0) == 10
     assert int(auto.get("loss_streak_pause_buys") or 0) == 3
     assert int(auto.get("trailing_stop_bps") or 0) == 200
     assert int(auto.get("trailing_offset_bps") or 0) == 300
-    assert int(auto.get("fade_min_abs_bps") or 0) == 100
+    assert int(auto.get("fade_min_abs_bps") or 0) == 250
     assert int(auto.get("max_hold_sec") or 0) == 14400
+    assert int(auto.get("quote_usdt_micros_per_buy") or 0) == 12_000_000
+    assert int(auto.get("signal_cooldown_sec") or 0) == 900
+    assert int(auto.get("max_chase_change_bps_1h") or 0) == 400
+    assert int(auto.get("reentry_after_stop_sec") or 0) == 10_800
+    assert int(auto.get("reentry_after_fade_sec") or 0) == 2700
+    assert int(auto.get("reentry_after_loss_sec") or 0) == 1200
+    assert int(auto.get("stop_loss_bps") or 0) == 1000
     ladder = auto.get("roi_ladder") or []
     assert isinstance(ladder, list) and len(ladder) >= 4
     setups = list(auto.get("buy_setups") or [])

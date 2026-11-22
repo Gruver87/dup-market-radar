@@ -252,6 +252,24 @@ class AutoTradeEngine:
                     cfg.get("loss_streak_pause_buys") or 0
                 ),
                 "pause_buys_until": int(self._state.get("pause_buys_until") or 0),
+                "reentry_after_stop_sec": int(
+                    cfg.get("reentry_after_stop_sec") or 0
+                ),
+                "reentry_after_fade_sec": int(
+                    cfg.get("reentry_after_fade_sec") or 0
+                ),
+                "reentry_after_loss_sec": int(
+                    cfg.get("reentry_after_loss_sec") or 0
+                ),
+                "reentry_until": {
+                    str(k): int(v)
+                    for k, v in (
+                        self._state.get("reentry_until")
+                        if isinstance(self._state.get("reentry_until"), dict)
+                        else {}
+                    ).items()
+                    if int(v or 0) > int(time.time())
+                },
                 "cycle_sec": int(cfg.get("cycle_sec") or 90),
             }
 
@@ -966,6 +984,9 @@ class AutoTradeEngine:
                     pnl_net = sell_ev.get("realized_pnl_usdt_micros")
                     if isinstance(pnl_net, int):
                         self._note_sell_pnl_locked(pnl_net, cfg)
+                    else:
+                        pnl_net = None
+                    self._note_symbol_reentry_locked(sym, reason, pnl_net, cfg)
                     self._record_fire_locked(sym, "sell", notional_micros=0, is_buy=False)
             else:
                 logger.warning(
@@ -1295,6 +1316,9 @@ class AutoTradeEngine:
                     pnl_net = sell_ev.get("realized_pnl_usdt_micros")
                     if isinstance(pnl_net, int):
                         self._note_sell_pnl_locked(pnl_net, cfg)
+                    else:
+                        pnl_net = None
+                    self._note_symbol_reentry_locked(sym, sell_reason, pnl_net, cfg)
                     self._record_fire_locked(sym, "sell", notional_micros=0, is_buy=False)
             else:
                 logger.warning(
@@ -2069,6 +2093,70 @@ class AutoTradeEngine:
             return False, ""
         return True, f"loss_streak pause buys {until - now}s left"
 
+    def _note_symbol_reentry_locked(
+        self,
+        symbol: str,
+        sell_reason: str,
+        pnl_net: Optional[int],
+        cfg: Dict[str, Any],
+    ) -> None:
+        """Ban same-symbol buys after stop/fade/loss — cuts revenge re-entry churn."""
+        want = self._norm_symbol(symbol)
+        reason = str(sell_reason or "")
+        ban = 0
+        tag = ""
+        if reason.startswith("stop_loss"):
+            ban = int(cfg.get("reentry_after_stop_sec") or 0)
+            tag = "stop"
+        elif "fade-watch" in reason or reason.startswith("setup=fade"):
+            ban = int(cfg.get("reentry_after_fade_sec") or 0)
+            tag = "fade"
+        elif pnl_net is not None and int(pnl_net) < 0:
+            ban = int(cfg.get("reentry_after_loss_sec") or 0)
+            tag = "loss"
+        if ban <= 0 or not want:
+            return
+        until = int(time.time()) + max(60, ban)
+        raw = self._state.get("reentry_until")
+        m: Dict[str, int] = {}
+        if isinstance(raw, dict):
+            now = int(time.time())
+            for k, v in raw.items():
+                try:
+                    ts = int(v or 0)
+                except (TypeError, ValueError):
+                    continue
+                if ts > now:
+                    m[str(k)] = ts
+        prev = int(m.get(want) or 0)
+        m[want] = max(prev, until)
+        if len(m) > 200:
+            keep = sorted(m.items(), key=lambda kv: -kv[1])[:200]
+            m = {k: v for k, v in keep}
+        self._state["reentry_until"] = m
+        logger.info(
+            "reentry ban %s until=%s tag=%s ban_sec=%s",
+            want,
+            until,
+            tag,
+            ban,
+        )
+
+    def _reentry_blocked(self, symbol: str) -> Tuple[bool, str]:
+        want = self._norm_symbol(symbol)
+        with self._lock:
+            raw = self._state.get("reentry_until")
+            if not isinstance(raw, dict):
+                return False, ""
+            try:
+                until = int(raw.get(want) or 0)
+            except (TypeError, ValueError):
+                until = 0
+        now = int(time.time())
+        if until <= now:
+            return False, ""
+        return True, f"reentry ban {until - now}s left for {want}"
+
     def _buy_gates_ok(
         self,
         symbol: str,
@@ -2081,6 +2169,9 @@ class AutoTradeEngine:
         paused, pause_msg = self._buys_paused()
         if paused:
             return False, pause_msg
+        re_ban, re_msg = self._reentry_blocked(symbol)
+        if re_ban:
+            return False, re_msg
         blocked, msg = self._cooldown_blocked(symbol, "buy", cooldown_sec)
         if blocked:
             return False, msg

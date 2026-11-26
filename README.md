@@ -1,3 +1,9 @@
+<p align="center">
+  <a href="https://github.com/Gruver87">
+    <img src="https://raw.githubusercontent.com/Gruver87/Gruver87/main/assets/card-dup-market-radar.png" alt="dup-market-radar — Spot Market Cockpit & Mobile PWA" width="880" />
+  </a>
+</p>
+
 # DUP Market Radar
 
 **Version:** 0.2.110 · **Org:** [DUP Labs](https://github.com/Gruver87) · **Author:** Uladzimir Dabranski

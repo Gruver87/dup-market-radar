@@ -7,7 +7,7 @@ import logging
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from radar.secrets_redact import redact_exc
 from radar.trade.events import EVENTS_PATH
